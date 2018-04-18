@@ -1,7 +1,7 @@
 ---
 title: "A mobile app to run scripts on servers"
 date: 2016-11-24
-draft: true
+draft: false
 ---
 Over the years, whether I was working with a Raspberry Pi or running a server, there would often be one-off scripts that I would want to run. The usual pattern would be:
 

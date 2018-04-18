@@ -1,7 +1,7 @@
 ---
 title: "A React Native library to run commands over SSH"
 date: 2016-12-06
-draft: true
+draft: false
 ---
 For my React Native app [Hooks](/hooks/), I wrote some native Android code to enable the running of arbitrary commands over SSH.
 

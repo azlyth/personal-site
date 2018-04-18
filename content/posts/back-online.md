@@ -1,7 +1,7 @@
 ---
 title: "Back online"
 date: 2016-10-16
-draft: true
+draft: false
 ---
 
 It's been a while since I've had any form of personal site.
