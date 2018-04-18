@@ -23,7 +23,7 @@ Electron gets a
 for being too resource intensive and for enabling lazy developers. The haters say that better
 frameworks for desktop apps already exist and that you should use those instead.
 
-They're right, Electron apps are more intensive than I'd like. For those unaware, it's because 
+They're right, Electron apps are more intensive than I'd like. For those unaware, it's because
 every app has a full browser baked into it. That's how you're able to use Javascript, HTML, and CSS.
 
 But let me be the first to say: the haters are missing the point, as usual. The real value of

@@ -224,7 +224,7 @@ data to create SSL certificates for this service.
 
 ## Service: Git repository
 
-And so our final service, the Git repository. I went with [Gogs](https://gogs.io). I originally
+And so our final service, the Git repository. I went with {{< link "Gogs" "https://gogs.io" >}}. I originally
 liked Gogs because of it's portability, thanks to it being a single binary. Considering I'm running
 it inside a container, that doesn't matter as much, but oh well.
 
