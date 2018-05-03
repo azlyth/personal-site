@@ -12,7 +12,7 @@ own library: {{< link "react-native-ssh" "https://github.com/azlyth/react-native
 There are no tests and it's very light on the error handling. But I figured I'd put it out there
 for others to use and/or improve upon.
 
-### Native dependency pains
+## Native dependency pains
 
 Gradle (the Android build system) lets you specify dependencies from Maven (Java's package
 repository). This meant that including the Android SSH library I needed was a single line. Nice and
@@ -42,7 +42,7 @@ headers
 Perhaps I missed something, but if I haven't, this is definitely something to be addressed for
 React Native.
 
-### Get it while it's hot
+## Get it while it's hot
 
 **react-native-ssh** is on {{< link "GitHub" "https://github.com/azlyth/react-native-ssh" >}} and
 {{< link "npm" "https://www.npmjs.com/package/react-native-ssh" >}}.
