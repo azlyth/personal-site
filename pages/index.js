@@ -19,10 +19,6 @@ export default function Home({ allPostsData }) {
     <Layout home>
       <section className="text-center mx-auto">
 
-        <p className="text-lg mb-4">
-          the computer whisperer
-        </p>
-
         <div className="text-2xl space-y-4">
           <div>
             <a target="_blank" href="https://twitter.com/outbytheforest">twitter</a>
@@ -35,6 +31,9 @@ export default function Home({ allPostsData }) {
           <div>
             <a target="_blank" href="/peter-valdez-march-2023-resume.pdf">resumé 2023</a>
           </div>
+
+          <hr/>
+          <hr/>
 
           <h2 className={utilStyles.headingLg}>Blog</h2>
 

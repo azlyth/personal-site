@@ -3,6 +3,8 @@ version: '3'
 services:
 
   web:
-    build: .
+    build:
+      dockerfile: deploy/docker/Dockerfile
+      context: .
     ports:
     - 8000:80
