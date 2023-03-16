@@ -1,9 +1,9 @@
-import Head from 'next/head';
-import Link from 'next/link';
-import Date from '../components/date';
-import Layout, { siteTitle } from '../components/layout';
-import { getSortedPostsData } from '../lib/posts';
-import utilStyles from '../styles/utils.module.css';
+import Head from "next/head";
+import Link from "next/link";
+import Date from "../components/date";
+import Layout, { siteTitle } from "../components/layout";
+import { getSortedPostsData } from "../lib/posts";
+import utilStyles from "../styles/utils.module.css";
 
 export async function getStaticProps() {
   const allPostsData = getSortedPostsData();
@@ -17,23 +17,32 @@ export async function getStaticProps() {
 export default function Home({ allPostsData }) {
   return (
     <Layout home>
-      <section className="text-center mx-auto">
+      <Head>
+        <title>{siteTitle}</title>
+      </Head>
 
+      <section className="text-center mx-auto">
         <div className="text-2xl space-y-4">
           <div>
-            <a target="_blank" href="https://twitter.com/outbytheforest">twitter</a>
+            <a target="_blank" href="https://twitter.com/outbytheforest">
+              twitter
+            </a>
           </div>
 
           <div>
-            <a target="_blank" href="https://www.linkedin.com/in/peter-valdez/">linkedin</a>
+            <a target="_blank" href="https://www.linkedin.com/in/peter-valdez/">
+              linkedin
+            </a>
           </div>
 
           <div>
-            <a target="_blank" href="/peter-valdez-march-2023-resume.pdf">resumé 2023</a>
+            <a target="_blank" href="/peter-valdez-march-2023-resume.pdf">
+              resumé 2023
+            </a>
           </div>
 
-          <hr/>
-          <hr/>
+          <hr />
+          <hr />
 
           <h2 className={utilStyles.headingLg}>Blog</h2>
 
@@ -48,13 +57,11 @@ export default function Home({ allPostsData }) {
               </li>
             ))}
           </ul>
-
         </div>
 
         <div className="my-10">
           <img src="/images/ubbe.jpg" alt="my cat Ubbe" />
         </div>
-
       </section>
     </Layout>
   );
