@@ -5,14 +5,14 @@ import utilStyles from "../styles/utils.module.css";
 import Link from "next/link";
 
 const name = "Peter Valdez";
-export const siteTitle = "the forest 🌳";
+export const siteTitle = "out by the fore.st";
 
 export default function Layout({ children, home }) {
   return (
     <div className={styles.container}>
       <Head>
         <link rel="icon" href="/favicon.ico" />
-        <meta name="description" content="the forest 🌳" />
+        <meta name="description" content={siteTitle} />
         <meta name="og:title" content={siteTitle} />
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
