@@ -9,10 +9,10 @@ to by an nginx proxy, and my free SSL certificates are provided by the oh-so-won
 The best part is that all of that is defined in and deployed by using a single Docker Compose file.
 
 That means the only thing I had to do on my server was install
-{{< link "Docker" "https://www.docker.com/what-docker" >}} (which is made easy by
-{{< link "Docker Machine" "https://docs.docker.com/machine/overview/#/what-is-docker-machine" >}}).
+[Docker](https://www.docker.com/what-docker) (which is made easy by
+[Docker Machine](https://docs.docker.com/machine/overview/#/what-is-docker-machine)).
 The rest happens inside containers that play well with each other thanks to
-{{< link "Docker Compose" "https://docs.docker.com/compose/overview/#/overview-of-docker-compose" >}}.
+[Docker Compose](https://docs.docker.com/compose/overview/#/overview-of-docker-compose).
 
 I'm going to explain the file section by section, but first, here's all of it:
 
@@ -224,7 +224,7 @@ data to create SSL certificates for this service.
 
 ## Service: Git repository
 
-And so our final service, the Git repository. I went with {{< link "Gogs" "https://gogs.io" >}}. I originally
+And so our final service, the Git repository. I went with [Gogs](https://gogs.io). I originally
 liked Gogs because of it's portability, thanks to it being a single binary. Considering I'm running
 it inside a container, that doesn't matter as much, but oh well.
 

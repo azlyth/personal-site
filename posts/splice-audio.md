@@ -23,6 +23,7 @@ ffmpeg \
   -c:v copy \
   output.mp4
 ```
+
 ### The explanation
 
 Line by line:

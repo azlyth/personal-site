@@ -3,11 +3,11 @@ title: "A React Native library to run commands over SSH"
 date: '2016-12-06'
 draft: false
 ---
-For my React Native app {{< link "Hooks" "/hooks/" >}}, I wrote some native Android code to enable
+For my React Native app [Hooks](/hooks/), I wrote some native Android code to enable
 the running of arbitrary commands over SSH.
 
 I've now added the iOS side, and after some refactoring, the SSH code for both platforms is now its
-own library: {{< link "react-native-ssh" "https://github.com/azlyth/react-native-ssh" >}}.
+own library: [react-native-ssh](https://github.com/azlyth/react-native-ssh).
 
 There are no tests and it's very light on the error handling. But I figured I'd put it out there
 for others to use and/or improve upon.
@@ -31,7 +31,7 @@ pod:
 in duplicate libraries in XCode
 
 After this didn't work, I decided to go with the manual installation methods listed by a few other
-libraries (specifically {{< link "react-native-lock" "https://github.com/auth0/react-native-lock" >}}, thanks
+libraries (specifically [react-native-lock](https://github.com/auth0/react-native-lock), thanks
 auth0). So as it stands, after npm-installing **react-native-ssh**, you have to:
 
 - run **react-native link** to include the library
@@ -44,5 +44,5 @@ React Native.
 
 ## Get it while it's hot
 
-**react-native-ssh** is on {{< link "GitHub" "https://github.com/azlyth/react-native-ssh" >}} and
-{{< link "npm" "https://www.npmjs.com/package/react-native-ssh" >}}.
+**react-native-ssh** is on [GitHub](https://github.com/azlyth/react-native-ssh) and
+[npm](https://www.npmjs.com/package/react-native-ssh).

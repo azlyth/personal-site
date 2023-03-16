@@ -84,5 +84,5 @@ let x = await somePromiseReturningMethod()
 I haven't written an iOS version of the native SSH bridge, so for now, the app only works on
 Android.
 
-- {{< link "Google Play store" "https://play.google.com/store/apps/details?id=com.hooks" >}}
-- {{< link "GitHub" "https://github.com/azlyth/hooks" >}}
+- [Google Play store](https://play.google.com/store/apps/details?id=com.hooks)
+- [GitHub](https://github.com/azlyth/hooks)

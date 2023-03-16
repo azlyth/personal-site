@@ -6,7 +6,7 @@ draft: false
 One part of setting up my online presence naturally includes getting backups going.
 
 Since I'm trying to keep everything containerized, I did some research into what Amazon S3 backup
-solutions are out there. I found a popular project called {{< link "dockup" "https://github.com/tutumcloud/dockup" >}}
+solutions are out there. I found a popular project called [dockup](https://github.com/tutumcloud/dockup)
 that basically does everything I wanted to have done.
 
 However, upon looking at what I had to configure, I thought it could be simpler.
@@ -68,5 +68,5 @@ setup, the two following backups are placed in my **ptrvldz-backups** bucket:
 - ghost-blog/ghost-blog-TIMESTAMP.tar.bz2
 - gogs/gogs-TIMESTAMP.tar.bz2
 
-You can find **s3-backup** on {{< link "GitHub" "https://github.com/azlyth/docker-s3-backup" >}} and
-{{< link "Docker Hub" "https://hub.docker.com/r/ptrvldz/s3-backup/" >}}.
+You can find **s3-backup** on [GitHub](https://github.com/azlyth/docker-s3-backup) and
+[Docker Hub](https://hub.docker.com/r/ptrvldz/s3-backup/).
