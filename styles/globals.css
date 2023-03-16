@@ -29,3 +29,7 @@ img {
   max-width: 100%;
   display: block;
 }
+
+.markdown > p {
+  margin-top: 1.1rem;
+}

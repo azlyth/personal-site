@@ -5,7 +5,7 @@ draft: false
 ---
 ### The goal
 
-For a {{< link "hobby project of mine" "https://github.com/azlyth/redub" >}}, I wanted to be able
+For a [hobby project of mine](https://github.com/azlyth/redub), I wanted to be able
 to merge an audio clip into the existing audio track of a video file.
 
 ### The command
@@ -45,7 +45,7 @@ Line by line:
 ### JS version
 
 And for any of you interested in doing this in JavaScript, here's the same command translated to
-{{< link "node-fluent-ffmpeg" "https://github.com/fluent-ffmpeg/node-fluent-ffmpeg" >}}:
+[node-fluent-ffmpeg](https://github.com/fluent-ffmpeg/node-fluent-ffmpeg):
 
 ```js
 ffmpeg()

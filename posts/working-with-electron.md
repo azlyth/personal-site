@@ -4,8 +4,8 @@ date: '2017-11-12'
 draft: false
 ---
 
-Working with {{< link "Electron" "https://electron.atom.io/" >}} is a pleasure. I just built an
-app called {{< link "Redub" "http://redub.audio" >}} with it. For the uninitiated, here is how the
+Working with [Electron](https://electron.atom.io/) is a pleasure. I just built an
+app called [Redub](http://redub.audio) with it. For the uninitiated, here is how the
 creators describe Electron:
 
 > Electron is a framework for creating native applications with web technologies like JavaScript,
@@ -14,12 +14,10 @@ creators describe Electron:
 Most programmers know how to build web apps. Now, with that same knowledge, you can build
 cross-platform desktop apps.
 
-{{< link "" "" >}}
-
 Electron gets a
-{{< link "lot" "https://josephg.com/blog/electron-is-flash-for-the-desktop/">}}
-{{< link "of" "https://medium.com/@caspervonb/electron-is-cancer-b066108e6c32" >}}
-{{< link "crap" "http://sircmpwn.github.io/2016/11/24/Electron-considered-harmful.html" >}}
+[lot](https://josephg.com/blog/electron-is-flash-for-the-desktop/)
+[of](https://medium.com/@caspervonb/electron-is-cancer-b066108e6c32)
+[crap](http://sircmpwn.github.io/2016/11/24/Electron-considered-harmful.html)
 for being too resource intensive and for enabling lazy developers. The haters say that better
 frameworks for desktop apps already exist and that you should use those instead.
 
@@ -32,7 +30,7 @@ web dev knowledge you probably already have (which also means you have a huge co
 from).
 
 Also, it's not like you the performance problems can't be addressed. Solutions are already being
-proposed. For example, there's talks of an {{< link "\"Electron runtime\"" "https://github.com/electron/electron/issues/673" >}}.
+proposed. For example, there's talks of an ["Electron runtime"](https://github.com/electron/electron/issues/673).
 Basically, every Electron app on your system would share a single copy of chromium.
 
 Finally, let's be real. Most people don't have the time to learn a new language and cross-platform
