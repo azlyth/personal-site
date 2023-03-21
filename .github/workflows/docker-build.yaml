@@ -21,12 +21,12 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push to GHCR
         uses: docker/build-push-action@v4
         with:
           context: .
           file: deploy/docker/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          cache-to: type=inline
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}:build-cache
+          cache-to:   type=registry,ref=ghcr.io/${{ github.repository }}:build-cache
