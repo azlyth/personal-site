@@ -27,6 +27,6 @@ jobs:
           context: .
           file: deploy/docker/Dockerfile
           push: true
-          tags: ghcr.io/{{ github.repository }}:${{ github.ref }}
-          cache-from: type=registry,ref=ghcr.io/{{ github.repository }}:${{ github.ref }}
+          tags: ghcr.io/{{ github.repository }}:${{ github.ref_name }}
+          cache-from: type=registry,ref=ghcr.io/{{ github.repository }}:${{ github.ref_name }}
           cache-to: type=inline
