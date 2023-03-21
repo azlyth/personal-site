@@ -18,7 +18,7 @@ export default function Home({ allPostsData }) {
   return (
     <Layout home>
       <Head>
-        <title>{siteTitle}</title>
+        <title>Testing Docker cache with code change</title>
       </Head>
 
       <section className="text-center mx-auto">
