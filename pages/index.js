@@ -38,19 +38,15 @@ export default function Home({ allPostsData }) {
           <div>
             <a target="_blank" href="/peter-valdez-march-2023-resume.pdf">
               resumé
-              <br />
-              (as of march 2023)
             </a>
           </div>
 
           <div>
             <a
               target="_blank"
-              href="https://www.meetup.com/astoria-tech-meetup/events/292267753/"
+              href="https://www.meetup.com/astoria-tech-meetup"
             >
-              astoria tech meetup #29
-              <br />
-              (on march 29th, 2023)
+              astoria tech meetup
             </a>
           </div>
 
