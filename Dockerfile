@@ -1,18 +1,24 @@
+# Build stage
 FROM ghcr.io/getzola/zola:v0.20.0 as builder
 
 # Copy the site source
 COPY . /project
 WORKDIR /project
 
-# Build the site for production (this will create /project/public)
+# Build the static site
 RUN zola build
 
-# Runtime image - using the same Zola image for serve command
-FROM ghcr.io/getzola/zola:v0.20.0
+# Production stage - serve with nginx
+FROM nginx:alpine
 
-# Copy the source files for development mode
-COPY . /project
-WORKDIR /project
+# Copy the built static files from builder stage
+COPY --from=builder /project/public /usr/share/nginx/html
 
-# Default command (can be overridden via environment variable or docker-compose)
-CMD ["zola", "serve", "--interface", "0.0.0.0", "--port", "1111"] 
+# Copy custom nginx config if needed
+# COPY nginx.conf /etc/nginx/nginx.conf
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"] 

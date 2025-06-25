@@ -1,0 +1,8 @@
+FROM ghcr.io/getzola/zola:v0.20.0
+
+# Copy the source files for development mode
+COPY . /project
+WORKDIR /project
+
+# Default command for development with live reload
+CMD ["zola", "serve", "--interface", "0.0.0.0", "--port", "1111"] 

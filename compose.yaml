@@ -1,11 +1,13 @@
 services:
   zola:
-    build: .
+    build:
+      context: .
+      dockerfile: ${DOCKERFILE:-Dockerfile.dev}
     ports:
-      - "1111:1111"
+      - "${PORT:-1111}:${INTERNAL_PORT:-1111}"
     volumes:
-      # Mount source for live reloading in development
-      - .:/project
+      # Mount source for live reloading in development only
+      - ${VOLUME_MOUNT:-.:/project}
     working_dir: /project
     command: ${ZOLA_COMMAND:-serve --interface 0.0.0.0 --port 1111}
     environment:

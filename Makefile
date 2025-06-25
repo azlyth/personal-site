@@ -18,7 +18,7 @@ help:
 	@echo "  $(GREEN)make stop$(RESET)    - Stop running containers"
 	@echo ""
 	@echo "$(CYAN)Production:$(RESET)"
-	@echo "  $(GREEN)make prod$(RESET)    - Build site for production"
+	@echo "  $(GREEN)make prod$(RESET)    - Build and serve production site with nginx (http://localhost:8080)"
 	@echo "  $(GREEN)make check$(RESET)   - Validate site structure and content"
 	@echo ""
 	@echo "$(CYAN)Docker:$(RESET)"
@@ -27,13 +27,13 @@ help:
 	@echo ""
 	@echo "$(YELLOW)💡 Tip: Run 'make dev' to get started!$(RESET)"
 
-# Default development mode - runs zola serve with live reloading
+# Development mode - runs zola serve with live reloading
 dev:
-	docker compose up --build
+	DOCKERFILE=Dockerfile.dev PORT=1111 INTERNAL_PORT=1111 VOLUME_MOUNT=.:/project docker compose up --build
 
-# Production mode - builds the site and exits
+# Production mode - builds static site and serves with nginx
 prod:
-	ZOLA_COMMAND="build" docker compose up --build --abort-on-container-exit
+	DOCKERFILE=Dockerfile PORT=8080 INTERNAL_PORT=80 VOLUME_MOUNT=/dev/null:/dev/null docker compose up --build
 
 # Build the Docker image
 build:
@@ -53,4 +53,4 @@ stop:
 
 # Check if site builds successfully
 check:
-	ZOLA_COMMAND="check" docker compose up --build --abort-on-container-exit 
+	DOCKERFILE=Dockerfile.dev ZOLA_COMMAND="check" docker compose up --build --abort-on-container-exit 
