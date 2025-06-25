@@ -5,4 +5,4 @@ COPY . /project
 WORKDIR /project
 
 # Default command for development with live reload
-CMD ["zola", "serve", "--interface", "0.0.0.0", "--port", "1111"] 
+CMD ["zola", "serve", "--interface", "0.0.0.0", "--port", "1111", "--base-url", "http://localhost:1111"] 
