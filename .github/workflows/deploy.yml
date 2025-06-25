@@ -31,7 +31,7 @@ jobs:
           sudo mv zola /usr/local/bin/
 
       - name: Build with Zola
-        run: zola build
+        run: zola build --base-url "https://azlyth.github.io/personal-site"
 
       - name: Setup Pages
         id: pages
