@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check
+.PHONY: help dev prod build logs clean stop check open-local open-gh
 
 # Colors for help output
 CYAN = \033[36m
@@ -14,6 +14,8 @@ help:
 	@echo ""
 	@echo "$(CYAN)Development:$(RESET)"
 	@echo "  $(GREEN)make dev$(RESET)     - Start development server with live reload (http://localhost:1111)"
+	@echo "  $(GREEN)make open-local$(RESET) - Open local development site in browser"
+	@echo "  $(GREEN)make open-gh$(RESET)    - Open GitHub Pages site in browser"
 	@echo "  $(GREEN)make logs$(RESET)    - Show container logs"
 	@echo "  $(GREEN)make stop$(RESET)    - Stop running containers"
 	@echo ""
@@ -30,6 +32,16 @@ help:
 # Development mode - runs zola serve with live reloading
 dev:
 	docker compose -f compose.dev.yaml up --build
+
+# Open local development site
+open-local:
+	@echo "$(CYAN)Opening local development site...$(RESET)"
+	open http://localhost:1111
+
+# Open GitHub Pages site
+open-gh:
+	@echo "$(CYAN)Opening GitHub Pages site...$(RESET)"
+	open https://azlyth.github.io/personal-site
 
 # Production mode - builds static site and serves with nginx
 prod:
