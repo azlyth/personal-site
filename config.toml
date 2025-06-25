@@ -1,5 +1,5 @@
 # The URL the site will be built for
-base_url = "https://azlyth.github.io/personal-site"
+base_url = "https://peter.direct"
 
 # Whether to automatically compile all Sass files in the sass directory
 compile_sass = true

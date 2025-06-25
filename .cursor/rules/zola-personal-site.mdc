@@ -1,0 +1,181 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Personal Site - Zola Static Site Generator Rules
+
+## Project Overview
+This is a personal blog/website built with [Zola](mdc:https:/www.getzola.org), a fast static site generator written in Rust. The site is containerized with Docker and includes both development and production environments.
+
+## Key Files and Structure
+
+### Configuration
+- [config.toml](mdc:config.toml) - Main Zola configuration file
+- [Makefile](mdc:Makefile) - Build automation and development commands
+- [compose.dev.yaml](mdc:compose.dev.yaml) - Development Docker Compose setup
+- [compose.yaml](mdc:compose.yaml) - Production Docker Compose setup
+
+### Templates
+- [templates/base.html](mdc:templates/base.html) - Base template with site-wide styling and layout
+- [templates/index.html](mdc:templates/index.html) - Homepage template
+- [templates/page.html](mdc:templates/page.html) - Individual page template
+- [templates/section.html](mdc:templates/section.html) - Section/listing template
+
+### Content
+- [content/blog/](mdc:content/blog) - Blog posts directory
+- [content/blog/_index.md](mdc:content/blog/_index.md) - Blog section configuration
+
+### Assets
+- [static/](mdc:static) - Static assets (images, etc.)
+- [sass/](mdc:sass) - Sass/SCSS stylesheets (compiled automatically)
+
+### Docker Setup
+- [Dockerfile](mdc:Dockerfile) - Production build (Zola + Nginx)
+- [Dockerfile.dev](mdc:Dockerfile.dev) - Development environment
+
+## Development Workflow
+
+### Getting Started
+```bash
+# Start development server with live reload
+make dev
+
+# Open local site in browser
+make open-local
+
+# View container logs
+make logs
+
+# Stop development server
+make stop
+```
+
+### Available Commands
+- `make help` - Show all available commands
+- `make dev` - Start development server at http://localhost:1111
+- `make prod` - Build and serve production version at http://localhost:8080
+- `make build` - Build Docker image
+- `make check` - Validate site structure
+- `make clean` - Clean up containers and images
+- `make open-gh` - Open live site at https://peter.direct
+
+## Content Management
+
+### Blog Posts
+Blog posts are markdown files in `content/blog/` with TOML frontmatter:
+
+```markdown
++++
+title = "Post Title" 
+date = 2024-01-01
+draft = false
++++
+
+Your content here...
+```
+
+### Adding New Posts
+1. Create new `.md` file in `content/blog/`
+2. Add TOML frontmatter with title, date, and draft status
+3. Write content in Markdown
+4. Test locally with `make dev`
+
+### Content Structure
+- Posts are sorted by date (configured in `_index.md`)
+- Template hierarchy: `base.html` → `section.html`/`page.html` → `index.html`
+- Static files go in `static/` directory
+
+## Styling and Templates
+
+### CSS Architecture
+- All styles are inline in [templates/base.html](mdc:templates/base.html)
+- Clean, minimal design with system fonts
+- Responsive layout with mobile-first approach
+- Color scheme: Blue links (#0066cc), gray text (#555/#777)
+
+### Template Structure
+- Zola uses Tera templating engine
+- Block inheritance: `{% block title %}`, `{% block content %}`
+- Automatic Sass compilation enabled in config
+
+## Docker and Deployment
+
+### Development
+- Uses official Zola Docker image
+- Volume mounts for live reloading
+- Serves on port 1111
+
+### Production  
+- Multi-stage build: Zola build → Nginx serve
+- Static files served from `/usr/share/nginx/html`
+- Serves on port 8080 (mapped from 80)
+
+### Environment Variables
+- `ZOLA_ENV=development` in dev mode
+- `NODE_ENV=production` in prod mode
+
+## Best Practices
+
+### Content Guidelines
+- Use descriptive titles and proper dates
+- Set `draft = false` only when ready to publish
+- Keep posts in `content/blog/` directory
+- Use lowercase, hyphenated filenames
+
+### Development Guidelines
+- Always test locally with `make dev` before deploying
+- Use `make check` to validate site structure
+- Keep templates DRY (Don't Repeat Yourself)
+- Maintain consistent styling in base template
+
+### Docker Guidelines
+- Use development compose for local work
+- Production builds are optimized and cached
+- Clean up with `make clean` periodically
+
+## Site Configuration
+
+### Base URL
+Site builds for `https://peter.direct` (configured in config.toml)
+
+### Features
+- Syntax highlighting disabled
+- Search index disabled  
+- Sass compilation enabled
+- Clean URLs and semantic structure
+
+## Troubleshooting
+
+### Common Issues
+- If site doesn't reload: Check Docker containers with `make logs`
+- If styles don't update: Restart dev server with `make stop` then `make dev`
+- If build fails: Run `make check` to validate content
+
+### Debug Commands
+```bash
+# View running containers
+docker ps
+
+# Check Zola version
+docker run --rm ghcr.io/getzola/zola:v0.20.0 --version
+
+# Rebuild everything
+make clean && make dev
+```
+
+## File Patterns
+
+### When creating new content:
+- Blog posts: `content/blog/post-name.md`
+- Static assets: `static/filename.ext`
+- Templates: `templates/name.html`
+
+### When modifying styles:
+- Edit inline CSS in [templates/base.html](mdc:templates/base.html)
+- Or add SCSS files to `sass/` directory
+
+### When adding features:
+- Update [config.toml](mdc:config.toml) for site-wide settings
+- Modify templates for HTML structure changes
+- Update [Makefile](mdc:Makefile) for new build commands

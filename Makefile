@@ -40,8 +40,8 @@ open-local:
 
 # Open GitHub Pages site
 open-gh:
-	@echo "$(CYAN)Opening GitHub Pages site...$(RESET)"
-	open https://azlyth.github.io/personal-site
+	@echo "$(CYAN)Opening site at peter.direct...$(RESET)"
+	open https://peter.direct
 
 # Production mode - builds static site and serves with nginx
 prod:
