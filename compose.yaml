@@ -1,0 +1,12 @@
+services:
+  zola:
+    build: .
+    ports:
+      - "1111:1111"
+    volumes:
+      # Mount source for live reloading in development
+      - .:/project
+    working_dir: /project
+    command: ${ZOLA_COMMAND:-serve --interface 0.0.0.0 --port 1111}
+    environment:
+      - ZOLA_ENV=${ZOLA_ENV:-development} 

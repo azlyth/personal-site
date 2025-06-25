@@ -15,6 +15,9 @@
 # production
 /build
 
+# Zola build output
+/public
+
 # misc
 .DS_Store
 
