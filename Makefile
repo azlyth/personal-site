@@ -29,11 +29,11 @@ help:
 
 # Development mode - runs zola serve with live reloading
 dev:
-	DOCKERFILE=Dockerfile.dev PORT=1111 INTERNAL_PORT=1111 VOLUME_MOUNT=.:/project docker compose up --build
+	docker compose -f compose.dev.yaml up --build
 
 # Production mode - builds static site and serves with nginx
 prod:
-	DOCKERFILE=Dockerfile PORT=8080 INTERNAL_PORT=80 VOLUME_MOUNT=/dev/null:/dev/null docker compose up --build
+	docker compose up --build
 
 # Build the Docker image
 build:
@@ -41,16 +41,18 @@ build:
 
 # Show logs from the running container
 logs:
-	docker compose logs -f zola
+	docker compose logs -f web
 
 # Clean up containers and images
 clean:
 	docker compose down --rmi local
+	docker compose -f compose.dev.yaml down --rmi local
 
 # Stop running containers
 stop:
 	docker compose down
+	docker compose -f compose.dev.yaml down
 
 # Check if site builds successfully
 check:
-	DOCKERFILE=Dockerfile.dev ZOLA_COMMAND="check" docker compose up --build --abort-on-container-exit 
+	docker compose -f compose.dev.yaml run --rm zola check 

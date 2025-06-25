@@ -1,5 +1,8 @@
 # Build stage
-FROM ghcr.io/getzola/zola:v0.20.0 as builder
+FROM alpine:3.20 as builder
+
+# Install Zola from Alpine packages
+RUN apk add --no-cache zola
 
 # Copy the site source
 COPY . /project
