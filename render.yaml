@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: peter-lab-backend
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: cd lab-backend && npm install
+    startCommand: cd lab-backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health 
