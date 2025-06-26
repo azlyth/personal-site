@@ -3,60 +3,67 @@
 {% block title %}{{ page.title }} - Peter Valdez{% endblock title %}
 
 {% block content %}
-<h1>{{ page.title }}</h1>
-<div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>
+<h1 style="margin-bottom: 0.25rem; font-weight: 400;">{{ page.title }}</h1>
+<div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
 
 {{ page.content | safe }}
 
-<div id="experiment-1">
+<div id="experiment-1" style="max-width: 640px; margin: 0 auto;">
     <div id="session-container">
-        <h2>QR Code Counter</h2>
-        
-        <div id="qr-container" style="text-align: center; margin: 2rem 0;">
-            <div id="qr-code"></div>
-            <p id="session-status" style="color: #777; margin-top: 1rem;">Generating session...</p>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0;">
+            <div id="qr-container" style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                <div id="qr-code"></div>
+            </div>
+            
+            <div id="counter-display" style="text-align: center; display: flex; align-items: center; justify-content: center;">
+                <div id="counter" style="font-size: 10rem; font-weight: 200; color: #0066cc; line-height: 0.9; letter-spacing: -0.02em; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center;">0</div>
+            </div>
         </div>
         
-        <div id="counter-display" style="text-align: center; margin: 2rem 0;">
-            <div id="counter" style="font-size: 4rem; font-weight: bold; color: #0066cc;">0</div>
-            <p style="color: #777;">Counter Value</p>
-        </div>
-        
-        <div id="connected-devices" style="margin: 2rem 0;">
-            <h3>Connected Devices</h3>
-            <ul id="device-list" style="list-style: none; padding: 0;"></ul>
+        <div id="connected-devices" style="margin: 1rem 0; text-align: center;">
+            <div id="device-status" style="font-size: 1.1rem; font-weight: 400; letter-spacing: 0.025em; color: #999;">Waiting for device...</div>
         </div>
     </div>
     
-    <div id="mobile-container" style="display: none;">
-        <h2>Phone Controller</h2>
-        <p id="connection-status">Connecting...</p>
+    <div id="mobile-container" style="display: none; max-width: 320px; margin: 0 auto; text-align: center;">
+        <div style="margin: 1.5rem 0;">
+            <p id="mobile-session-id" style="color: #999; font-size: 0.85rem; margin-bottom: 0.75rem; letter-spacing: 0.025em;"></p>
+            <p id="connection-status" style="color: #999; margin-bottom: 1.5rem; font-size: 0.9rem;">Connecting...</p>
+        </div>
         
-        <div id="controls" style="display: none; text-align: center; margin: 2rem 0;">
-            <button id="increment-btn" style="
-                font-size: 1.5rem;
-                padding: 1rem 2rem;
-                background: #0066cc;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                margin: 1rem;
-            ">+1</button>
-            
-            <button id="decrement-btn" style="
-                font-size: 1.5rem;
-                padding: 1rem 2rem;
-                background: #cc6600;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                margin: 1rem;
-            ">-1</button>
-            
-            <div style="margin-top: 2rem;">
-                <p style="color: #777;">Tap the buttons to change the counter on the main display!</p>
+        <div id="controls" style="display: none; margin: 2.5rem 0;">
+            <div style="display: flex; justify-content: center; gap: 1.5rem;">
+                <button id="decrement-btn" style="
+                    font-size: 1.8rem;
+                    width: 72px;
+                    height: 72px;
+                    background: #f8f9fa;
+                    color: #666;
+                    border: 1px solid #e5e5e5;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 300;
+                ">−</button>
+                
+                <button id="increment-btn" style="
+                    font-size: 1.8rem;
+                    width: 72px;
+                    height: 72px;
+                    background: #0066cc;
+                    color: white;
+                    border: 1px solid #0066cc;
+                    border-radius: 50%;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 300;
+                ">+</button>
             </div>
         </div>
     </div>
@@ -123,7 +130,12 @@
                 level: 'M'
             });
             
-            document.getElementById('session-status').textContent = `Session: ${sessionId}`;
+
+            
+            // Set initial counter value
+            if (data && typeof data.counter !== 'undefined') {
+                document.getElementById('counter').textContent = data.counter;
+            }
         });
         
         socket.on('counter-update', (data) => {
@@ -131,11 +143,13 @@
         });
         
         socket.on('device-connected', (data) => {
-            updateDeviceList(data.devices);
+            updateDeviceStatus('Device connected', true);
         });
         
         socket.on('device-disconnected', (data) => {
-            updateDeviceList(data.devices);
+            if (data.devices.length === 0) {
+                updateDeviceStatus('Waiting for device...', false);
+            }
         });
     }
     
@@ -151,6 +165,8 @@
             return;
         }
         
+        document.getElementById('mobile-session-id').textContent = `Session: ${sessionId}`;
+        
         // Connect to backend
         socket = io(BACKEND_URL);
         
@@ -159,9 +175,13 @@
             socket.emit('join-session', { sessionId });
         });
         
-        socket.on('session-joined', () => {
+        socket.on('session-joined', (data) => {
             document.getElementById('connection-status').textContent = 'Connected to session!';
             document.getElementById('controls').style.display = 'block';
+        });
+        
+        socket.on('counter-update', (data) => {
+            // Mobile doesn't have a counter display, but we could add one if needed
         });
         
         socket.on('session-not-found', () => {
@@ -178,22 +198,15 @@
         });
     }
     
-    function updateDeviceList(devices) {
-        const deviceList = document.getElementById('device-list');
-        deviceList.innerHTML = '';
-        
-        devices.forEach((device, index) => {
-            const li = document.createElement('li');
-            li.style.cssText = 'padding: 0.5rem; margin: 0.5rem 0; background: #f5f5f5; border-radius: 4px;';
-            li.textContent = `Device ${index + 1} (${device.id.substring(0, 8)}...)`;
-            deviceList.appendChild(li);
-        });
-        
-        if (devices.length === 0) {
-            const li = document.createElement('li');
-            li.style.cssText = 'padding: 0.5rem; color: #777; font-style: italic;';
-            li.textContent = 'No devices connected';
-            deviceList.appendChild(li);
+    function updateDeviceStatus(message, isConnected) {
+        const status = document.getElementById('device-status');
+        status.textContent = message;
+        if (isConnected) {
+            status.style.color = 'rgba(34, 197, 94, 0.9)';
+            status.style.fontWeight = '500';
+        } else {
+            status.style.color = '#999';
+            status.style.fontWeight = '400';
         }
     }
     
@@ -201,7 +214,4 @@
     document.addEventListener('DOMContentLoaded', init);
 </script>
 
-<div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #eee;">
-    <a href="{{ get_url(path='/lab/') }}">← Back to Lab</a>
-</div>
 {% endblock content %} 
