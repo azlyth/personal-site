@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section.title }} - Peter Valdez{% endblock title %}
+
+{% block content %}
+<script>
+// Redirect to the latest experiment
+window.location.href = "{{ get_url(path='/lab/experiment-1/') }}";
+</script>
+
+<noscript>
+<h1>{{ section.title }}</h1>
+{{ section.content | safe }}
+
+<h2>Experiments</h2>
+<ul class="post-list">
+    {% for page in section.pages %}
+    <li>
+        <a href="{{ page.permalink }}">
+            <div class="post-title">{{ page.title }}</div>
+        </a>
+    </li>
+    {% endfor %}
+</ul>
+
+<p><a href="{{ get_url(path='/lab/experiment-1/') }}">Go to Latest Experiment →</a></p>
+</noscript>
+{% endblock content %} 

@@ -13,7 +13,7 @@ help:
 	@echo "$(BOLD)🚀 Zola Site Commands$(RESET)"
 	@echo ""
 	@echo "$(CYAN)Development:$(RESET)"
-	@echo "  $(GREEN)make dev$(RESET)     - Start development server with live reload (http://localhost:1111)"
+	@echo "  $(GREEN)make dev$(RESET)     - Start site + lab backend (ports 1111 & 3001)"
 	@echo "  $(GREEN)make open-local$(RESET) - Open local development site in browser"
 	@echo "  $(GREEN)make open-gh$(RESET)    - Open GitHub Pages site in browser"
 	@echo "  $(GREEN)make logs$(RESET)    - Show container logs"
@@ -27,9 +27,9 @@ help:
 	@echo "  $(GREEN)make build$(RESET)   - Build Docker image"
 	@echo "  $(GREEN)make clean$(RESET)   - Clean up containers and images"
 	@echo ""
-	@echo "$(YELLOW)💡 Tip: Run 'make dev' to get started!$(RESET)"
+	@echo "$(YELLOW)💡 Tip: Run 'make dev' to start both site and experiments!$(RESET)"
 
-# Development mode - runs zola serve with live reloading
+# Development mode - runs zola serve with live reloading + lab backend
 dev:
 	docker compose -f compose.dev.yaml up --build
 
@@ -67,4 +67,8 @@ stop:
 
 # Check if site builds successfully
 check:
-	docker compose -f compose.dev.yaml run --rm zola check 
+	docker compose -f compose.dev.yaml run --rm zola check
+
+
+
+ 

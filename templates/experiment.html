@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - Peter Valdez{% endblock title %}
+
+{% block content %}
+<h1>{{ page.title }}</h1>
+<div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>
+
+{{ page.content | safe }}
+
+<div id="experiment-1">
+    <div id="session-container">
+        <h2>QR Code Counter</h2>
+        
+        <div id="qr-container" style="text-align: center; margin: 2rem 0;">
+            <div id="qr-code"></div>
+            <p id="session-status" style="color: #777; margin-top: 1rem;">Generating session...</p>
+        </div>
+        
+        <div id="counter-display" style="text-align: center; margin: 2rem 0;">
+            <div id="counter" style="font-size: 4rem; font-weight: bold; color: #0066cc;">0</div>
+            <p style="color: #777;">Counter Value</p>
+        </div>
+        
+        <div id="connected-devices" style="margin: 2rem 0;">
+            <h3>Connected Devices</h3>
+            <ul id="device-list" style="list-style: none; padding: 0;"></ul>
+        </div>
+    </div>
+    
+    <div id="mobile-container" style="display: none;">
+        <h2>Phone Controller</h2>
+        <p id="connection-status">Connecting...</p>
+        
+        <div id="controls" style="display: none; text-align: center; margin: 2rem 0;">
+            <button id="increment-btn" style="
+                font-size: 1.5rem;
+                padding: 1rem 2rem;
+                background: #0066cc;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                margin: 1rem;
+            ">+1</button>
+            
+            <button id="decrement-btn" style="
+                font-size: 1.5rem;
+                padding: 1rem 2rem;
+                background: #cc6600;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                margin: 1rem;
+            ">-1</button>
+            
+            <div style="margin-top: 2rem;">
+                <p style="color: #777;">Tap the buttons to change the counter on the main display!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/qrious@4.0.2/dist/qrious.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+    // Configuration
+    const getBackendUrl = () => {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+            return 'http://localhost:3001';
+        } else if (hostname === '192.168.1.191') {
+            return 'http://192.168.1.191:3001';
+        } else {
+            return 'https://your-render-app.render.com'; // Update this when deployed
+        }
+    };
+    
+    const BACKEND_URL = getBackendUrl();
+    
+    let socket;
+    let sessionId;
+    let isDesktop = !window.location.search.includes('mobile=true');
+    
+    // Initialize the experiment
+    function init() {
+        if (isDesktop) {
+            initDesktop();
+        } else {
+            initMobile();
+        }
+    }
+    
+    function initDesktop() {
+        document.getElementById('mobile-container').style.display = 'none';
+        document.getElementById('session-container').style.display = 'block';
+        
+        // Connect to backend
+        socket = io(BACKEND_URL);
+        
+        socket.on('connect', () => {
+            console.log('Connected to backend');
+            socket.emit('create-session');
+        });
+        
+        socket.on('session-created', (data) => {
+            sessionId = data.sessionId;
+            const mobileUrl = `${window.location.origin}${window.location.pathname}?mobile=true&session=${sessionId}`;
+            
+            // Generate QR code using QRious
+            const qrContainer = document.getElementById('qr-code');
+            qrContainer.innerHTML = ''; // Clear any existing content
+            
+            const canvas = document.createElement('canvas');
+            qrContainer.appendChild(canvas);
+            
+            const qr = new QRious({
+                element: canvas,
+                value: mobileUrl,
+                size: 200,
+                level: 'M'
+            });
+            
+            document.getElementById('session-status').textContent = `Session: ${sessionId}`;
+        });
+        
+        socket.on('counter-update', (data) => {
+            document.getElementById('counter').textContent = data.value;
+        });
+        
+        socket.on('device-connected', (data) => {
+            updateDeviceList(data.devices);
+        });
+        
+        socket.on('device-disconnected', (data) => {
+            updateDeviceList(data.devices);
+        });
+    }
+    
+    function initMobile() {
+        document.getElementById('session-container').style.display = 'none';
+        document.getElementById('mobile-container').style.display = 'block';
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        sessionId = urlParams.get('session');
+        
+        if (!sessionId) {
+            document.getElementById('connection-status').textContent = 'No session ID provided';
+            return;
+        }
+        
+        // Connect to backend
+        socket = io(BACKEND_URL);
+        
+        socket.on('connect', () => {
+            console.log('Connected to backend');
+            socket.emit('join-session', { sessionId });
+        });
+        
+        socket.on('session-joined', () => {
+            document.getElementById('connection-status').textContent = 'Connected to session!';
+            document.getElementById('controls').style.display = 'block';
+        });
+        
+        socket.on('session-not-found', () => {
+            document.getElementById('connection-status').textContent = 'Session not found';
+        });
+        
+        // Button handlers
+        document.getElementById('increment-btn').addEventListener('click', () => {
+            socket.emit('increment', { sessionId });
+        });
+        
+        document.getElementById('decrement-btn').addEventListener('click', () => {
+            socket.emit('decrement', { sessionId });
+        });
+    }
+    
+    function updateDeviceList(devices) {
+        const deviceList = document.getElementById('device-list');
+        deviceList.innerHTML = '';
+        
+        devices.forEach((device, index) => {
+            const li = document.createElement('li');
+            li.style.cssText = 'padding: 0.5rem; margin: 0.5rem 0; background: #f5f5f5; border-radius: 4px;';
+            li.textContent = `Device ${index + 1} (${device.id.substring(0, 8)}...)`;
+            deviceList.appendChild(li);
+        });
+        
+        if (devices.length === 0) {
+            const li = document.createElement('li');
+            li.style.cssText = 'padding: 0.5rem; color: #777; font-style: italic;';
+            li.textContent = 'No devices connected';
+            deviceList.appendChild(li);
+        }
+    }
+    
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+
+<div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #eee;">
+    <a href="{{ get_url(path='/lab/') }}">← Back to Lab</a>
+</div>
+{% endblock content %} 
