@@ -3,7 +3,7 @@ services:
     name: peter-lab-backend
     env: node
     region: ohio
-    plan: free
+    plan: starter
     buildCommand: cd lab-backend && npm install
     startCommand: cd lab-backend && npm start
     envVars:
