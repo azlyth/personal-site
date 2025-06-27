@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - Peter Valdez{% endblock title %}
+
+{% block content %}
+<div id="experiment-header">
+<h1 style="margin-bottom: 0.25rem; font-weight: 400;">{{ page.title }}</h1>
+<div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
+
+{{ page.content | safe }}
+</div>
+
+<div id="go-experiment" style="max-width: 800px; margin: 0 auto;">
+    <div id="session-container">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0; flex-wrap: wrap;">
+            <!-- QR Code Section -->
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div id="qr-container" style="text-align: center;">
+                    <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Game</div>
+                    <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
+                        <div id="qr-code" style="display: flex; align-items: center; justify-content: center;"></div>
+                    </div>
+                    <a id="game-link" href="#" style="font-size: 0.8rem; color: #0066cc; text-decoration: none; margin-top: 0.5rem; display: block;">Click to test</a>
+                </div>
+            </div>
+            
+            <!-- Go Board Section -->
+            <div id="go-board-container" style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                <div id="game-info" style="margin-bottom: 1rem;">
+                    <div id="player-count" style="font-size: 0.9rem; color: #666;">
+                        0 players connected
+                    </div>
+                </div>
+                <div id="go-board" style="display: inline-block; background: #dcb35c; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
+                <div id="error-message" style="color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <div id="mobile-container" style="display: none; max-width: 360px; margin: 0 auto; text-align: center; padding: 0 1rem;">
+        <div style="margin: 1rem 0 0.5rem 0;">
+            <p id="connection-status" style="color: #999; margin: 0; font-size: 0.85rem;">Connecting...</p>
+        </div>
+        
+        <div id="mobile-game-info" style="display: none; margin-bottom: 0.75rem;">
+            <div id="mobile-turn-indicator" style="font-size: 0.9rem; color: #666; font-weight: 500;">Black's turn</div>
+        </div>
+        
+        <div id="mobile-go-board" style="display: none; background: #dcb35c; padding: 12px; border-radius: 8px; margin: 0 auto; max-width: 320px;"></div>
+        <div id="mobile-error-message" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1rem; text-align: center;"></div>
+        
+        <div id="go-controls" style="display: none; margin: 1.25rem 0 1rem 0;">
+            <!-- Player Color Status -->
+            <div id="mobile-current-status" style="font-size: 0.95rem; font-weight: 500; margin-bottom: 0.75rem; color: #555;">Playing as White</div>
+            
+            <!-- Color Switch Buttons -->
+            <div style="margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: center; gap: 0.75rem;">
+                    <button id="switch-white-btn" style="
+                        padding: 0.6rem 1.25rem;
+                        background: #fff;
+                        color: #333;
+                        border: 2px solid #ddd;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        transition: all 0.15s ease;
+                        font-size: 0.85rem;
+                        font-weight: 500;
+                        min-width: 80px;
+                    ">White</button>
+                    
+                    <button id="switch-black-btn" style="
+                        padding: 0.6rem 1.25rem;
+                        background: #333;
+                        color: #fff;
+                        border: 2px solid #333;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        transition: all 0.15s ease;
+                        font-size: 0.85rem;
+                        font-weight: 500;
+                        min-width: 80px;
+                    ">Black</button>
+                </div>
+            </div>
+            
+            <!-- Reset Button -->
+            <div style="text-align: center;">
+                <button id="reset-game-btn" style="
+                    padding: 0.6rem 1.5rem;
+                    background: #dc3545;
+                    color: white;
+                    border: 1px solid #dc3545;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                ">Reset Game</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/qrious@4.0.2/dist/qrious.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+    // Configuration
+    const getBackendUrl = () => {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+            return 'http://localhost:3001';
+        } else if (hostname === '192.168.1.191') {
+            return 'http://192.168.1.191:3001';
+        } else {
+            return 'https://peter-lab-backend.onrender.com';
+        }
+    };
+    
+    const BACKEND_URL = getBackendUrl();
+    const BOARD_SIZE = 9;
+    
+    let socket;
+    let sessionId;
+    let playerColor;
+    let gameState = {
+        board: Array(9).fill().map(() => Array(9).fill(null)),
+        currentPlayer: 'black',
+        players: { white: null, black: null }
+    };
+    let isDesktop = !window.location.search.includes('mobile=true');
+    
+    // Initialize the experiment
+    function init() {
+        if (isDesktop) {
+            initDesktop();
+        } else {
+            initMobile();
+            // Hide header for mobile users
+            document.getElementById('experiment-header').style.display = 'none';
+        }
+    }
+    
+    function initDesktop() {
+        document.getElementById('mobile-container').style.display = 'none';
+        document.getElementById('session-container').style.display = 'block';
+        
+        // Create Go board
+        createGoBoard('go-board');
+        
+        // Connect to backend
+        socket = io(BACKEND_URL);
+        
+        socket.on('connect', () => {
+            console.log('Experiment page - Connected to backend');
+            socket.emit('create-go-session');
+        });
+        
+        socket.on('go-session-created', (data) => {
+            sessionId = data.sessionId;
+            console.log('Experiment page - Go session created:', sessionId, data);
+            
+            // Use global session for URLs
+            const gameUrl = `${window.location.origin}${window.location.pathname}?mobile=true&session=global-go-game`;
+            
+            // Generate QR code
+            createQRCode('qr-code', gameUrl);
+            
+            // Make QR code clickable
+            const qrContainer = document.getElementById('qr-code').parentElement;
+            qrContainer.style.cursor = 'pointer';
+            qrContainer.addEventListener('click', () => {
+                window.open(gameUrl, '_blank');
+            });
+            
+            // Set up test link
+            document.getElementById('game-link').href = gameUrl;
+            
+            updateGameState(data.gameState);
+        });
+        
+        socket.on('go-game-update', (data) => {
+            updateGameState(data.gameState);
+        });
+        
+        socket.on('go-player-joined', (data) => {
+            updatePlayerStatus(data.players);
+        });
+        
+        socket.on('go-player-left', (data) => {
+            updatePlayerStatus(data.players);
+        });
+    }
+    
+    function initMobile() {
+        document.getElementById('session-container').style.display = 'none';
+        document.getElementById('mobile-container').style.display = 'block';
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        // Always use global session ID
+        sessionId = 'global-go-game';
+        playerColor = urlParams.get('color') || 'white'; // Default to white if no color specified
+        
+        console.log('Mobile init with global session:', sessionId, 'color:', playerColor);
+        
+        // Create mobile Go board
+        createGoBoard('mobile-go-board', true);
+        
+        // Connect to backend
+        socket = io(BACKEND_URL);
+        
+        socket.on('connect', () => {
+            console.log('Connected to backend as', playerColor, 'session:', sessionId);
+            socket.emit('join-go-session', { sessionId, color: playerColor });
+        });
+        
+        socket.on('go-session-joined', (data) => {
+            document.getElementById('connection-status').textContent = 'Connected to game!';
+            document.getElementById('mobile-game-info').style.display = 'block';
+            document.getElementById('mobile-go-board').style.display = 'block';
+            document.getElementById('go-controls').style.display = 'block';
+            updateGameState(data.gameState);
+            updateColorSwitchButtons();
+            setupMobileControls(); // Setup controls after they're visible
+        });
+        
+        socket.on('go-game-update', (data) => {
+            updateGameState(data.gameState);
+        });
+        
+        socket.on('go-session-not-found', () => {
+            document.getElementById('connection-status').textContent = 'Session not found';
+        });
+        
+        socket.on('go-color-switched', (data) => {
+            console.log('Received color switch:', data);
+            playerColor = data.newColor;
+            updateColorSwitchButtons();
+            // Update the mobile status display
+            if (document.getElementById('mobile-current-status')) {
+                document.getElementById('mobile-current-status').textContent = `Playing as ${playerColor.charAt(0).toUpperCase() + playerColor.slice(1)}`;
+            }
+        });
+        
+        socket.on('go-game-reset', (data) => {
+            console.log('Received game reset:', data);
+            updateGameState(data.gameState);
+        });
+        
+        socket.on('go-invalid-move', (data) => {
+            console.log('Invalid move:', data);
+            showErrorMessage(data.reason);
+        });
+    }
+    
+    function createQRCode(containerId, url) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+        
+        new QRious({
+            element: canvas,
+            value: url,
+            size: 160,
+            level: 'M'
+        });
+    }
+    
+    function createGoBoard(containerId, isMobile = false) {
+        const container = document.getElementById(containerId);
+        const boardSize = isMobile ? 280 : 380;
+        const cellSize = boardSize / (BOARD_SIZE + 1);
+        
+        // Create SVG board
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', boardSize);
+        svg.setAttribute('height', boardSize);
+        svg.style.cursor = 'pointer';
+        
+        // Draw grid lines
+        for (let i = 1; i <= BOARD_SIZE; i++) {
+            // Horizontal lines
+            const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hLine.setAttribute('x1', cellSize);
+            hLine.setAttribute('y1', i * cellSize);
+            hLine.setAttribute('x2', BOARD_SIZE * cellSize);
+            hLine.setAttribute('y2', i * cellSize);
+            hLine.setAttribute('stroke', '#8B4513');
+            hLine.setAttribute('stroke-width', '1');
+            svg.appendChild(hLine);
+            
+            // Vertical lines
+            const vLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            vLine.setAttribute('x1', i * cellSize);
+            vLine.setAttribute('y1', cellSize);
+            vLine.setAttribute('x2', i * cellSize);
+            vLine.setAttribute('y2', BOARD_SIZE * cellSize);
+            vLine.setAttribute('stroke', '#8B4513');
+            vLine.setAttribute('stroke-width', '1');
+            svg.appendChild(vLine);
+        }
+        
+        // Add star points (handicap points) for 9x9 board
+        const starPoints = [[3,3], [3,7], [5,5], [7,3], [7,7]];
+        starPoints.forEach(([x, y]) => {
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', x * cellSize);
+            circle.setAttribute('cy', y * cellSize);
+            circle.setAttribute('r', '3');
+            circle.setAttribute('fill', '#8B4513');
+            svg.appendChild(circle);
+        });
+        
+        // Add click handler for moves
+        if (!isDesktop || isMobile) {
+            svg.addEventListener('click', (e) => {
+                if (!playerColor || gameState.currentPlayer !== playerColor) return;
+                
+                const rect = svg.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const col = Math.round((x - cellSize) / cellSize);
+                const row = Math.round((y - cellSize) / cellSize);
+                
+                if (col >= 0 && col < BOARD_SIZE && row >= 0 && row < BOARD_SIZE) {
+                    makeMove(row, col);
+                }
+            });
+        }
+        
+        svg.setAttribute('id', containerId + '-svg');
+        container.appendChild(svg);
+    }
+    
+    function makeMove(row, col) {
+        if (gameState.board[row][col] !== null) return;
+        
+        socket.emit('go-make-move', {
+            sessionId,
+            row,
+            col,
+            color: playerColor
+        });
+    }
+    
+    function updateGameState(newGameState) {
+        gameState = newGameState;
+        
+        // Update board stones
+        updateBoardStones('go-board-svg');
+        if (document.getElementById('mobile-go-board-svg')) {
+            updateBoardStones('mobile-go-board-svg');
+        }
+        
+        // Update player status
+        updatePlayerStatus(gameState.players);
+        
+        // Update mobile current status display
+        if (document.getElementById('mobile-current-status')) {
+            document.getElementById('mobile-current-status').textContent = `Playing as ${playerColor.charAt(0).toUpperCase() + playerColor.slice(1)}`;
+        }
+        
+        // Update turn indicator
+        if (document.getElementById('mobile-turn-indicator')) {
+            const currentTurn = gameState.currentPlayer.charAt(0).toUpperCase() + gameState.currentPlayer.slice(1);
+            document.getElementById('mobile-turn-indicator').textContent = `${currentTurn}'s turn`;
+        }
+    }
+    
+    function updateBoardStones(svgId) {
+        const svg = document.getElementById(svgId);
+        if (!svg) return;
+        
+        // Remove existing stones
+        const existingStones = svg.querySelectorAll('.stone');
+        existingStones.forEach(stone => stone.remove());
+        
+        const cellSize = parseInt(svg.getAttribute('width')) / (BOARD_SIZE + 1);
+        
+        // Add stones
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                const stone = gameState.board[row][col];
+                if (stone) {
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', (col + 1) * cellSize);
+                    circle.setAttribute('cy', (row + 1) * cellSize);
+                    circle.setAttribute('r', cellSize * 0.4);
+                    circle.setAttribute('fill', stone === 'black' ? '#000' : '#fff');
+                    circle.setAttribute('stroke', stone === 'black' ? '#333' : '#ccc');
+                    circle.setAttribute('stroke-width', '1');
+                    circle.classList.add('stone');
+                    svg.appendChild(circle);
+                }
+            }
+        }
+    }
+    
+    function updatePlayerStatus(players) {
+        const connectedPlayers = Object.values(players).filter(p => p !== null).length;
+        if (document.getElementById('player-count')) {
+            document.getElementById('player-count').textContent = `${connectedPlayers} ${connectedPlayers === 1 ? 'player' : 'players'} connected`;
+        }
+    }
+    
+    function setupMobileControls() {
+        // Go control button handlers - setup after controls are visible
+        const whiteBtn = document.getElementById('switch-white-btn');
+        const blackBtn = document.getElementById('switch-black-btn');
+        const resetBtn = document.getElementById('reset-game-btn');
+        
+        console.log('Setting up mobile controls:', { whiteBtn, blackBtn, resetBtn });
+        
+        if (whiteBtn) {
+            whiteBtn.addEventListener('click', () => {
+                console.log('White button clicked, current color:', playerColor);
+                if (playerColor !== 'white') {
+                    console.log('Emitting go-switch-color to white');
+                    socket.emit('go-switch-color', { sessionId, newColor: 'white' });
+                }
+            });
+        }
+        
+        if (blackBtn) {
+            blackBtn.addEventListener('click', () => {
+                console.log('Black button clicked, current color:', playerColor);
+                if (playerColor !== 'black') {
+                    console.log('Emitting go-switch-color to black');
+                    socket.emit('go-switch-color', { sessionId, newColor: 'black' });
+                }
+            });
+        }
+        
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                console.log('Reset button clicked');
+                if (confirm('Are you sure you want to reset the game? This will clear all stones and start over.')) {
+                    console.log('Emitting go-reset-game');
+                    socket.emit('go-reset-game', { sessionId });
+                }
+            });
+        }
+    }
+    
+    function updateColorSwitchButtons() {
+        const whiteBtn = document.getElementById('switch-white-btn');
+        const blackBtn = document.getElementById('switch-black-btn');
+        
+        console.log('Updating color switch buttons, current color:', playerColor);
+        
+        if (whiteBtn && blackBtn) {
+            // Reset both buttons to default state
+            whiteBtn.style.background = '#fff';
+            whiteBtn.style.color = '#333';
+            whiteBtn.style.borderWidth = '2px';
+            whiteBtn.style.borderStyle = 'solid';
+            whiteBtn.disabled = false;
+            whiteBtn.style.opacity = '1';
+            
+            blackBtn.style.background = '#333';
+            blackBtn.style.color = '#fff';
+            blackBtn.style.borderWidth = '2px';
+            blackBtn.style.borderStyle = 'solid';
+            blackBtn.disabled = false;
+            blackBtn.style.opacity = '1';
+            
+            // Add bigger blue border to current color
+            if (playerColor === 'white') {
+                whiteBtn.style.borderColor = '#0066cc';
+                whiteBtn.style.borderWidth = '4px';
+                blackBtn.style.borderColor = '#333';
+                blackBtn.style.borderWidth = '2px';
+            } else {
+                blackBtn.style.borderColor = '#0066cc';
+                blackBtn.style.borderWidth = '4px';
+                whiteBtn.style.borderColor = '#ddd';
+                whiteBtn.style.borderWidth = '2px';
+            }
+        }
+    }
+    
+    function showErrorMessage(message) {
+        const errorElement = document.getElementById('mobile-error-message') || document.getElementById('error-message');
+        if (errorElement) {
+            errorElement.textContent = message;
+            // Clear the error message after 3 seconds
+            setTimeout(() => {
+                errorElement.textContent = '';
+            }, 3000);
+        }
+    }
+    
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+
+{% endblock content %} 

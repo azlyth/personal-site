@@ -3,10 +3,12 @@
 {% block title %}{{ page.title }} - Peter Valdez{% endblock title %}
 
 {% block content %}
+<div id="experiment-header">
 <h1 style="margin-bottom: 0.25rem; font-weight: 400;">{{ page.title }}</h1>
 <div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
 
 {{ page.content | safe }}
+</div>
 
 <div id="experiment-1" style="max-width: 640px; margin: 0 auto;">
     <div id="session-container">
@@ -29,8 +31,11 @@
     
     <div id="mobile-container" style="display: none; max-width: 320px; margin: 0 auto; text-align: center;">
         <div style="margin: 1.5rem 0;">
-            <p id="mobile-session-id" style="color: #999; font-size: 0.85rem; margin-bottom: 0.75rem; letter-spacing: 0.025em;"></p>
             <p id="connection-status" style="color: #999; margin-bottom: 1.5rem; font-size: 0.9rem;">Connecting...</p>
+        </div>
+        
+        <div id="mobile-counter-display" style="display: none; margin: 2rem 0;">
+            <div id="mobile-counter" style="font-size: 8rem; font-weight: 200; color: #0066cc; line-height: 0.9; letter-spacing: -0.02em;">0</div>
         </div>
         
         <div id="controls" style="display: none; margin: 2.5rem 0;">
@@ -99,6 +104,8 @@
             initDesktop();
         } else {
             initMobile();
+            // Hide header for mobile users
+            document.getElementById('experiment-header').style.display = 'none';
         }
     }
     
@@ -167,8 +174,6 @@
             return;
         }
         
-        document.getElementById('mobile-session-id').textContent = `Session: ${sessionId}`;
-        
         // Connect to backend
         socket = io(BACKEND_URL);
         
@@ -178,12 +183,18 @@
         });
         
         socket.on('session-joined', (data) => {
-            document.getElementById('connection-status').textContent = 'Connected to session!';
+            document.getElementById('connection-status').textContent = 'Connected!';
+            document.getElementById('mobile-counter-display').style.display = 'block';
             document.getElementById('controls').style.display = 'block';
+            
+            // Set initial counter value if provided
+            if (data && typeof data.counter !== 'undefined') {
+                document.getElementById('mobile-counter').textContent = data.counter;
+            }
         });
         
         socket.on('counter-update', (data) => {
-            // Mobile doesn't have a counter display, but we could add one if needed
+            document.getElementById('mobile-counter').textContent = data.value;
         });
         
         socket.on('session-not-found', () => {

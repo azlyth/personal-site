@@ -3,26 +3,391 @@
 {% block title %}{{ section.title }} - Peter Valdez{% endblock title %}
 
 {% block content %}
+{% set sorted_pages = section.pages | sort(attribute="date") | reverse %}
+{% for page in sorted_pages %}
+<div class="experiment-container" style="margin: 0; padding: 0; border-bottom: 1px solid #eee;">
+    <h2 style="margin-bottom: 0.1rem; font-weight: 400;">{{ page.title }}</h2>
+    <div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
+    
+    {% if page.title == "Experiment #2: Go Board" %}
+        <!-- Go Board Experiment -->
+        <div id="go-experiment-{{ loop.index0 }}" style="max-width: 800px; margin: 0 auto;">
+            <div id="go-session-container-{{ loop.index0 }}">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0; flex-wrap: wrap;">
+                    <!-- QR Code Section -->
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Game</div>
+                            <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
+                                <div id="qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Go Board Section -->
+                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                        <div style="margin-bottom: 1rem;">
+                            <div id="go-player-count-{{ loop.index0 }}" style="font-size: 0.9rem; color: #666;">
+                                0 players connected
+                            </div>
+                        </div>
+                        <div id="go-board-{{ loop.index0 }}" style="display: inline-block; background: #dcb35c; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
+                        <div id="go-error-message-{{ loop.index0 }}" style="color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+    {% elif page.title == "Experiment #1: Minus, Plus" %}
+        <!-- Counter Experiment -->
+        <div id="counter-experiment-{{ loop.index0 }}" style="max-width: 640px; margin: 0 auto;">
+            <div id="counter-session-container-{{ loop.index0 }}">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0;">
+                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                        <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
+                            <div id="counter-qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; display: flex; align-items: center; justify-content: center;">
+                        <div id="counter-display-{{ loop.index0 }}" style="font-size: 10rem; font-weight: 200; color: #0066cc; line-height: 0.9; letter-spacing: -0.02em; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center;">0</div>
+                    </div>
+                </div>
+                
+                <p style="margin: 1rem 0; font-size: 0.95rem; color: #666; text-align: center;">Scan with your phone, change the number to your liking.</p>
+                
+                <div style="margin: 1rem 0; text-align: center;">
+                    <div id="counter-device-status-{{ loop.index0 }}" style="font-size: 1.1rem; font-weight: 400; letter-spacing: 0.025em; color: #999;">Waiting for device...</div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+    {% endfor %}
+
+<script src="https://unpkg.com/qrious@4.0.2/dist/qrious.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
 <script>
-// Redirect to the latest experiment
-window.location.href = "{{ get_url(path='/lab/experiment-1/') }}";
+    // Configuration
+    const getBackendUrl = () => {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+            return 'http://localhost:3001';
+        } else if (hostname === '192.168.1.191') {
+            return 'http://192.168.1.191:3001';
+        } else {
+            return 'https://peter-lab-backend.onrender.com';
+        }
+    };
+    
+    const BACKEND_URL = getBackendUrl();
+    const BOARD_SIZE = 9;
+    
+    // Separate socket connections for each experiment
+    let counterSocket;
+    let goSocket;
+    let counterSessionId;
+    let goSessionId;
+    
+         // Game states
+     let goGameState = {
+         board: Array(9).fill().map(() => Array(9).fill(null)),
+         currentPlayer: 'black',
+         players: { white: null, black: null }
+     };
+    
+         // Initialize all experiments
+     function initExperiments() {
+         // Add small delay to ensure DOM is fully ready
+         setTimeout(() => {
+             initCounterExperiment();
+             initGoExperiment();
+         }, 100);
+     }
+    
+    // Counter Experiment Functions
+    function initCounterExperiment() {
+        counterSocket = io(BACKEND_URL);
+        
+        counterSocket.on('connect', () => {
+            console.log('Counter experiment connected');
+            counterSocket.emit('create-session');
+        });
+        
+        counterSocket.on('session-created', (data) => {
+            counterSessionId = data.sessionId;
+            const mobileUrl = `${window.location.origin}/lab/experiment-1?mobile=true&session=${counterSessionId}`;
+            
+                         // Generate QR code - find the counter experiment container
+             const qrContainer = document.querySelector('[id^="counter-qr-code-"]');
+             if (qrContainer) {
+                 qrContainer.innerHTML = '';
+                 const canvas = document.createElement('canvas');
+                 qrContainer.appendChild(canvas);
+                 
+                 new QRious({
+                     element: canvas,
+                     value: mobileUrl,
+                     size: 160,
+                     level: 'M'
+                 });
+                 
+                 // Make QR code clickable
+                 qrContainer.style.cursor = 'pointer';
+                 qrContainer.addEventListener('click', () => {
+                     window.open(mobileUrl, '_blank');
+                 });
+             }
+             
+             // Set initial counter value
+             const counterDisplay = document.querySelector('[id^="counter-display-"]');
+            if (counterDisplay && typeof data.counter !== 'undefined') {
+                counterDisplay.textContent = data.counter;
+            }
+        });
+        
+                 counterSocket.on('counter-update', (data) => {
+             const counterDisplay = document.querySelector('[id^="counter-display-"]');
+             if (counterDisplay) {
+                 counterDisplay.textContent = data.value;
+             }
+         });
+        
+        counterSocket.on('device-connected', (data) => {
+            updateCounterDeviceStatus('Device connected', true);
+        });
+        
+        counterSocket.on('device-disconnected', (data) => {
+            if (data.devices.length === 0) {
+                updateCounterDeviceStatus('Waiting for device...', false);
+            }
+        });
+    }
+    
+         function updateCounterDeviceStatus(message, isConnected) {
+         const status = document.querySelector('[id^="counter-device-status-"]');
+         if (status) {
+             status.textContent = message;
+             if (isConnected) {
+                 status.style.color = 'rgba(34, 197, 94, 0.9)';
+                 status.style.fontWeight = '500';
+             } else {
+                 status.style.color = '#999';
+                 status.style.fontWeight = '400';
+             }
+         }
+     }
+    
+         // Go Experiment Functions
+     function initGoExperiment() {
+         // Create Go board - find the go board container
+         const goBoardContainer = document.querySelector('[id^="go-board-"]');
+         if (goBoardContainer) {
+             createGoBoard(goBoardContainer.id);
+         }
+        
+        goSocket = io(BACKEND_URL);
+        
+                 goSocket.on('connect', () => {
+             console.log('Lab page - Go experiment connected');
+             goSocket.emit('create-go-session');
+         });
+        
+                 goSocket.on('go-session-created', (data) => {
+             goSessionId = data.sessionId;
+             console.log('Lab page - Go session created:', goSessionId, data);
+             
+             // Always use global session for URLs
+             const gameUrl = `${window.location.origin}/lab/experiment-2?mobile=true&session=global-go-game`;
+             
+             // Generate QR code
+             const qrCode = document.querySelector('[id^="qr-code-"][id$="-0"]');
+             if (qrCode) {
+                 createQRCode(qrCode.id, gameUrl);
+                 
+                 // Make QR code clickable
+                 const qrContainer = qrCode.parentElement;
+                 qrContainer.style.cursor = 'pointer';
+                 qrContainer.addEventListener('click', () => {
+                     window.open(gameUrl, '_blank');
+                 });
+             }
+             
+             // Set up test link
+             const gameLink = document.querySelector('[id^="game-link-"]');
+             if (gameLink) gameLink.href = gameUrl;
+             
+             // Desktop also joins session as observer to get game updates
+             goSocket.emit('join-go-session', { sessionId: goSessionId, color: 'observer' });
+             
+             updateGoGameState(data.gameState);
+         });
+        
+                 goSocket.on('go-game-update', (data) => {
+             console.log('Desktop received game update:', data);
+             updateGoGameState(data.gameState);
+         });
+         
+         goSocket.on('go-player-joined', (data) => {
+             console.log('Player joined:', data);
+             updateGoPlayerStatus(data.players);
+         });
+         
+         goSocket.on('go-player-left', (data) => {
+             console.log('Player left:', data);
+             updateGoPlayerStatus(data.players);
+         });
+         
+         goSocket.on('go-invalid-move', (data) => {
+             console.log('Invalid move:', data);
+             showGoErrorMessage(data.reason);
+         });
+    }
+    
+    function createQRCode(containerId, url) {
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.innerHTML = '';
+            const canvas = document.createElement('canvas');
+            container.appendChild(canvas);
+            
+            new QRious({
+                element: canvas,
+                value: url,
+                size: 160,
+                level: 'M'
+            });
+        }
+    }
+    
+    function createGoBoard(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        const boardSize = 380;
+        const cellSize = boardSize / (BOARD_SIZE + 1);
+        
+        // Create SVG board
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', boardSize);
+        svg.setAttribute('height', boardSize);
+        svg.style.cursor = 'pointer';
+        
+        // Draw grid lines
+        for (let i = 1; i <= BOARD_SIZE; i++) {
+            // Horizontal lines
+            const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hLine.setAttribute('x1', cellSize);
+            hLine.setAttribute('y1', i * cellSize);
+            hLine.setAttribute('x2', BOARD_SIZE * cellSize);
+            hLine.setAttribute('y2', i * cellSize);
+            hLine.setAttribute('stroke', '#8B4513');
+            hLine.setAttribute('stroke-width', '1');
+            svg.appendChild(hLine);
+            
+            // Vertical lines
+            const vLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            vLine.setAttribute('x1', i * cellSize);
+            vLine.setAttribute('y1', cellSize);
+            vLine.setAttribute('x2', i * cellSize);
+            vLine.setAttribute('y2', BOARD_SIZE * cellSize);
+            vLine.setAttribute('stroke', '#8B4513');
+            vLine.setAttribute('stroke-width', '1');
+            svg.appendChild(vLine);
+        }
+        
+                 // Add star points (handicap points) for 9x9 board
+         const starPoints = [[3,3], [3,7], [5,5], [7,3], [7,7]];
+         starPoints.forEach(([x, y]) => {
+             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+             circle.setAttribute('cx', x * cellSize);
+             circle.setAttribute('cy', y * cellSize);
+             circle.setAttribute('r', '3');
+             circle.setAttribute('fill', '#8B4513');
+             svg.appendChild(circle);
+         });
+        
+        svg.setAttribute('id', containerId + '-svg');
+        container.appendChild(svg);
+    }
+    
+         function updateGoGameState(newGameState) {
+         console.log('Updating game state:', newGameState);
+         goGameState = newGameState;
+         
+         // Update board stones
+         const boardSvg = document.querySelector('[id$="-svg"]');
+         console.log('Found board SVG:', boardSvg);
+         if (boardSvg) {
+             updateGoBoardStones(boardSvg.id);
+         }
+         
+         // Update player status
+         updateGoPlayerStatus(goGameState.players);
+     }
+    
+         function updateGoBoardStones(svgId) {
+         const svg = document.getElementById(svgId);
+         console.log('Updating board stones, SVG:', svg, 'Game state:', goGameState);
+         
+         if (!svg) {
+             console.error('SVG not found:', svgId);
+             return;
+         }
+         
+         // Remove existing stones
+         const existingStones = svg.querySelectorAll('.stone');
+         existingStones.forEach(stone => stone.remove());
+         
+         const cellSize = parseInt(svg.getAttribute('width')) / (BOARD_SIZE + 1);
+         console.log('Cell size:', cellSize, 'Board size:', BOARD_SIZE);
+         
+         // Add stones
+         let stoneCount = 0;
+         for (let row = 0; row < BOARD_SIZE; row++) {
+             for (let col = 0; col < BOARD_SIZE; col++) {
+                 const stone = goGameState.board[row][col];
+                 if (stone) {
+                     stoneCount++;
+                     console.log(`Adding stone at ${row},${col}: ${stone}`);
+                     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                     circle.setAttribute('cx', (col + 1) * cellSize);
+                     circle.setAttribute('cy', (row + 1) * cellSize);
+                     circle.setAttribute('r', cellSize * 0.4);
+                     circle.setAttribute('fill', stone === 'black' ? '#000' : '#fff');
+                     circle.setAttribute('stroke', stone === 'black' ? '#333' : '#ccc');
+                     circle.setAttribute('stroke-width', '1');
+                     circle.classList.add('stone');
+                     svg.appendChild(circle);
+                 }
+             }
+         }
+         console.log(`Added ${stoneCount} stones to board`);
+     }
+    
+         function updateGoPlayerStatus(players) {
+         const connectedPlayers = Object.values(players).filter(p => p !== null).length;
+         const playerCount = document.querySelector('[id^="go-player-count-"]');
+         if (playerCount) {
+             playerCount.textContent = `${connectedPlayers} ${connectedPlayers === 1 ? 'player' : 'players'} connected`;
+         }
+     }
+     
+     function showGoErrorMessage(message) {
+         const errorElement = document.querySelector('[id^="go-error-message-"]');
+         if (errorElement) {
+             errorElement.textContent = message;
+             // Clear the error message after 3 seconds
+             setTimeout(() => {
+                 errorElement.textContent = '';
+             }, 3000);
+         }
+     }
+    
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', initExperiments);
 </script>
 
-<noscript>
-<h1>{{ section.title }}</h1>
-{{ section.content | safe }}
-
-<h2>Experiments</h2>
-<ul class="post-list">
-    {% for page in section.pages %}
-    <li>
-        <a href="{{ page.permalink }}">
-            <div class="post-title">{{ page.title }}</div>
-        </a>
-    </li>
-    {% endfor %}
-</ul>
-
-<p><a href="{{ get_url(path='/lab/experiment-1/') }}">Go to Latest Experiment →</a></p>
-</noscript>
 {% endblock content %} 

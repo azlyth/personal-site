@@ -32,6 +32,83 @@ const io = socketIo(server, {
 
 // In-memory session storage
 const sessions = new Map();
+const goSessions = new Map();
+
+// Global Go session ID
+const GLOBAL_GO_SESSION = 'global-go-game';
+
+// Go game helper functions
+function getNeighbors(row, col) {
+  const neighbors = [];
+  if (row > 0) neighbors.push([row - 1, col]);
+  if (row < 8) neighbors.push([row + 1, col]);
+  if (col > 0) neighbors.push([row, col - 1]);
+  if (col < 8) neighbors.push([row, col + 1]);
+  return neighbors;
+}
+
+function getGroup(board, row, col, color, visited = new Set()) {
+  const key = `${row},${col}`;
+  if (visited.has(key) || board[row][col] !== color) {
+    return [];
+  }
+  
+  visited.add(key);
+  const group = [[row, col]];
+  
+  const neighbors = getNeighbors(row, col);
+  for (const [nRow, nCol] of neighbors) {
+    if (board[nRow][nCol] === color) {
+      group.push(...getGroup(board, nRow, nCol, color, visited));
+    }
+  }
+  
+  return group;
+}
+
+function hasLiberties(board, group) {
+  for (const [row, col] of group) {
+    const neighbors = getNeighbors(row, col);
+    for (const [nRow, nCol] of neighbors) {
+      if (board[nRow][nCol] === null) {
+        return true; // Found an empty space (liberty)
+      }
+    }
+  }
+  return false; // No liberties found
+}
+
+function checkAndRemoveCaptures(board, lastRow, lastCol, lastColor) {
+  const capturedStones = [];
+  const opponentColor = lastColor === 'black' ? 'white' : 'black';
+  const processedGroups = new Set();
+  
+  // Check all adjacent opponent stones for captures
+  const neighbors = getNeighbors(lastRow, lastCol);
+  for (const [nRow, nCol] of neighbors) {
+    if (board[nRow][nCol] === opponentColor) {
+      const groupKey = `${nRow},${nCol}`;
+      if (!processedGroups.has(groupKey)) {
+        const group = getGroup(board, nRow, nCol, opponentColor);
+        
+        // Mark all stones in this group as processed
+        for (const [gRow, gCol] of group) {
+          processedGroups.add(`${gRow},${gCol}`);
+        }
+        
+        // If the group has no liberties, capture it
+        if (!hasLiberties(board, group)) {
+          for (const [gRow, gCol] of group) {
+            board[gRow][gCol] = null;
+            capturedStones.push([gRow, gCol]);
+          }
+        }
+      }
+    }
+  }
+  
+  return capturedStones;
+}
 
 // Global counter shared by all sessions
 let globalCounter = 0;
@@ -153,10 +230,212 @@ io.on('connection', (socket) => {
     });
   });
   
+  // Go Game Socket Handlers
+  
+  // Create new Go session (use global session)
+  socket.on('create-go-session', () => {
+    let gameState = goSessions.get(GLOBAL_GO_SESSION);
+    
+    // Create global session if it doesn't exist
+    if (!gameState) {
+      gameState = {
+        board: Array(9).fill().map(() => Array(9).fill(null)),
+        currentPlayer: 'black',
+        players: { white: null, black: null },
+        createdAt: new Date(),
+        lastActivity: new Date()
+      };
+      goSessions.set(GLOBAL_GO_SESSION, gameState);
+      console.log(`Global Go session created: ${GLOBAL_GO_SESSION}`);
+    }
+    
+    socket.join(GLOBAL_GO_SESSION);
+    
+    console.log(`Desktop joined global Go session: ${GLOBAL_GO_SESSION}`);
+    socket.emit('go-session-created', { sessionId: GLOBAL_GO_SESSION, gameState });
+  });
+  
+  // Join Go session as specific color
+  socket.on('join-go-session', ({ sessionId, color }) => {
+    const gameState = goSessions.get(sessionId);
+    
+    if (!gameState) {
+      socket.emit('go-session-not-found');
+      return;
+    }
+    
+    socket.join(sessionId);
+    socket.goSessionId = sessionId;
+    
+    // Handle observer (desktop) connections
+    if (color === 'observer') {
+      socket.playerColor = 'observer';
+      console.log(`Observer joined Go session ${sessionId}`);
+      socket.emit('go-session-joined', { sessionId, gameState });
+      return;
+    }
+    
+    // Check if color is already taken for actual players
+    if (gameState.players[color] !== null) {
+      socket.emit('go-color-taken');
+      return;
+    }
+    
+    // Add player to game
+    gameState.players[color] = {
+      id: uuidv4().substring(0, 8),
+      socketId: socket.id,
+      color: color
+    };
+    gameState.lastActivity = new Date();
+    
+    socket.playerColor = color;
+    
+    console.log(`Player joined Go session ${sessionId} as ${color}`);
+    
+    socket.emit('go-session-joined', { sessionId, gameState });
+    
+    // Notify all clients in session (including observers)
+    io.to(sessionId).emit('go-player-joined', {
+      players: gameState.players
+    });
+  });
+  
+  // Handle Go move
+  socket.on('go-make-move', ({ sessionId, row, col, color }) => {
+    const gameState = goSessions.get(sessionId);
+    
+    if (!gameState) {
+      socket.emit('go-session-not-found');
+      return;
+    }
+    
+    // Validate move
+    if (gameState.currentPlayer !== color) {
+      socket.emit('go-invalid-move', { reason: 'Not your turn' });
+      return;
+    }
+    
+    if (gameState.board[row][col] !== null) {
+      socket.emit('go-invalid-move', { reason: 'Position already occupied' });
+      return;
+    }
+    
+    if (row < 0 || row >= 9 || col < 0 || col >= 9) {
+      socket.emit('go-invalid-move', { reason: 'Invalid position' });
+      return;
+    }
+    
+    // Create a copy of the board to test the move
+    const testBoard = gameState.board.map(row => [...row]);
+    testBoard[row][col] = color;
+    
+    // Check if this move would capture opponent stones
+    const capturedStones = checkAndRemoveCaptures(testBoard, row, col, color);
+    
+    // Check if the placed stone or its group would have liberties after captures
+    const placedStoneGroup = getGroup(testBoard, row, col, color);
+    const wouldHaveLiberties = hasLiberties(testBoard, placedStoneGroup);
+    
+    // If the move doesn't capture anything AND the placed stone has no liberties, it's suicide
+    if (capturedStones.length === 0 && !wouldHaveLiberties) {
+      socket.emit('go-invalid-move', { reason: 'Invalid move: suicide is not allowed' });
+      return;
+    }
+    
+    // Make the actual move
+    gameState.board[row][col] = color;
+    
+    // Apply captures to the real board
+    const actualCapturedStones = checkAndRemoveCaptures(gameState.board, row, col, color);
+    
+    gameState.currentPlayer = color === 'black' ? 'white' : 'black';
+    gameState.lastActivity = new Date();
+    
+    console.log(`Go move: ${color} played at ${row},${col} in session ${sessionId}`);
+    if (actualCapturedStones.length > 0) {
+      console.log(`Captured ${actualCapturedStones.length} stones:`, actualCapturedStones);
+    }
+    
+    // Broadcast game update to all clients in session (players + observers)
+    io.to(sessionId).emit('go-game-update', { gameState });
+    
+    console.log(`Broadcasting game update to session ${sessionId}:`, {
+      move: { row, col, color },
+      captured: actualCapturedStones,
+      currentPlayer: gameState.currentPlayer,
+      boardState: gameState.board.map(row => row.map(cell => cell || '.')).join('\n').replace(/,/g, '')
+    });
+  });
+  
+  // Handle color switching
+  socket.on('go-switch-color', ({ sessionId, newColor }) => {
+    console.log(`Received go-switch-color: ${sessionId}, ${newColor} from ${socket.id}`);
+    console.log(`Available sessions:`, Array.from(goSessions.keys()));
+    const gameState = goSessions.get(sessionId);
+    
+    if (!gameState) {
+      console.log(`Session not found: ${sessionId}, available: ${Array.from(goSessions.keys())}`);
+      socket.emit('go-session-not-found');
+      return;
+    }
+    
+    // Remove player from current color
+    if (socket.playerColor && socket.playerColor !== 'observer') {
+      gameState.players[socket.playerColor] = null;
+    }
+    
+    // Add player to new color (replace existing player if any)
+    gameState.players[newColor] = {
+      id: uuidv4().substring(0, 8),
+      socketId: socket.id,
+      color: newColor
+    };
+    
+    socket.playerColor = newColor;
+    gameState.lastActivity = new Date();
+    
+    console.log(`Player switched to ${newColor} in session ${sessionId}`);
+    console.log(`Updated players:`, gameState.players);
+    
+    // Notify the player of successful switch
+    socket.emit('go-color-switched', { newColor });
+    console.log(`Sent go-color-switched to ${socket.id}:`, { newColor });
+    
+    // Notify all clients in session about player changes
+    io.to(sessionId).emit('go-player-joined', {
+      players: gameState.players
+    });
+  });
+  
+  // Handle game reset
+  socket.on('go-reset-game', ({ sessionId }) => {
+    console.log(`Received go-reset-game: ${sessionId} from ${socket.id}`);
+    const gameState = goSessions.get(sessionId);
+    
+    if (!gameState) {
+      console.log(`Session not found for reset: ${sessionId}`);
+      socket.emit('go-session-not-found');
+      return;
+    }
+    
+    // Reset the board
+    gameState.board = Array(9).fill().map(() => Array(9).fill(null));
+    gameState.currentPlayer = 'black';
+    gameState.lastActivity = new Date();
+    
+    console.log(`Game reset in session ${sessionId}`);
+    
+    // Broadcast reset to all clients in session
+    io.to(sessionId).emit('go-game-reset', { gameState });
+    io.to(sessionId).emit('go-game-update', { gameState });
+  });
+  
   // Handle disconnection
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
     
+    // Handle regular session disconnection
     if (socket.sessionId) {
       const session = sessions.get(socket.sessionId);
       
@@ -178,6 +457,30 @@ io.on('connection', (socket) => {
         }
       }
     }
+    
+    // Handle Go session disconnection
+    if (socket.goSessionId) {
+      const gameState = goSessions.get(socket.goSessionId);
+      
+      if (gameState && socket.playerColor) {
+        // Remove player from game
+        gameState.players[socket.playerColor] = null;
+        gameState.lastActivity = new Date();
+        
+        console.log(`Player ${socket.playerColor} left Go session ${socket.goSessionId}`);
+        
+        // Notify remaining players
+        io.to(socket.goSessionId).emit('go-player-left', {
+          players: gameState.players
+        });
+        
+        // Clean up empty Go sessions
+        const hasPlayers = Object.values(gameState.players).some(p => p !== null);
+        if (!hasPlayers) {
+          console.log(`Go session ${socket.goSessionId} is empty, will be cleaned up later`);
+        }
+      }
+    }
   });
 });
 
@@ -187,7 +490,10 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     activeSessions: sessions.size,
+    activeGoSessions: goSessions.size,
     totalDevices: Array.from(sessions.values()).reduce((sum, session) => sum + session.devices.length, 0),
+    totalGoPlayers: Array.from(goSessions.values()).reduce((sum, game) => 
+      sum + Object.values(game.players).filter(p => p !== null).length, 0),
     globalCounter: globalCounter
   });
 });
