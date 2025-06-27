@@ -1,211 +1,109 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
-# Lab Experiments - Interactive Web Technologies
+# Lab Experiments - Collaborative Interactive Experiments
 
 ## Overview
-The lab section contains interactive experiments that demonstrate real-time web technologies using QR codes for mobile interaction. All experiments use Socket.IO for real-time communication between desktop displays and mobile controllers.
+The lab section contains interactive, collaborative experiments that use WebSocket connections to enable real-time multiplayer interactions. Each experiment follows a consistent pattern with desktop preview and mobile controller interfaces.
 
-## Architecture
 
-### Frontend Structure
-- [content/lab/](mdc:content/lab) - Lab experiments content directory
-- [content/lab/_index.md](mdc:content/lab/_index.md) - Lab section index (clean, no header/description)
-- [templates/lab.html](mdc:templates/lab.html) - Lab overview page with all experiments
-- [templates/experiment.html](mdc:templates/experiment.html) - Counter experiment template
-- [templates/experiment-go.html](mdc:templates/experiment-go.html) - Go board experiment template
+## Experiment Structure
 
-### Backend Structure
-- [lab-backend/](mdc:lab-backend) - Node.js backend for real-time communication
-- [lab-backend/server.js](mdc:lab-backend/server.js) - Express + Socket.IO server
-- [lab-backend/package.json](mdc:lab-backend/package.json) - Backend dependencies
+### Content Files
+- Experiments are defined in [content/lab/](mdc:content/lab) directory
+- Each experiment needs a markdown file: `experiment-N.md` with TOML frontmatter
+- Template reference in frontmatter determines rendering (e.g., `template = "experiment-drawing.html"`)
+- Weight determines display order
 
-## Experiment #1: Counter (Minus, Plus)
+### Template System
+- Individual experiment pages use dedicated templates in [templates/](mdc:templates)
+- The main lab page [templates/lab.html](mdc:templates/lab.html) embeds all experiments inline
+- Each experiment needs both individual template AND integration into [templates/lab.html](mdc:templates/lab.html)
 
-### Overview
-Real-time counter that can be controlled from mobile devices via QR code scanning.
+### Backend Integration
+- WebSocket server in [lab-backend/server.js](mdc:lab-backend/server.js) handles real-time communication
+- Global sessions pattern: `GLOBAL_[EXPERIMENT]_SESSION` constants
+- Each experiment needs: session creation, joining, data handling, and disconnection logic
 
-### Files
-- [content/lab/experiment-1.md](mdc:content/lab/experiment-1.md) - Counter experiment content (date: 2025-06-25)
-- [templates/experiment.html](mdc:templates/experiment.html) - Counter experiment template
+## Adding New Experiments
 
-### Features
-- **QR Code Generation**: Creates unique session-based QR codes
-- **Real-time Sync**: Counter updates instantly across all connected devices
-- **Mobile Controls**: Plus/minus buttons on mobile interface
-- **Session Management**: Each session gets unique ID for device pairing
-- **Clean Mobile UI**: Header hidden on mobile, shows only counter and controls
+### 1. Content File
+Create `content/lab/experiment-N.md`:
+```markdown
++++
+title = "Experiment #N: [Name]"
+date = 2025-MM-DD
+weight = N
+template = "experiment-[name].html"
++++
+```
 
-### Architecture
-- **Desktop View**: QR code + large counter display
-- **Mobile View**: Large counter display + control buttons
-- **Real-time**: Socket.IO handles `increment`/`decrement` events
-- **Session-based**: Each QR scan creates/joins specific session
+### 2. Individual Template
+Create `templates/experiment-[name].html` with:
+- Desktop view: QR code + live preview
+- Mobile view: controller interface (hidden header)
+- WebSocket integration with experiment-specific events
+- Responsive design considerations
 
-### Key Implementation Details
-- QR code size: 160px (matches Go experiment)
-- Counter font: 8rem for mobile, 10rem for desktop
-- Clickable QR codes open mobile interface in new tab
-- Header automatically hidden for mobile users (`mobile=true` URL param)
+### 3. Lab Page Integration
+Update [templates/lab.html](mdc:templates/lab.html):
+- Add experiment condition in template loop
+- Create experiment-specific HTML structure
+- Add JavaScript initialization function
+- Include WebSocket event handlers
 
-## Experiment #2: Go Board
+### 4. Backend Functionality
+Update [lab-backend/server.js](mdc:lab-backend/server.js):
+- Add global session constant
+- Create session storage map
+- Implement socket event handlers
+- Add disconnect cleanup
+- Update health endpoint
 
-### Overview
-Multiplayer Go game with real-time gameplay, suicide move validation, and mobile controls.
+## Design Patterns
 
-### Files
-- [content/lab/experiment-2.md](mdc:content/lab/experiment-2.md) - Go experiment content (date: 2025-06-26)
-- [templates/experiment-go.html](mdc:templates/experiment-go.html) - Go game template
+### Mobile-First Approach
+- Canvas/interactive elements should be phone-shaped (9:16 aspect ratio)
+- Use responsive sizing: `max-width: 95vw` for mobile compatibility
+- Touch-optimized controls with proper touch-action handling
+- Header-less mobile interface for immersive experience
 
-### Features
-- **Multiplayer Go Game**: Full 9x9 Go board with real-time moves
-- **Suicide Move Validation**: Prevents invalid moves according to Go rules
-- **Color Switching**: Players can switch between white/black on mobile
-- **Game Reset**: Mobile reset functionality with confirmation
-- **Turn Indicator**: Shows whose turn it is
-- **Player Count**: Displays number of connected players
-- **Error Handling**: Invalid move notifications
+### WebSocket Communication
+- Desktop creates sessions, mobile joins via QR code
+- Global session IDs for persistence across page reloads
+- Real-time state synchronization between all connected clients
+- Player count tracking and display
 
-### Architecture
-- **Desktop View**: Single QR code + Go board + player count
-- **Mobile View**: Turn indicator + Go board + color controls + reset
-- **Global Session**: Uses `global-go-game` session ID for all players
-- **Real-time**: Socket.IO handles moves, color switches, game resets
+### UI Consistency
+- Experiment headers: `<strong>Experiment #N:</strong> Title` format
+- QR codes with "Join [Action]" labels
+- Player count display: "N players [action]"
+- Error message containers with consistent styling
 
-### Game Logic Implementation
-- **Move Validation**: Checks turn, position availability, board bounds, suicide rules
-- **Capture Detection**: Removes opponent stones with no liberties
-- **Group Analysis**: Uses flood-fill algorithm to find connected stones
-- **Liberty Counting**: Validates moves don't create suicide positions
+## Current Experiments
 
-### Mobile Interface Design
-- **Compact Layout**: Tight spacing, professional typography
-- **Color Selection**: Visual feedback with 4px border for selected color
-- **Button Styling**: Consistent 6px border radius, proper min-widths
-- **Turn Display**: Clear indication of current player's turn
+### Experiment #1: Minus, Plus
+- Template: [templates/experiment.html](mdc:templates/experiment.html)
+- Shared counter with increment/decrement controls
 
-## Backend Server Architecture
+### Experiment #2: Go Board
+- Template: [templates/experiment-go.html](mdc:templates/experiment-go.html)
+- Collaborative Go game with move validation
 
-### Socket.IO Events
-
-#### Counter Events
-- `create-session` → `session-created` - Create new counter session
-- `join-session` → `session-joined` - Join existing session
-- `increment` → `counter-update` - Increment counter
-- `decrement` → `counter-update` - Decrement counter
-
-#### Go Game Events
-- `create-go-session` → `go-session-created` - Create/join global Go game
-- `join-go-session` → `go-session-joined` - Join as specific color or observer
-- `go-make-move` → `go-game-update` - Make a move on the board
-- `go-switch-color` → `go-color-switched` - Switch player color
-- `go-reset-game` → `go-game-reset` - Reset the game board
-- `go-invalid-move` - Error response for invalid moves
-
-### Game State Management
-- **Counter**: Simple integer value per session
-- **Go Game**: Board state (9x9 array), current player, connected players
-- **Session Cleanup**: Automatic cleanup of old sessions (24-hour TTL)
-- **Player Management**: Track connected players by color
+### Experiment #3: Finger Painting
+- Template: [templates/experiment-drawing.html](mdc:templates/experiment-drawing.html)
+- Real-time collaborative drawing canvas with color selection
 
 ## Development Workflow
+- Use `make dev` for development server
+- Backend runs on port 3001, frontend on 1111
+- QR codes automatically generate mobile controller URLs
+- Test mobile interface by clicking QR codes or using `?mobile=true` parameter
 
-### Starting Backend
-```bash
-cd lab-backend
-npm start
-```
-
-### Backend Development
-- Server runs on port 3001 locally
-- Production deployment on Render.com
-- CORS configured for multiple origins (localhost, IP, production)
-
-### Frontend Development
-- Use standard Zola development workflow
-- Backend must be running for real-time features
-- Test mobile interface by adding `?mobile=true` to URLs
-
-## Design System
-
-### QR Code Standards
-- **Size**: 160px for all experiments (consistent)
-- **Border**: 2px solid #ddd, 8px padding, 8px border-radius
-- **Centering**: Flexbox centering within bordered container
-- **Clickable**: Opens mobile interface in new tab
-
-### Mobile UI Standards
-- **Header Hiding**: All mobile interfaces hide experiment headers
-- **Spacing**: Tight, professional spacing (0.6rem-1.25rem)
-- **Typography**: 0.85rem-0.95rem font sizes, 500 font-weight for emphasis
-- **Colors**: #0066cc (primary), #dc3545 (destructive), #555/#666 (text)
-- **Buttons**: 6px border-radius, proper padding, min-widths
-
-### Layout Patterns
-- **Desktop**: QR code left/center, main interface right/center
-- **Mobile**: Vertical stack - status, main interface, controls
-- **Responsive**: Flexbox with gap, wrap, and center alignment
-
-## Error Handling
-
-### Go Game Validation
-- **Turn Validation**: Ensures correct player is making move
-- **Position Validation**: Checks if position is empty and in bounds
-- **Suicide Prevention**: Validates move doesn't create suicide position
-- **User Feedback**: Clear error messages displayed to player
-
-### Connection Handling
-- **Session Not Found**: Graceful handling of invalid sessions
-- **Disconnection**: Proper cleanup when players leave
-- **Reconnection**: Players can rejoin existing games
-
-## Best Practices
-
-### Adding New Experiments
-1. Create content file in [content/lab/](mdc:content/lab) with future date
-2. Create template in [templates/](mdc:templates) (or reuse existing)
-3. Add backend Socket.IO events if needed
-4. Follow mobile UI design standards
-5. Implement header hiding for mobile experience
-6. Add QR code with consistent styling
-
-### Code Patterns
-- **Socket.IO**: Always emit to rooms/sessions for targeted updates
-- **Mobile Detection**: Use `mobile=true` URL parameter
-- **Error Handling**: Emit specific error events with clear messages
-- **State Management**: Keep game state on server, sync to clients
-- **UI Updates**: Update UI in response to server events, not local actions
-
-### Security Considerations
-- **Input Validation**: Validate all move/action inputs on server
-- **Session Management**: Use UUIDs, implement cleanup
-- **CORS**: Restrictive CORS policy for production
-- **Rate Limiting**: Consider implementing for production deployment
-
-## Troubleshooting
-
-### Common Issues
-- **Backend not running**: Check if lab-backend server is started
-- **QR codes not working**: Verify backend URL configuration
-- **Mobile interface issues**: Check mobile=true parameter and header hiding
-- **Socket connection failed**: Verify CORS settings and backend availability
-
-### Debug Commands
-```bash
-# Check backend status
-curl http://localhost:3001/health
-
-# View backend logs
-cd lab-backend && npm start
-
-# Test mobile interface
-# Add ?mobile=true to any experiment URL
-```
-
-### Development Tips
-- **Mobile Testing**: Use browser dev tools mobile mode + ?mobile=true
-- **Real-time Testing**: Open multiple browser windows/tabs
-- **Network Testing**: Test on local network using IP address
-- **Production Testing**: Use QR codes on actual mobile devices
+## Key Files
+- [templates/lab.html](mdc:templates/lab.html) - Main lab page with all experiments
+- [lab-backend/server.js](mdc:lab-backend/server.js) - WebSocket server
+- [content/lab/_index.md](mdc:content/lab/_index.md) - Lab section configuration
+- [Makefile](mdc:Makefile) - Development commands
