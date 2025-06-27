@@ -3,9 +3,13 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+const PersistenceLayer = require('./persistence');
 
 const app = express();
 const server = http.createServer(app);
+
+// Initialize persistence layer
+const persistence = new PersistenceLayer();
 
 // Configure CORS
 const corsOptions = {
@@ -30,7 +34,7 @@ const io = socketIo(server, {
   cors: corsOptions
 });
 
-// In-memory session storage
+// In-memory session storage (fallback when Redis is unavailable)
 const sessions = new Map();
 const goSessions = new Map();
 const drawingSessions = new Map();
@@ -117,6 +121,89 @@ function checkAndRemoveCaptures(board, lastRow, lastCol, lastColor) {
 // Global counter shared by all sessions
 let globalCounter = 0;
 
+// Persistence helpers
+async function getSession(sessionId) {
+  const session = await persistence.loadSession(sessionId);
+  return session || sessions.get(sessionId);
+}
+
+async function saveSession(sessionId, session) {
+  sessions.set(sessionId, session); // Keep in memory as fallback
+  await persistence.saveSession(sessionId, session);
+}
+
+async function getGoSession(sessionId) {
+  const session = await persistence.loadGoSession(sessionId);
+  return session || goSessions.get(sessionId);
+}
+
+async function saveGoSession(sessionId, gameState) {
+  goSessions.set(sessionId, gameState); // Keep in memory as fallback
+  await persistence.saveGoSession(sessionId, gameState);
+}
+
+async function getDrawingSession(sessionId) {
+  const session = await persistence.loadDrawingSession(sessionId);
+  if (session) {
+    // Ensure players is a Map
+    if (session.players && !(session.players instanceof Map)) {
+      session.players = new Map(session.players);
+    }
+    return session;
+  }
+  return drawingSessions.get(sessionId);
+}
+
+async function saveDrawingSession(sessionId, drawingState) {
+  drawingSessions.set(sessionId, drawingState); // Keep in memory as fallback
+  // Serialize Map to array for Redis storage
+  const serializedState = persistence.serializeDrawingState(drawingState);
+  await persistence.saveDrawingSession(sessionId, serializedState);
+}
+
+async function updateGlobalCounter(newValue) {
+  globalCounter = newValue;
+  await persistence.saveGlobalCounter(globalCounter);
+}
+
+// Initialize server with Redis connection and data loading
+async function initializeServer() {
+  console.log('Initializing server...');
+  
+  // Connect to Redis
+  const redisConnected = await persistence.connect();
+  if (redisConnected) {
+    console.log('Redis connected, loading persisted data...');
+    
+    // Load global counter
+    globalCounter = await persistence.loadGlobalCounter();
+    console.log(`Loaded global counter: ${globalCounter}`);
+    
+    // Load all sessions
+    const persistedSessions = await persistence.getAllSessions();
+    for (const [sessionId, session] of persistedSessions) {
+      sessions.set(sessionId, session);
+    }
+    console.log(`Loaded ${persistedSessions.size} regular sessions`);
+    
+    // Load all Go sessions
+    const persistedGoSessions = await persistence.getAllGoSessions();
+    for (const [sessionId, gameState] of persistedGoSessions) {
+      goSessions.set(sessionId, gameState);
+    }
+    console.log(`Loaded ${persistedGoSessions.size} Go sessions`);
+    
+    // Load all Drawing sessions
+    const persistedDrawingSessions = await persistence.getAllDrawingSessions();
+    for (const [sessionId, drawingState] of persistedDrawingSessions) {
+      drawingSessions.set(sessionId, drawingState);
+    }
+    console.log(`Loaded ${persistedDrawingSessions.size} Drawing sessions`);
+  } else {
+    console.warn('Redis connection failed, using in-memory storage only');
+  }
+}
+
 // Session structure:
 // {
 //   id: string,
@@ -126,14 +213,31 @@ let globalCounter = 0;
 // }
 
 // Clean up old sessions (older than 24 hours)
-setInterval(() => {
+setInterval(async () => {
   const now = Date.now();
   const maxAge = 24 * 60 * 60 * 1000; // 24 hours
   
   for (const [sessionId, session] of sessions.entries()) {
-    if (now - session.lastActivity.getTime() > maxAge) {
+    if (now - new Date(session.lastActivity).getTime() > maxAge) {
       console.log(`Cleaning up old session: ${sessionId}`);
       sessions.delete(sessionId);
+      await persistence.deleteSession(sessionId);
+    }
+  }
+  
+  for (const [sessionId, gameState] of goSessions.entries()) {
+    if (now - new Date(gameState.lastActivity).getTime() > maxAge) {
+      console.log(`Cleaning up old Go session: ${sessionId}`);
+      goSessions.delete(sessionId);
+      await persistence.deleteGoSession(sessionId);
+    }
+  }
+  
+  for (const [sessionId, drawingState] of drawingSessions.entries()) {
+    if (now - new Date(drawingState.lastActivity).getTime() > maxAge) {
+      console.log(`Cleaning up old Drawing session: ${sessionId}`);
+      drawingSessions.delete(sessionId);
+      await persistence.deleteDrawingSession(sessionId);
     }
   }
 }, 60 * 60 * 1000); // Check every hour
@@ -143,7 +247,7 @@ io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   
   // Create new session
-  socket.on('create-session', () => {
+  socket.on('create-session', async () => {
     const sessionId = uuidv4().substring(0, 8); // Short session ID
     const session = {
       id: sessionId,
@@ -152,7 +256,7 @@ io.on('connection', (socket) => {
       lastActivity: new Date()
     };
     
-    sessions.set(sessionId, session);
+    await saveSession(sessionId, session);
     socket.join(sessionId);
     
     console.log(`Session created: ${sessionId}`);
@@ -160,8 +264,8 @@ io.on('connection', (socket) => {
   });
   
   // Join existing session
-  socket.on('join-session', ({ sessionId }) => {
-    const session = sessions.get(sessionId);
+  socket.on('join-session', async ({ sessionId }) => {
+    const session = await getSession(sessionId);
     
     if (!session) {
       socket.emit('session-not-found');
@@ -176,6 +280,8 @@ io.on('connection', (socket) => {
     
     session.devices.push(device);
     session.lastActivity = new Date();
+    
+    await saveSession(sessionId, session);
     
     socket.join(sessionId);
     socket.sessionId = sessionId;
@@ -193,16 +299,17 @@ io.on('connection', (socket) => {
   });
   
   // Handle counter increment
-  socket.on('increment', ({ sessionId }) => {
-    const session = sessions.get(sessionId);
+  socket.on('increment', async ({ sessionId }) => {
+    const session = await getSession(sessionId);
     
     if (!session) {
       socket.emit('session-not-found');
       return;
     }
     
-    globalCounter++;
+    await updateGlobalCounter(globalCounter + 1);
     session.lastActivity = new Date();
+    await saveSession(sessionId, session);
     
     console.log(`Global counter incremented to ${globalCounter} by session ${sessionId}`);
     
@@ -214,16 +321,17 @@ io.on('connection', (socket) => {
   });
   
   // Handle counter decrement
-  socket.on('decrement', ({ sessionId }) => {
-    const session = sessions.get(sessionId);
+  socket.on('decrement', async ({ sessionId }) => {
+    const session = await getSession(sessionId);
     
     if (!session) {
       socket.emit('session-not-found');
       return;
     }
     
-    globalCounter--;
+    await updateGlobalCounter(globalCounter - 1);
     session.lastActivity = new Date();
+    await saveSession(sessionId, session);
     
     console.log(`Global counter decremented to ${globalCounter} by session ${sessionId}`);
     
@@ -237,8 +345,8 @@ io.on('connection', (socket) => {
   // Go Game Socket Handlers
   
   // Create new Go session (use global session)
-  socket.on('create-go-session', () => {
-    let gameState = goSessions.get(GLOBAL_GO_SESSION);
+  socket.on('create-go-session', async () => {
+    let gameState = await getGoSession(GLOBAL_GO_SESSION);
     
     // Create global session if it doesn't exist
     if (!gameState) {
@@ -249,7 +357,7 @@ io.on('connection', (socket) => {
         createdAt: new Date(),
         lastActivity: new Date()
       };
-      goSessions.set(GLOBAL_GO_SESSION, gameState);
+      await saveGoSession(GLOBAL_GO_SESSION, gameState);
       console.log(`Global Go session created: ${GLOBAL_GO_SESSION}`);
     }
     
@@ -260,8 +368,8 @@ io.on('connection', (socket) => {
   });
   
   // Join Go session as specific color
-  socket.on('join-go-session', ({ sessionId, color }) => {
-    const gameState = goSessions.get(sessionId);
+  socket.on('join-go-session', async ({ sessionId, color }) => {
+    const gameState = await getGoSession(sessionId);
     
     if (!gameState) {
       socket.emit('go-session-not-found');
@@ -293,6 +401,8 @@ io.on('connection', (socket) => {
     };
     gameState.lastActivity = new Date();
     
+    await saveGoSession(sessionId, gameState);
+    
     socket.playerColor = color;
     
     console.log(`Player joined Go session ${sessionId} as ${color}`);
@@ -306,8 +416,8 @@ io.on('connection', (socket) => {
   });
   
   // Handle Go move
-  socket.on('go-make-move', ({ sessionId, row, col, color }) => {
-    const gameState = goSessions.get(sessionId);
+  socket.on('go-make-move', async ({ sessionId, row, col, color }) => {
+    const gameState = await getGoSession(sessionId);
     
     if (!gameState) {
       socket.emit('go-session-not-found');
@@ -356,6 +466,8 @@ io.on('connection', (socket) => {
     gameState.currentPlayer = color === 'black' ? 'white' : 'black';
     gameState.lastActivity = new Date();
     
+    await saveGoSession(sessionId, gameState);
+    
     console.log(`Go move: ${color} played at ${row},${col} in session ${sessionId}`);
     if (actualCapturedStones.length > 0) {
       console.log(`Captured ${actualCapturedStones.length} stones:`, actualCapturedStones);
@@ -373,10 +485,10 @@ io.on('connection', (socket) => {
   });
   
   // Handle color switching
-  socket.on('go-switch-color', ({ sessionId, newColor }) => {
+  socket.on('go-switch-color', async ({ sessionId, newColor }) => {
     console.log(`Received go-switch-color: ${sessionId}, ${newColor} from ${socket.id}`);
     console.log(`Available sessions:`, Array.from(goSessions.keys()));
-    const gameState = goSessions.get(sessionId);
+    const gameState = await getGoSession(sessionId);
     
     if (!gameState) {
       console.log(`Session not found: ${sessionId}, available: ${Array.from(goSessions.keys())}`);
@@ -399,6 +511,8 @@ io.on('connection', (socket) => {
     socket.playerColor = newColor;
     gameState.lastActivity = new Date();
     
+    await saveGoSession(sessionId, gameState);
+    
     console.log(`Player switched to ${newColor} in session ${sessionId}`);
     console.log(`Updated players:`, gameState.players);
     
@@ -413,9 +527,9 @@ io.on('connection', (socket) => {
   });
   
   // Handle game reset
-  socket.on('go-reset-game', ({ sessionId }) => {
+  socket.on('go-reset-game', async ({ sessionId }) => {
     console.log(`Received go-reset-game: ${sessionId} from ${socket.id}`);
-    const gameState = goSessions.get(sessionId);
+    const gameState = await getGoSession(sessionId);
     
     if (!gameState) {
       console.log(`Session not found for reset: ${sessionId}`);
@@ -428,6 +542,8 @@ io.on('connection', (socket) => {
     gameState.currentPlayer = 'black';
     gameState.lastActivity = new Date();
     
+    await saveGoSession(sessionId, gameState);
+    
     console.log(`Game reset in session ${sessionId}`);
     
     // Broadcast reset to all clients in session
@@ -438,8 +554,8 @@ io.on('connection', (socket) => {
   // Drawing Canvas Socket Handlers
   
   // Create new Drawing session (use global session)
-  socket.on('create-drawing-session', () => {
-    let drawingState = drawingSessions.get(GLOBAL_DRAWING_SESSION);
+  socket.on('create-drawing-session', async () => {
+    let drawingState = await getDrawingSession(GLOBAL_DRAWING_SESSION);
     
     // Create global session if it doesn't exist
     if (!drawingState) {
@@ -449,7 +565,7 @@ io.on('connection', (socket) => {
         createdAt: new Date(),
         lastActivity: new Date()
       };
-      drawingSessions.set(GLOBAL_DRAWING_SESSION, drawingState);
+      await saveDrawingSession(GLOBAL_DRAWING_SESSION, drawingState);
       console.log(`Global Drawing session created: ${GLOBAL_DRAWING_SESSION}`);
     }
     
@@ -463,8 +579,8 @@ io.on('connection', (socket) => {
   });
   
   // Join Drawing session
-  socket.on('join-drawing-session', ({ sessionId }) => {
-    const drawingState = drawingSessions.get(sessionId);
+  socket.on('join-drawing-session', async ({ sessionId }) => {
+    const drawingState = await getDrawingSession(sessionId);
     
     if (!drawingState) {
       socket.emit('drawing-session-not-found');
@@ -481,6 +597,8 @@ io.on('connection', (socket) => {
     });
     drawingState.lastActivity = new Date();
     
+    await saveDrawingSession(sessionId, drawingState);
+    
     console.log(`Player joined Drawing session ${sessionId}`);
     
     socket.emit('drawing-session-joined', { 
@@ -496,8 +614,8 @@ io.on('connection', (socket) => {
   });
   
   // Handle drawing data
-  socket.on('drawing-data', ({ sessionId, fromX, fromY, toX, toY, color, lineWidth }) => {
-    const drawingState = drawingSessions.get(sessionId);
+  socket.on('drawing-data', async ({ sessionId, fromX, fromY, toX, toY, color, lineWidth }) => {
+    const drawingState = await getDrawingSession(sessionId);
     
     if (!drawingState) {
       socket.emit('drawing-session-not-found');
@@ -518,6 +636,8 @@ io.on('connection', (socket) => {
     drawingState.strokes.push(stroke);
     drawingState.lastActivity = new Date();
     
+    await saveDrawingSession(sessionId, drawingState);
+    
     // Broadcast drawing update to all clients in session
     socket.to(sessionId).emit('drawing-update', { 
       drawingState: drawingState.strokes 
@@ -527,9 +647,9 @@ io.on('connection', (socket) => {
   });
   
   // Handle canvas clear
-  socket.on('clear-drawing-canvas', ({ sessionId }) => {
+  socket.on('clear-drawing-canvas', async ({ sessionId }) => {
     console.log(`Received clear-drawing-canvas: ${sessionId} from ${socket.id}`);
-    const drawingState = drawingSessions.get(sessionId);
+    const drawingState = await getDrawingSession(sessionId);
     
     if (!drawingState) {
       console.log(`Drawing session not found for clear: ${sessionId}`);
@@ -541,6 +661,8 @@ io.on('connection', (socket) => {
     drawingState.strokes = [];
     drawingState.lastActivity = new Date();
     
+    await saveDrawingSession(sessionId, drawingState);
+    
     console.log(`Canvas cleared in session ${sessionId}`);
     
     // Broadcast clear to all clients in session
@@ -548,17 +670,19 @@ io.on('connection', (socket) => {
   });
   
   // Handle disconnection
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log('Client disconnected:', socket.id);
     
     // Handle regular session disconnection
     if (socket.sessionId) {
-      const session = sessions.get(socket.sessionId);
+      const session = await getSession(socket.sessionId);
       
       if (session) {
         // Remove device from session
         session.devices = session.devices.filter(device => device.socketId !== socket.id);
         session.lastActivity = new Date();
+        
+        await saveSession(socket.sessionId, session);
         
         console.log(`Device ${socket.deviceId} left session ${socket.sessionId}`);
         
@@ -576,12 +700,14 @@ io.on('connection', (socket) => {
     
     // Handle Go session disconnection
     if (socket.goSessionId) {
-      const gameState = goSessions.get(socket.goSessionId);
+      const gameState = await getGoSession(socket.goSessionId);
       
       if (gameState && socket.playerColor) {
         // Remove player from game
         gameState.players[socket.playerColor] = null;
         gameState.lastActivity = new Date();
+        
+        await saveGoSession(socket.goSessionId, gameState);
         
         console.log(`Player ${socket.playerColor} left Go session ${socket.goSessionId}`);
         
@@ -600,12 +726,14 @@ io.on('connection', (socket) => {
     
     // Handle Drawing session disconnection
     if (socket.drawingSessionId) {
-      const drawingState = drawingSessions.get(socket.drawingSessionId);
+      const drawingState = await getDrawingSession(socket.drawingSessionId);
       
       if (drawingState) {
         // Remove player from drawing session
         drawingState.players.delete(socket.id);
         drawingState.lastActivity = new Date();
+        
+        await saveDrawingSession(socket.drawingSessionId, drawingState);
         
         console.log(`Player left Drawing session ${socket.drawingSessionId}`);
         
@@ -624,10 +752,16 @@ io.on('connection', (socket) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const redisHealthy = await persistence.isHealthy();
+  
   res.json({
-    status: 'healthy',
+    status: redisHealthy ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
+    redis: {
+      connected: persistence.isConnected,
+      healthy: redisHealthy
+    },
     activeSessions: sessions.size,
     activeGoSessions: goSessions.size,
     activeDrawingSessions: drawingSessions.size,
@@ -657,7 +791,33 @@ app.get('/sessions', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-server.listen(PORT, () => {
-  console.log(`Lab backend server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+// Graceful shutdown handling
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  await persistence.disconnect();
+  server.close(() => {
+    console.log('Server shut down');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  await persistence.disconnect();
+  server.close(() => {
+    console.log('Server shut down');
+    process.exit(0);
+  });
+});
+
+// Initialize server and start listening
+initializeServer().then(() => {
+  server.listen(PORT, () => {
+    console.log(`Lab backend server running on port ${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Redis connection: ${persistence.isConnected ? 'connected' : 'failed'}`);
+  });
+}).catch((error) => {
+  console.error('Failed to initialize server:', error);
+  process.exit(1);
 }); 
