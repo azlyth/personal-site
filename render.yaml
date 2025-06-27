@@ -11,4 +11,16 @@ services:
         value: production
       - key: PORT
         value: 10000
-    healthCheckPath: /health 
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: peter-lab-redis
+          property: connectionString
+    healthCheckPath: /health
+
+  - type: keyvalue
+    name: peter-lab-redis
+    region: ohio
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
