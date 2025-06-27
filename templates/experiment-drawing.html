@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - Peter Valdez{% endblock title %}
+
+{% block content %}
+<div id="experiment-header">
+<h1 style="margin-bottom: 0.25rem; font-weight: 400;"><strong>Experiment #3:</strong> Finger Painting</h1>
+<div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
+
+{{ page.content | safe }}
+</div>
+
+<div id="drawing-experiment" style="max-width: 800px; margin: 0 auto;">
+    <div id="session-container">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0; flex-wrap: wrap;">
+            <!-- QR Code Section -->
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div id="qr-container" style="text-align: center;">
+                    <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Canvas</div>
+                    <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
+                        <div id="qr-code" style="display: flex; align-items: center; justify-content: center;"></div>
+                    </div>
+                    <a id="drawing-link" href="#" style="font-size: 0.8rem; color: #0066cc; text-decoration: none; margin-top: 0.5rem; display: block;">Click to test</a>
+                </div>
+            </div>
+            
+            <!-- Drawing Canvas Section -->
+            <div id="drawing-canvas-container" style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                <div id="canvas-info" style="margin-bottom: 1rem;">
+                    <div id="player-count" style="font-size: 0.9rem; color: #666;">
+                        0 players connected
+                    </div>
+                </div>
+                                 <div id="drawing-canvas-wrapper" style="display: inline-block; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 2px solid #ddd;">
+                     <canvas id="drawing-canvas" width="300" height="533" style="display: block; cursor: crosshair; border-radius: 4px;"></canvas>
+                 </div>
+                <div id="error-message" style="color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <div id="mobile-container" style="display: none; max-width: 360px; margin: 0 auto; text-align: center; padding: 0 1rem;">
+        <div style="margin: 1rem 0 0.5rem 0;">
+            <p id="connection-status" style="color: #999; margin: 0; font-size: 0.85rem;">Connecting...</p>
+        </div>
+        
+        <div id="mobile-canvas-info" style="display: none; margin-bottom: 0.75rem;">
+            <div id="mobile-player-count" style="font-size: 0.9rem; color: #666;">2 players drawing</div>
+        </div>
+        
+        <!-- Color Selection -->
+        <div id="color-palette" style="display: none; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap;">
+                <div class="color-option" data-color="#ff0000" style="width: 40px; height: 40px; border-radius: 50%; background: #ff0000; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+                <div class="color-option" data-color="#00ff00" style="width: 40px; height: 40px; border-radius: 50%; background: #00ff00; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+                <div class="color-option" data-color="#0000ff" style="width: 40px; height: 40px; border-radius: 50%; background: #0000ff; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+                <div class="color-option" data-color="#ffff00" style="width: 40px; height: 40px; border-radius: 50%; background: #ffff00; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+                <div class="color-option" data-color="#ff00ff" style="width: 40px; height: 40px; border-radius: 50%; background: #ff00ff; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+                <div class="color-option" data-color="#00ffff" style="width: 40px; height: 40px; border-radius: 50%; background: #00ffff; border: 3px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+                <div class="color-option active" data-color="#000000" style="width: 40px; height: 40px; border-radius: 50%; background: #000000; border: 3px solid #0066cc; box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: pointer; transition: transform 0.1s ease; transform: scale(1.1);"></div>
+                <div class="color-option" data-color="#ffffff" style="width: 40px; height: 40px; border-radius: 50%; background: #ffffff; border: 3px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.1s ease;"></div>
+            </div>
+        </div>
+        
+                 <div id="mobile-canvas-wrapper" style="display: none; background: #fff; padding: 8px; border-radius: 8px; margin: 0 auto; border: 2px solid #ddd; max-width: 95vw;">
+             <canvas id="mobile-drawing-canvas" width="300" height="533" style="display: block; border-radius: 4px; touch-action: none; max-width: calc(95vw - 16px); height: auto;"></canvas>
+         </div>
+        <div id="mobile-error-message" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1rem; text-align: center;"></div>
+        
+        <div id="drawing-controls" style="display: none; margin: 1.25rem 0 1rem 0;">            
+            <!-- Clear Button -->
+            <div style="text-align: center;">
+                <button id="clear-canvas-btn" style="
+                    padding: 0.6rem 1.5rem;
+                    background: #dc3545;
+                    color: white;
+                    border: 1px solid #dc3545;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                    font-size: 0.85rem;
+                    font-weight: 500;
+                ">Clear Canvas</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/qrious@4.0.2/dist/qrious.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+    // Configuration
+    const getBackendUrl = () => {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+            return 'http://localhost:3001';
+        } else if (hostname === '192.168.1.191') {
+            return 'http://192.168.1.191:3001';
+        } else {
+            return 'https://peter-lab-backend.onrender.com';
+        }
+    };
+    
+    const BACKEND_URL = getBackendUrl();
+         const CANVAS_WIDTH = 300;
+     const CANVAS_HEIGHT = 533;
+     const MOBILE_CANVAS_WIDTH = 300;
+     const MOBILE_CANVAS_HEIGHT = 533;
+    
+    let socket;
+    let sessionId;
+    let currentColor = '#000000';
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    let canvas;
+    let ctx;
+    let drawingState = [];
+    let isDesktop = !window.location.search.includes('mobile=true');
+    
+    // Initialize the experiment
+    function init() {
+        if (isDesktop) {
+            initDesktop();
+        } else {
+            initMobile();
+            // Hide header for mobile users
+            document.getElementById('experiment-header').style.display = 'none';
+        }
+    }
+    
+    function initDesktop() {
+        document.getElementById('mobile-container').style.display = 'none';
+        document.getElementById('session-container').style.display = 'block';
+        
+        // Setup desktop canvas
+        canvas = document.getElementById('drawing-canvas');
+        ctx = canvas.getContext('2d');
+        setupCanvas();
+        
+        // Connect to backend
+        socket = io(BACKEND_URL);
+        
+        socket.on('connect', () => {
+            console.log('Drawing experiment - Connected to backend');
+            socket.emit('create-drawing-session');
+        });
+        
+        socket.on('drawing-session-created', (data) => {
+            sessionId = data.sessionId;
+            console.log('Drawing session created:', sessionId, data);
+            
+            // Use global session for URLs
+            const drawingUrl = `${window.location.origin}${window.location.pathname}?mobile=true&session=global-drawing-canvas`;
+            
+            // Generate QR code
+            createQRCode('qr-code', drawingUrl);
+            
+            // Make QR code clickable
+            const qrContainer = document.getElementById('qr-code').parentElement;
+            qrContainer.style.cursor = 'pointer';
+            qrContainer.addEventListener('click', () => {
+                window.open(drawingUrl, '_blank');
+            });
+            
+            // Set up test link
+            document.getElementById('drawing-link').href = drawingUrl;
+            
+            updateDrawingState(data.drawingState);
+        });
+        
+        socket.on('drawing-update', (data) => {
+            redrawCanvas(data.drawingState);
+        });
+        
+        socket.on('drawing-player-joined', (data) => {
+            updatePlayerCount(data.playerCount);
+        });
+        
+        socket.on('drawing-player-left', (data) => {
+            updatePlayerCount(data.playerCount);
+        });
+    }
+    
+    function initMobile() {
+        document.getElementById('session-container').style.display = 'none';
+        document.getElementById('mobile-container').style.display = 'block';
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        // Always use global session ID
+        sessionId = 'global-drawing-canvas';
+        
+        console.log('Mobile init with global session:', sessionId);
+        
+        // Setup mobile canvas
+        canvas = document.getElementById('mobile-drawing-canvas');
+        ctx = canvas.getContext('2d');
+        setupCanvas();
+        setupMobileControls();
+        
+        // Connect to backend
+        socket = io(BACKEND_URL);
+        
+        socket.on('connect', () => {
+            console.log('Connected to backend, session:', sessionId);
+            socket.emit('join-drawing-session', { sessionId });
+        });
+        
+        socket.on('drawing-session-joined', (data) => {
+            document.getElementById('connection-status').textContent = 'Connected to canvas!';
+            document.getElementById('mobile-canvas-info').style.display = 'block';
+            document.getElementById('color-palette').style.display = 'block';
+            document.getElementById('mobile-canvas-wrapper').style.display = 'block';
+            document.getElementById('drawing-controls').style.display = 'block';
+            
+            updateDrawingState(data.drawingState);
+            updatePlayerCount(data.playerCount);
+        });
+        
+        socket.on('drawing-update', (data) => {
+            redrawCanvas(data.drawingState);
+        });
+        
+        socket.on('drawing-player-joined', (data) => {
+            updatePlayerCount(data.playerCount);
+        });
+        
+        socket.on('drawing-player-left', (data) => {
+            updatePlayerCount(data.playerCount);
+        });
+        
+        socket.on('drawing-session-not-found', () => {
+            document.getElementById('connection-status').textContent = 'Session not found';
+        });
+        
+        socket.on('drawing-cleared', (data) => {
+            console.log('Received canvas clear');
+            redrawCanvas(data.drawingState);
+        });
+    }
+    
+    function setupCanvas() {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = currentColor;
+        
+        // Fill canvas with white background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    function setupMobileControls() {
+        // Color palette
+        const colorOptions = document.querySelectorAll('.color-option');
+        colorOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                // Remove active class from all options
+                colorOptions.forEach(opt => {
+                    opt.classList.remove('active');
+                    opt.style.border = opt.dataset.color === '#ffffff' ? '3px solid #ddd' : '3px solid #fff';
+                    opt.style.transform = 'scale(1)';
+                });
+                
+                // Add active class to selected option
+                option.classList.add('active');
+                option.style.border = '3px solid #0066cc';
+                option.style.transform = 'scale(1.1)';
+                
+                currentColor = option.dataset.color;
+                ctx.strokeStyle = currentColor;
+            });
+        });
+        
+        // Touch/mouse drawing events
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        
+        // Clear button
+        document.getElementById('clear-canvas-btn').addEventListener('click', () => {
+            socket.emit('clear-drawing-canvas', { sessionId });
+        });
+        
+        // Prevent scrolling when touching the canvas
+        document.body.addEventListener('touchstart', function(e) {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.body.addEventListener('touchend', function(e) {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.body.addEventListener('touchmove', function(e) {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    }
+    
+    function getCanvasCoordinates(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        let clientX, clientY;
+        
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+    
+    function startDrawing(e) {
+        e.preventDefault();
+        isDrawing = true;
+        
+        const coords = getCanvasCoordinates(e);
+        lastX = coords.x;
+        lastY = coords.y;
+        
+        // Start new drawing path
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        
+        const coords = getCanvasCoordinates(e);
+        
+        // Draw line
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(coords.x, coords.y);
+        ctx.stroke();
+        
+        // Emit drawing data to server
+        socket.emit('drawing-data', {
+            sessionId,
+            fromX: lastX,
+            fromY: lastY,
+            toX: coords.x,
+            toY: coords.y,
+            color: currentColor,
+            lineWidth: 3
+        });
+        
+        lastX = coords.x;
+        lastY = coords.y;
+    }
+    
+    function stopDrawing(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        isDrawing = false;
+    }
+    
+    function createQRCode(elementId, url) {
+        new QRious({
+            element: document.getElementById(elementId),
+            value: url,
+            size: 128,
+            level: 'M'
+        });
+    }
+    
+    function updateDrawingState(state) {
+        drawingState = state;
+        redrawCanvas(state);
+    }
+    
+    function redrawCanvas(state) {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Redraw all strokes
+        state.forEach(stroke => {
+            ctx.beginPath();
+            ctx.moveTo(stroke.fromX, stroke.fromY);
+            ctx.lineTo(stroke.toX, stroke.toY);
+            ctx.strokeStyle = stroke.color;
+            ctx.lineWidth = stroke.lineWidth;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        });
+        
+        // Reset current drawing style
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = 3;
+    }
+    
+    function updatePlayerCount(count) {
+        const text = count === 1 ? '1 player connected' : `${count} players connected`;
+        document.getElementById('player-count').textContent = text;
+        
+        if (document.getElementById('mobile-player-count')) {
+            const mobileText = count === 1 ? '1 player drawing' : `${count} players drawing`;
+            document.getElementById('mobile-player-count').textContent = mobileText;
+        }
+    }
+    
+    // Initialize when DOM is loaded
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+
+<style>
+    .color-option:hover {
+        transform: scale(1.1) !important;
+    }
+    
+    .color-option:active {
+        transform: scale(0.95) !important;
+    }
+    
+    #clear-canvas-btn:hover {
+        background: #c82333 !important;
+        border-color: #bd2130 !important;
+    }
+    
+    #clear-canvas-btn:active {
+        transform: translateY(1px);
+    }
+</style>
+
+{% endblock content %} 

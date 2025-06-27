@@ -33,9 +33,13 @@ const io = socketIo(server, {
 // In-memory session storage
 const sessions = new Map();
 const goSessions = new Map();
+const drawingSessions = new Map();
 
 // Global Go session ID
 const GLOBAL_GO_SESSION = 'global-go-game';
+
+// Global Drawing session ID
+const GLOBAL_DRAWING_SESSION = 'global-drawing-canvas';
 
 // Go game helper functions
 function getNeighbors(row, col) {
@@ -430,6 +434,118 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('go-game-reset', { gameState });
     io.to(sessionId).emit('go-game-update', { gameState });
   });
+
+  // Drawing Canvas Socket Handlers
+  
+  // Create new Drawing session (use global session)
+  socket.on('create-drawing-session', () => {
+    let drawingState = drawingSessions.get(GLOBAL_DRAWING_SESSION);
+    
+    // Create global session if it doesn't exist
+    if (!drawingState) {
+      drawingState = {
+        strokes: [],
+        players: new Map(),
+        createdAt: new Date(),
+        lastActivity: new Date()
+      };
+      drawingSessions.set(GLOBAL_DRAWING_SESSION, drawingState);
+      console.log(`Global Drawing session created: ${GLOBAL_DRAWING_SESSION}`);
+    }
+    
+    socket.join(GLOBAL_DRAWING_SESSION);
+    
+    console.log(`Desktop joined global Drawing session: ${GLOBAL_DRAWING_SESSION}`);
+    socket.emit('drawing-session-created', { 
+      sessionId: GLOBAL_DRAWING_SESSION, 
+      drawingState: drawingState.strokes 
+    });
+  });
+  
+  // Join Drawing session
+  socket.on('join-drawing-session', ({ sessionId }) => {
+    const drawingState = drawingSessions.get(sessionId);
+    
+    if (!drawingState) {
+      socket.emit('drawing-session-not-found');
+      return;
+    }
+    
+    socket.join(sessionId);
+    socket.drawingSessionId = sessionId;
+    
+    // Add player to session
+    drawingState.players.set(socket.id, {
+      id: socket.id,
+      joinedAt: new Date()
+    });
+    drawingState.lastActivity = new Date();
+    
+    console.log(`Player joined Drawing session ${sessionId}`);
+    
+    socket.emit('drawing-session-joined', { 
+      sessionId, 
+      drawingState: drawingState.strokes,
+      playerCount: drawingState.players.size
+    });
+    
+    // Notify all clients in session about new player
+    io.to(sessionId).emit('drawing-player-joined', {
+      playerCount: drawingState.players.size
+    });
+  });
+  
+  // Handle drawing data
+  socket.on('drawing-data', ({ sessionId, fromX, fromY, toX, toY, color, lineWidth }) => {
+    const drawingState = drawingSessions.get(sessionId);
+    
+    if (!drawingState) {
+      socket.emit('drawing-session-not-found');
+      return;
+    }
+    
+    // Add stroke to drawing state
+    const stroke = {
+      fromX,
+      fromY,
+      toX,
+      toY,
+      color,
+      lineWidth,
+      timestamp: Date.now()
+    };
+    
+    drawingState.strokes.push(stroke);
+    drawingState.lastActivity = new Date();
+    
+    // Broadcast drawing update to all clients in session
+    socket.to(sessionId).emit('drawing-update', { 
+      drawingState: drawingState.strokes 
+    });
+    
+    console.log(`Drawing stroke added to session ${sessionId}: ${color} from (${fromX},${fromY}) to (${toX},${toY})`);
+  });
+  
+  // Handle canvas clear
+  socket.on('clear-drawing-canvas', ({ sessionId }) => {
+    console.log(`Received clear-drawing-canvas: ${sessionId} from ${socket.id}`);
+    const drawingState = drawingSessions.get(sessionId);
+    
+    if (!drawingState) {
+      console.log(`Drawing session not found for clear: ${sessionId}`);
+      socket.emit('drawing-session-not-found');
+      return;
+    }
+    
+    // Clear all strokes
+    drawingState.strokes = [];
+    drawingState.lastActivity = new Date();
+    
+    console.log(`Canvas cleared in session ${sessionId}`);
+    
+    // Broadcast clear to all clients in session
+    io.to(sessionId).emit('drawing-cleared', { drawingState: drawingState.strokes });
+  });
   
   // Handle disconnection
   socket.on('disconnect', () => {
@@ -481,6 +597,29 @@ io.on('connection', (socket) => {
         }
       }
     }
+    
+    // Handle Drawing session disconnection
+    if (socket.drawingSessionId) {
+      const drawingState = drawingSessions.get(socket.drawingSessionId);
+      
+      if (drawingState) {
+        // Remove player from drawing session
+        drawingState.players.delete(socket.id);
+        drawingState.lastActivity = new Date();
+        
+        console.log(`Player left Drawing session ${socket.drawingSessionId}`);
+        
+        // Notify remaining players
+        io.to(socket.drawingSessionId).emit('drawing-player-left', {
+          playerCount: drawingState.players.size
+        });
+        
+        // Clean up empty Drawing sessions
+        if (drawingState.players.size === 0) {
+          console.log(`Drawing session ${socket.drawingSessionId} is empty, will be cleaned up later`);
+        }
+      }
+    }
   });
 });
 
@@ -491,9 +630,12 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     activeSessions: sessions.size,
     activeGoSessions: goSessions.size,
+    activeDrawingSessions: drawingSessions.size,
     totalDevices: Array.from(sessions.values()).reduce((sum, session) => sum + session.devices.length, 0),
     totalGoPlayers: Array.from(goSessions.values()).reduce((sum, game) => 
       sum + Object.values(game.players).filter(p => p !== null).length, 0),
+    totalDrawingPlayers: Array.from(drawingSessions.values()).reduce((sum, drawing) => 
+      sum + drawing.players.size, 0),
     globalCounter: globalCounter
   });
 });

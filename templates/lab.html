@@ -19,7 +19,7 @@
                         <div style="text-align: center;">
                             <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Game</div>
                             <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
-                                <div id="qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
+                                <div id="go-qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
                             </div>
                         </div>
                     </div>
@@ -62,6 +62,37 @@
                 </div>
             </div>
         </div>
+        
+    {% elif page.title == "Experiment #3: Finger Painting" %}
+        <!-- Drawing Canvas Experiment -->
+        <div id="drawing-experiment-{{ loop.index0 }}" style="max-width: 800px; margin: 0 auto;">
+            <div id="drawing-session-container-{{ loop.index0 }}">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0; flex-wrap: wrap;">
+                    <!-- QR Code Section -->
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Canvas</div>
+                            <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
+                                <div id="drawing-qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Drawing Canvas Section -->
+                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
+                        <div style="margin-bottom: 1rem;">
+                            <div id="drawing-player-count-{{ loop.index0 }}" style="font-size: 0.9rem; color: #666;">
+                                0 players connected
+                            </div>
+                        </div>
+                                                 <div style="display: inline-block; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 2px solid #ddd;">
+                             <canvas id="drawing-canvas-{{ loop.index0 }}" width="300" height="533" style="display: block; cursor: crosshair; border-radius: 4px;"></canvas>
+                         </div>
+                        <div id="drawing-error-message-{{ loop.index0 }}" style="color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     {% endif %}
 </div>
     {% endfor %}
@@ -88,8 +119,10 @@
     // Separate socket connections for each experiment
     let counterSocket;
     let goSocket;
+    let drawingSocket;
     let counterSessionId;
     let goSessionId;
+    let drawingSessionId;
     
          // Game states
      let goGameState = {
@@ -104,6 +137,7 @@
          setTimeout(() => {
              initCounterExperiment();
              initGoExperiment();
+             initDrawingExperiment();
          }, 100);
      }
     
@@ -203,7 +237,7 @@
              const gameUrl = `${window.location.origin}/lab/experiment-2?mobile=true&session=global-go-game`;
              
              // Generate QR code
-             const qrCode = document.querySelector('[id^="qr-code-"][id$="-0"]');
+             const qrCode = document.querySelector('[id^="go-qr-code-"]');
              if (qrCode) {
                  createQRCode(qrCode.id, gameUrl);
                  
@@ -383,6 +417,108 @@
              setTimeout(() => {
                  errorElement.textContent = '';
              }, 3000);
+         }
+     }
+     
+     // Drawing Experiment Functions
+     function initDrawingExperiment() {
+         // Setup drawing canvas
+         const canvas = document.querySelector('[id^="drawing-canvas-"]');
+         if (canvas) {
+             setupDrawingCanvas(canvas);
+         }
+         
+         drawingSocket = io(BACKEND_URL);
+         
+         drawingSocket.on('connect', () => {
+             console.log('Lab page - Drawing experiment connected');
+             drawingSocket.emit('create-drawing-session');
+         });
+         
+         drawingSocket.on('drawing-session-created', (data) => {
+             drawingSessionId = data.sessionId;
+             console.log('Lab page - Drawing session created:', drawingSessionId, data);
+             
+             // Use global session for URLs
+             const drawingUrl = `${window.location.origin}/lab/experiment-3?mobile=true&session=global-drawing-canvas`;
+             
+             // Generate QR code
+             const qrCode = document.querySelector('[id^="drawing-qr-code-"]');
+             if (qrCode) {
+                 createQRCode(qrCode.id, drawingUrl);
+                 
+                 // Make QR code clickable
+                 const qrContainer = qrCode.parentElement;
+                 qrContainer.style.cursor = 'pointer';
+                 qrContainer.addEventListener('click', () => {
+                     window.open(drawingUrl, '_blank');
+                 });
+             }
+             
+             updateDrawingState(data.drawingState || []);
+         });
+         
+         drawingSocket.on('drawing-update', (data) => {
+             redrawCanvas(data.drawingState);
+         });
+         
+         drawingSocket.on('drawing-player-joined', (data) => {
+             updateDrawingPlayerCount(data.playerCount);
+         });
+         
+         drawingSocket.on('drawing-player-left', (data) => {
+             updateDrawingPlayerCount(data.playerCount);
+         });
+     }
+     
+     function setupDrawingCanvas(canvas) {
+         const ctx = canvas.getContext('2d');
+         ctx.lineCap = 'round';
+         ctx.lineJoin = 'round';
+         ctx.lineWidth = 3;
+         ctx.strokeStyle = '#000000';
+         
+         // Fill canvas with white background
+         ctx.fillStyle = '#ffffff';
+         ctx.fillRect(0, 0, canvas.width, canvas.height);
+     }
+     
+     function updateDrawingState(state) {
+         const canvas = document.querySelector('[id^="drawing-canvas-"]');
+         if (canvas) {
+             redrawCanvas(state);
+         }
+     }
+     
+     function redrawCanvas(state) {
+         const canvas = document.querySelector('[id^="drawing-canvas-"]');
+         if (!canvas) return;
+         
+         const ctx = canvas.getContext('2d');
+         
+         // Clear canvas
+         ctx.clearRect(0, 0, canvas.width, canvas.height);
+         ctx.fillStyle = '#ffffff';
+         ctx.fillRect(0, 0, canvas.width, canvas.height);
+         
+         // Redraw all strokes
+         state.forEach(stroke => {
+             ctx.beginPath();
+             ctx.moveTo(stroke.fromX, stroke.fromY);
+             ctx.lineTo(stroke.toX, stroke.toY);
+             ctx.strokeStyle = stroke.color;
+             ctx.lineWidth = stroke.lineWidth;
+             ctx.lineCap = 'round';
+             ctx.lineJoin = 'round';
+             ctx.stroke();
+         });
+     }
+     
+     function updateDrawingPlayerCount(count) {
+         const playerCountElement = document.querySelector('[id^="drawing-player-count-"]');
+         if (playerCountElement) {
+             const text = count === 1 ? '1 player connected' : `${count} players connected`;
+             playerCountElement.textContent = text;
          }
      }
     
