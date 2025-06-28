@@ -198,6 +198,7 @@
             white-space: nowrap;
             animation: marquee 8s linear infinite;
             padding: 0 1rem;
+            color: #000000; /* Start with black */
         }
 
         @keyframes marquee {
@@ -619,6 +620,28 @@
             }, 8000);
         }
         
+        // MTA Subway Line Colors
+        const mtaColors = [
+            '#000000', // Black (starting color)
+            '#EE352E', // Red (4/5/6 lines)
+            '#00933C', // Green (4/5/6 express)
+            '#0039A6', // Blue (A/C/E lines)
+            '#FF6319', // Orange (B/D/F/M lines)
+            '#FCCC0A', // Yellow (N/Q/R/W lines)
+            '#B933AD', // Purple (7 line)
+            '#996633', // Brown (J/Z lines)
+            '#A7A9AC'  // Gray (L line)
+        ];
+        let currentColorIndex = 0;
+
+        function cycleMarqueeColor() {
+            const marqueeText = document.querySelector('.marquee-text');
+            if (marqueeText) {
+                currentColorIndex = (currentColorIndex + 1) % mtaColors.length;
+                marqueeText.style.color = mtaColors[currentColorIndex];
+            }
+        }
+
         // Add click handler when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
             const cloudText = document.querySelector('.cloud-text');
@@ -627,6 +650,17 @@
                     e.preventDefault();
                     createCloudCover();
                 });
+            }
+
+            // Set up marquee color cycling
+            const marqueeText = document.querySelector('.marquee-text');
+            if (marqueeText) {
+                // Change color when text goes off-screen left (at 5 seconds into 8-second cycle)
+                // This way it's the new color when it slides in from the right
+                setTimeout(() => {
+                    cycleMarqueeColor();
+                    setInterval(cycleMarqueeColor, 8000);
+                }, 5000);
             }
         });
     </script>
