@@ -1,11 +1,20 @@
 # The URL the site will be built for
 base_url = "https://peter.direct"
 
+# Global author for RSS feeds
+author = "Peter Valdez"
+
 # Whether to automatically compile all Sass files in the sass directory
 compile_sass = true
 
 # Whether to build a search index to be used later on by a JavaScript library
 build_search_index = false
+
+# Generate RSS feed
+generate_feeds = true
+
+# RSS feed configuration
+feed_filenames = ["rss.xml"]
 
 [markdown]
 # Whether to do syntax highlighting
@@ -14,3 +23,4 @@ highlight_code = false
 
 [extra]
 # Put all your custom variables here
+description = "Personal blog and technical writings"

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div id="experiment-header">
-<h1 style="margin-bottom: 0.25rem; font-weight: 400;"><strong>Experiment #2:</strong> Go Board</h1>
+<h1 style="margin-bottom: 0.25rem; font-weight: 400; font-size: 1.6rem;"><span style="font-weight: 500;">Experiment #2:</span> Go Board</h1>
 <div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
 
 {{ page.content | safe }}
@@ -20,7 +20,6 @@
                     <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
                         <div id="qr-code" style="display: flex; align-items: center; justify-content: center;"></div>
                     </div>
-                    <a id="game-link" href="#" style="font-size: 0.8rem; color: #0066cc; text-decoration: none; margin-top: 0.5rem; display: block;">Click to test</a>
                 </div>
             </div>
             
@@ -175,9 +174,6 @@
                 window.open(gameUrl, '_blank');
             });
             
-            // Set up test link
-            document.getElementById('game-link').href = gameUrl;
-            
             updateGameState(data.gameState);
         });
         
@@ -265,7 +261,7 @@
         new QRious({
             element: canvas,
             value: url,
-            size: 160,
+            size: 128,
             level: 'M'
         });
     }

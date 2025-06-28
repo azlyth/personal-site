@@ -280,31 +280,37 @@
             font-weight: 500;
         }
 
-        .links {
-            margin: 2rem 0;
-            display: flex;
-            gap: 1.5rem;
-            flex-wrap: wrap;
+        footer {
+            margin-top: 4rem;
+            padding: 2rem 0 1rem;
+            border-top: 1px solid #eee;
+            text-align: center;
         }
 
-        .links a {
-            color: #0066cc;
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .footer-links a {
+            color: #777;
             text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid #0066cc;
-            border-radius: 4px;
-            transition: all 0.2s ease;
+            transition: color 0.2s ease;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
+            font-size: 0.9rem;
         }
 
-        .links a:hover {
-            background-color: #0066cc;
-            color: white;
+        .footer-links a:hover {
+            color: #0066cc;
+            text-decoration: none;
         }
 
-        .links .icon {
+        .footer-links .icon {
             font-size: 1rem;
             display: inline-block;
             width: 1.2rem;
@@ -577,6 +583,27 @@
             </div>
         </nav>
         {% block content %}{% endblock content %}
+        
+        <footer>
+            <div class="footer-links">
+                <a href="mailto:peter@moonbeam.nyc" class="link-email">
+                    <span class="icon">✉</span>
+                    Email
+                </a>
+                <a href="https://linkedin.com/in/peter-valdez" target="_blank" class="link-linkedin">
+                    <span class="icon">in</span>
+                    LinkedIn
+                </a>
+                <a href="https://github.com/azlyth" target="_blank" class="link-github">
+                    <span class="icon">⚡</span>
+                    GitHub
+                </a>
+                <a href="{{ get_url(path='rss.xml') }}" target="_blank" class="link-rss">
+                    <span class="icon">📡</span>
+                    RSS
+                </a>
+            </div>
+        </footer>
     </div>
     
     <script>
