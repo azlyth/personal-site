@@ -317,6 +317,18 @@
             text-align: center;
         }
 
+        .link-email .icon {
+            font-size: 1.3rem;
+            width: 1.4rem;
+            color: #0066cc;
+            transition: all 0.2s ease;
+        }
+
+        .link-email:hover .icon {
+            font-size: 1.4rem;
+            transform: scale(1.1);
+        }
+
         .link-linkedin .icon {
             font-weight: bold;
             font-family: serif;
@@ -648,8 +660,8 @@
                     const baseFontSize = 3.5 + Math.random() * 2; // 3.5 to 5.5rem
                     cloud.style.fontSize = baseFontSize + 'rem'; // ~100px to 180px
                     
-                    // Random animation delay and duration for variety
-                    cloud.style.animationDelay = Math.random() * 1 + 's';
+                    // Much faster animation delay and duration for variety
+                    cloud.style.animationDelay = Math.random() * 0.2 + 's';
                     cloud.style.animationDuration = (6 + Math.random() * 3) + 's';
                     
                     cloudCover.appendChild(cloud);
@@ -660,7 +672,7 @@
                             cloud.remove();
                         }
                     }, 12000); // Increased timeout
-                }, i * 20); // Much faster stagger to get 10x clouds in same timeframe
+                }, i * 5); // Super fast stagger for immediate cloud appearance
             }
             
             // Remove cloud cover after all animations (longer for bigger clouds)
