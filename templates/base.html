@@ -417,17 +417,7 @@
             cursor: pointer;
         }
 
-        /* Flying cloud animation styles */
-        .flying-cloud {
-            position: fixed;
-            font-size: 2rem;
-            color: rgba(135, 206, 235, 0.8);
-            z-index: 1000;
-            pointer-events: none;
-            text-shadow: 
-                0 0 5px rgba(135, 206, 235, 0.6),
-                0 0 10px rgba(135, 206, 235, 0.4);
-        }
+        /* Flying cloud animation styles - moved below */
 
         .cloud-drift-right {
             animation: drift-right 4s ease-out forwards;
@@ -445,18 +435,58 @@
             animation: drift-down 4.5s ease-out forwards;
         }
 
-        @keyframes drift-right {
+                @keyframes drift-right {
             0% {
-                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
+                transform: translateX(-200px) translateY(0) scale(1);
                 opacity: 0;
             }
-            10% {
+            5% {
                 opacity: 1;
+                transform: translateX(-150px) translateY(-20px) scale(1);
+            }
+            15% {
+                transform: translateX(5vw) translateY(15px) scale(1);
+            }
+            25% {
+                transform: translateX(20vw) translateY(-25px) scale(1);
+            }
+            35% {
+                transform: translateX(35vw) translateY(20px) scale(1);
+            }
+            45% {
+                transform: translateX(45vw) translateY(-15px) scale(1);
+            }
+            55% {
+                transform: translateX(55vw) translateY(25px) scale(1);
+            }
+            65% {
+                transform: translateX(65vw) translateY(-20px) scale(1);
+            }
+            75% {
+                transform: translateX(75vw) translateY(15px) scale(1);
+            }
+            85% {
+                transform: translateX(85vw) translateY(-10px) scale(1);
+            }
+            95% {
+                opacity: 1;
+                transform: translateX(95vw) translateY(10px) scale(1);
             }
             100% {
-                transform: translateX(100vw) translateY(-20px) scale(1.2) rotate(360deg);
+                transform: translateX(calc(100vw + 200px)) translateY(5px) scale(1);
                 opacity: 0;
             }
+        }
+
+        .flying-cloud {
+            position: fixed;
+            font-size: 2rem;
+            color: rgba(135, 206, 235, 0.8);
+            z-index: 1000;
+            pointer-events: none;
+            text-shadow: 
+                0 0 5px rgba(135, 206, 235, 0.6),
+                0 0 10px rgba(135, 206, 235, 0.4);
         }
 
         @keyframes drift-left {
@@ -548,11 +578,11 @@
             cloudCover.className = 'cloud-cover';
             document.body.appendChild(cloudCover);
             
-            // Cloud emojis to use
-            const cloudTypes = ['☁️', '⛅', '🌤️', '⛈️', '🌩️', '🌨️'];
+            // Just pure white clouds
+            const cloudTypes = ['☁️'];
             
-            // Generate multiple clouds
-            const numClouds = 15 + Math.floor(Math.random() * 10); // 15-25 clouds
+            // Generate LOTS of clouds
+            const numClouds = 80 + Math.floor(Math.random() * 40); // 80-120 clouds
             
             for (let i = 0; i < numClouds; i++) {
                 setTimeout(() => {
@@ -562,62 +592,41 @@
                     // Random cloud type
                     cloud.textContent = cloudTypes[Math.floor(Math.random() * cloudTypes.length)];
                     
-                    // Random starting position along edges
-                    const side = Math.floor(Math.random() * 4);
-                    let startX, startY;
-                    
-                    switch(side) {
-                        case 0: // Top
-                            startX = Math.random() * window.innerWidth;
-                            startY = -50;
-                            break;
-                        case 1: // Right
-                            startX = window.innerWidth + 50;
-                            startY = Math.random() * window.innerHeight;
-                            break;
-                        case 2: // Bottom
-                            startX = Math.random() * window.innerWidth;
-                            startY = window.innerHeight + 50;
-                            break;
-                        case 3: // Left
-                            startX = -50;
-                            startY = Math.random() * window.innerHeight;
-                            break;
-                    }
+                    // Always start from left edge, random Y position across full height
+                    const startX = -200; // Start well off the left edge
+                    const startY = Math.random() * window.innerHeight; // Full height distribution
                     
                     cloud.style.left = startX + 'px';
                     cloud.style.top = startY + 'px';
                     
-                    // Random animation direction
-                    const animations = ['cloud-drift-right', 'cloud-drift-left', 'cloud-drift-up', 'cloud-drift-down'];
-                    const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
-                    cloud.classList.add(randomAnimation);
+                    // Always drift right
+                    cloud.classList.add('cloud-drift-right');
                     
-                    // Random size variation
-                    const scale = 0.8 + Math.random() * 0.6; // 0.8 to 1.4
-                    cloud.style.fontSize = (2 * scale) + 'rem';
+                    // Slightly bigger, cozy cloud size (~100-180px range)
+                    const baseFontSize = 3.5 + Math.random() * 2; // 3.5 to 5.5rem
+                    cloud.style.fontSize = baseFontSize + 'rem'; // ~100px to 180px
                     
-                    // Random animation delay and duration
-                    cloud.style.animationDelay = Math.random() * 0.5 + 's';
-                    cloud.style.animationDuration = (3 + Math.random() * 2) + 's';
+                    // Random animation delay and duration for variety
+                    cloud.style.animationDelay = Math.random() * 1 + 's';
+                    cloud.style.animationDuration = (6 + Math.random() * 3) + 's';
                     
                     cloudCover.appendChild(cloud);
                     
-                    // Remove cloud after animation
+                    // Remove cloud after animation (longer timeout for longer animation)
                     setTimeout(() => {
                         if (cloud.parentNode) {
                             cloud.remove();
                         }
-                    }, 6000);
-                }, i * 100); // Stagger cloud creation
+                    }, 12000); // Increased timeout
+                }, i * 20); // Much faster stagger to get 10x clouds in same timeframe
             }
             
-            // Remove cloud cover after all animations
+            // Remove cloud cover after all animations (longer for bigger clouds)
             setTimeout(() => {
                 if (cloudCover.parentNode) {
                     cloudCover.remove();
                 }
-            }, 8000);
+            }, 15000);
         }
         
         // MTA Subway Line Colors
