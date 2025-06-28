@@ -163,6 +163,59 @@
             font-weight: 600;
             font-size: 1rem;
             margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 250px;
+        }
+
+        .marquee-container {
+            display: flex;
+            align-items: center;
+            width: 250px;
+            position: relative;
+            background: white;
+        }
+
+        .marquee-line {
+            width: 2px;
+            height: 20px;
+            background: #000;
+            flex-shrink: 0;
+            z-index: 2;
+            position: relative;
+        }
+
+        .marquee-scroll-area {
+            flex: 1;
+            overflow: hidden;
+            height: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .marquee-text {
+            white-space: nowrap;
+            animation: marquee 8s linear infinite;
+            padding: 0 1rem;
+        }
+
+        @keyframes marquee {
+            0% {
+                transform: translateX(0%);
+            }
+            37.5% {
+                transform: translateX(0%);
+            }
+            62.5% {
+                transform: translateX(-100%);
+            }
+            62.51% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(0%);
+            }
         }
 
         /* Tighter spacing for intro paragraphs */
@@ -360,6 +413,102 @@
                 0 0 8px rgba(135, 206, 235, 0.8),
                 0 0 15px rgba(135, 206, 235, 0.6),
                 0 0 25px rgba(135, 206, 235, 0.4);
+            cursor: pointer;
+        }
+
+        /* Flying cloud animation styles */
+        .flying-cloud {
+            position: fixed;
+            font-size: 2rem;
+            color: rgba(135, 206, 235, 0.8);
+            z-index: 1000;
+            pointer-events: none;
+            text-shadow: 
+                0 0 5px rgba(135, 206, 235, 0.6),
+                0 0 10px rgba(135, 206, 235, 0.4);
+        }
+
+        .cloud-drift-right {
+            animation: drift-right 4s ease-out forwards;
+        }
+
+        .cloud-drift-left {
+            animation: drift-left 4s ease-out forwards;
+        }
+
+        .cloud-drift-up {
+            animation: drift-up 3.5s ease-out forwards;
+        }
+
+        .cloud-drift-down {
+            animation: drift-down 4.5s ease-out forwards;
+        }
+
+        @keyframes drift-right {
+            0% {
+                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(100vw) translateY(-20px) scale(1.2) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes drift-left {
+            0% {
+                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-100vw) translateY(-30px) scale(1.1) rotate(-360deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes drift-up {
+            0% {
+                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(30px) translateY(-100vh) scale(1.3) rotate(180deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes drift-down {
+            0% {
+                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-50px) translateY(100vh) scale(0.8) rotate(-180deg);
+                opacity: 0;
+            }
+        }
+
+        .cloud-cover {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 999;
+            pointer-events: none;
+            overflow: hidden;
         }
     </style>
 </head>
@@ -371,9 +520,115 @@
                 <a href="{{ get_url(path='/blog/') }}">Blog</a>
                 <a href="{{ get_url(path='/lab/') }}">Lab</a>
             </div>
-            <div class="site-title">Peter's World Wide Website</div>
+            <div class="site-title">
+                <div class="marquee-container">
+                    <div class="marquee-line"></div>
+                    <div class="marquee-scroll-area">
+                        <div class="marquee-text">Peter's World Wide Website</div>
+                    </div>
+                    <div class="marquee-line"></div>
+                </div>
+            </div>
         </nav>
         {% block content %}{% endblock content %}
     </div>
+    
+    <script>
+        // Cloud animation functionality
+        function createCloudCover() {
+            // Remove any existing cloud cover
+            const existingCover = document.querySelector('.cloud-cover');
+            if (existingCover) {
+                existingCover.remove();
+            }
+            
+            // Create cloud cover container
+            const cloudCover = document.createElement('div');
+            cloudCover.className = 'cloud-cover';
+            document.body.appendChild(cloudCover);
+            
+            // Cloud emojis to use
+            const cloudTypes = ['☁️', '⛅', '🌤️', '⛈️', '🌩️', '🌨️'];
+            
+            // Generate multiple clouds
+            const numClouds = 15 + Math.floor(Math.random() * 10); // 15-25 clouds
+            
+            for (let i = 0; i < numClouds; i++) {
+                setTimeout(() => {
+                    const cloud = document.createElement('div');
+                    cloud.className = 'flying-cloud';
+                    
+                    // Random cloud type
+                    cloud.textContent = cloudTypes[Math.floor(Math.random() * cloudTypes.length)];
+                    
+                    // Random starting position along edges
+                    const side = Math.floor(Math.random() * 4);
+                    let startX, startY;
+                    
+                    switch(side) {
+                        case 0: // Top
+                            startX = Math.random() * window.innerWidth;
+                            startY = -50;
+                            break;
+                        case 1: // Right
+                            startX = window.innerWidth + 50;
+                            startY = Math.random() * window.innerHeight;
+                            break;
+                        case 2: // Bottom
+                            startX = Math.random() * window.innerWidth;
+                            startY = window.innerHeight + 50;
+                            break;
+                        case 3: // Left
+                            startX = -50;
+                            startY = Math.random() * window.innerHeight;
+                            break;
+                    }
+                    
+                    cloud.style.left = startX + 'px';
+                    cloud.style.top = startY + 'px';
+                    
+                    // Random animation direction
+                    const animations = ['cloud-drift-right', 'cloud-drift-left', 'cloud-drift-up', 'cloud-drift-down'];
+                    const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+                    cloud.classList.add(randomAnimation);
+                    
+                    // Random size variation
+                    const scale = 0.8 + Math.random() * 0.6; // 0.8 to 1.4
+                    cloud.style.fontSize = (2 * scale) + 'rem';
+                    
+                    // Random animation delay and duration
+                    cloud.style.animationDelay = Math.random() * 0.5 + 's';
+                    cloud.style.animationDuration = (3 + Math.random() * 2) + 's';
+                    
+                    cloudCover.appendChild(cloud);
+                    
+                    // Remove cloud after animation
+                    setTimeout(() => {
+                        if (cloud.parentNode) {
+                            cloud.remove();
+                        }
+                    }, 6000);
+                }, i * 100); // Stagger cloud creation
+            }
+            
+            // Remove cloud cover after all animations
+            setTimeout(() => {
+                if (cloudCover.parentNode) {
+                    cloudCover.remove();
+                }
+            }, 8000);
+        }
+        
+        // Add click handler when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const cloudText = document.querySelector('.cloud-text');
+            if (cloudText) {
+                cloudText.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    createCloudCover();
+                });
+            }
+        });
+    </script>
 </body>
 </html> 
