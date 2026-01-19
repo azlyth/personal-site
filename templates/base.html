@@ -19,6 +19,7 @@
             padding: 2rem 1rem;
         }
 
+
         .container {
             max-width: 700px;
             margin: 0 auto;
@@ -573,6 +574,202 @@
             pointer-events: none;
             overflow: hidden;
         }
+
+
+        /* Timeline page styles - Absolute positioning for precise alignment */
+        .timeline-header {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .timeline-header span {
+            flex: 1;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            text-align: center;
+        }
+
+        .timeline-header span.tl-header-years {
+            flex: 0 0 40px;
+        }
+
+        .timeline {
+            display: flex;
+            gap: 0.5rem;
+            position: relative;
+        }
+
+        /* Column containers */
+        .tl-col {
+            flex: 1;
+            position: relative;
+            min-height: 100rem; /* ~21 years * ~4.76rem per year */
+        }
+
+        .tl-years {
+            flex: 0 0 40px;
+            position: relative;
+        }
+
+        /* Vertical line through years column */
+        .tl-years::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e0e0e0;
+            z-index: 0;
+        }
+
+        /* Year labels - positioned absolutely */
+        .tl-year {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            padding: 0.1rem 0.3rem;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #888;
+            border: 1px solid #ddd;
+            border-radius: 2px;
+            z-index: 1;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        /* Timeline items - positioned absolutely */
+        .tl-item {
+            position: absolute;
+            left: 0;
+            right: 0;
+            padding: 0.4rem 0.5rem;
+            border-radius: 3px;
+            transition: background 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            overflow: hidden;
+        }
+
+        .tl-item:hover {
+            background: #f5f7f9;
+        }
+
+        .tl-item h3 {
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .tl-item h3 a {
+            color: #0066cc;
+        }
+
+        .tl-item .role {
+            font-size: 0.7rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        .tl-item p {
+            font-size: 0.7rem;
+            color: #666;
+            line-height: 1.3;
+            margin: 0.15rem 0 0 0;
+        }
+
+        .tl-item .sub {
+            font-size: 0.65rem;
+            color: #888;
+            margin-top: 0.2rem;
+        }
+
+        /* Color accents - Employment (right border, right aligned) */
+        .tl-col-employment .tl-item {
+            border-right: 3px solid #4a90e2;
+            text-align: right;
+            align-items: flex-end;
+        }
+
+        /* Projects (left border) */
+        .tl-col-projects .tl-item {
+            border-left: 3px solid #f39c12;
+        }
+
+        /* Civic (left border) */
+        .tl-col-civic .tl-item {
+            border-left: 3px solid #2ecc71;
+        }
+
+        /* Mobile */
+        @media (max-width: 600px) {
+            .timeline-header {
+                display: none;
+            }
+
+            .timeline {
+                flex-direction: column;
+                gap: 2rem;
+            }
+
+            .tl-col {
+                min-height: auto;
+                position: static;
+            }
+
+            .tl-years {
+                display: none;
+            }
+
+            .tl-item {
+                position: static;
+                margin-bottom: 1rem;
+            }
+
+            .tl-col-employment .tl-item {
+                border-right: none;
+                border-left: 3px solid #4a90e2;
+                text-align: left;
+                align-items: flex-start;
+            }
+
+            /* Mobile section labels */
+            .tl-col::before {
+                display: block;
+                font-size: 0.7rem;
+                font-weight: 600;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 0.02em;
+                margin-bottom: 0.5rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid #eee;
+            }
+
+            .tl-col-employment::before {
+                content: 'Employment';
+            }
+
+            .tl-col-projects::before {
+                content: 'Projects';
+            }
+
+            .tl-col-civic::before {
+                content: 'Civic';
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -580,6 +777,7 @@
         <nav>
             <div class="nav-links">
                 <a href="{{ get_url(path='/') }}">Home</a>
+                <a href="{{ get_url(path='/projects/') }}">Projects</a>
                 <a href="{{ get_url(path='/blog/') }}">Blog</a>
                 <a href="{{ get_url(path='/lab/') }}">Lab</a>
             </div>
