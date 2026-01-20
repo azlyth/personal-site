@@ -8,102 +8,294 @@
     color: #0066cc !important;
     text-decoration: underline !important;
 }
+
+/* Connection status bar */
+.lab-status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+}
+
+.connection-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #dc3545;
+    transition: background 0.3s ease;
+}
+
+.connection-dot.connected {
+    background: #28a745;
+}
+
+/* Share button */
+.share-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.share-btn:hover {
+    background: #e8e8e8;
+    color: #333;
+}
+
+/* Counter buttons */
+.counter-controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+.counter-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 2rem;
+    font-weight: 300;
+    border: 2px solid #ddd;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+}
+
+.counter-btn:hover {
+    border-color: #0066cc;
+    color: #0066cc;
+}
+
+.counter-btn:active {
+    transform: scale(0.95);
+    background: #f0f7ff;
+}
+
+/* Go board controls */
+.go-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.go-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.go-btn:hover {
+    border-color: #333;
+}
+
+.go-btn.active {
+    border-color: #0066cc;
+    background: #f0f7ff;
+}
+
+.go-turn-indicator {
+    font-size: 0.9rem;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.go-turn-indicator .stone-preview {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+}
+
+/* Drawing controls */
+.drawing-controls {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.color-swatch:hover {
+    transform: scale(1.1);
+}
+
+.color-swatch.active {
+    border-color: #333;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333;
+}
+
+.clear-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    background: #fff;
+    color: #dc3545;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 0.5rem;
+}
+
+.clear-btn:hover {
+    background: #dc3545;
+    color: #fff;
+}
+
+/* Experiment header */
+.experiment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.experiment-header h2 {
+    margin-bottom: 0 !important;
+}
 </style>
+
+<!-- Connection Status Bar -->
+<div class="lab-status-bar">
+    <div class="connection-indicator">
+        <div class="connection-dot" id="global-connection-dot"></div>
+        <span id="global-connection-text">Connecting...</span>
+    </div>
+    <div style="color: #666; font-size: 0.85rem;">Real-time collaborative experiments</div>
+</div>
+
 {% set sorted_pages = section.pages | sort(attribute="date") | reverse %}
 {% for page in sorted_pages %}
 <div class="experiment-container" style="margin: 0; padding: 0; border-bottom: 1px solid #eee;">
-    <h2 style="margin-bottom: 0.1rem; font-weight: 400; font-size: 1.6rem;"><a href="{{ page.permalink }}" style="color: #333; text-decoration: none; transition: color 0.2s ease;"><span style="font-weight: 500;">{{ page.title | split(pat=":") | first }}:</span> {{ page.title | split(pat=":") | last | trim }}</a></h2>
-    <div class="post-meta" style="margin-bottom: 2.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
-    
+    <div class="experiment-header">
+        <div>
+            <h2 style="margin-bottom: 0.1rem; font-weight: 400; font-size: 1.6rem;"><a href="{{ page.permalink }}" style="color: #333; text-decoration: none; transition: color 0.2s ease;"><span style="font-weight: 500;">{{ page.title | split(pat=":") | first }}:</span> {{ page.title | split(pat=":") | last | trim }}</a></h2>
+            <div class="post-meta" style="margin-bottom: 1.5rem; font-size: 0.9rem; border-bottom: none; padding-bottom: 0;">{{ page.date | date(format="%B %d, %Y") }}</div>
+        </div>
+    </div>
+
     {% if page.title == "Experiment #2: Go Board" %}
         <!-- Go Board Experiment -->
-        <div id="go-experiment-{{ loop.index0 }}" style="max-width: 800px; margin: 0 auto;">
-            <div id="go-session-container-{{ loop.index0 }}">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0; flex-wrap: wrap;">
-                    <!-- QR Code Section -->
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Game</div>
-                            <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
-                                <div id="go-qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Go Board Section -->
-                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
-                        <div style="margin-bottom: 1rem;">
-                            <div id="go-player-count-{{ loop.index0 }}" style="font-size: 0.9rem; color: #666;">
-                                0 players connected
-                            </div>
-                        </div>
-                        <div id="go-board-{{ loop.index0 }}" style="display: inline-block; background: #dcb35c; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
-                        <div id="go-error-message-{{ loop.index0 }}" style="color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
-                    </div>
+        <div id="go-experiment" style="max-width: 500px; margin: 0 auto; padding-bottom: 2rem;">
+            <div style="text-align: center;">
+                <div style="margin-bottom: 0.75rem;">
+                    <span id="go-player-count" style="font-size: 0.85rem; color: #666;">0 players</span>
+                    <span style="color: #ddd; margin: 0 0.5rem;">|</span>
+                    <button class="share-btn" onclick="shareExperiment('go')">
+                        <span>Share</span>
+                    </button>
                 </div>
-                
+                <div id="go-board" style="display: inline-block; background: #dcb35c; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
+                <div id="go-error-message" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
+
+                <div class="go-controls">
+                    <div class="go-turn-indicator">
+                        <span>Your color:</span>
+                        <div class="stone-preview" id="go-my-color" style="background: #000;"></div>
+                    </div>
+                    <button class="go-btn" id="go-switch-color" onclick="switchGoColor()">Switch to White</button>
+                    <button class="go-btn" onclick="resetGoGame()">Reset Board</button>
+                </div>
+                <div style="margin-top: 0.5rem;">
+                    <span class="go-turn-indicator">
+                        <span>Current turn:</span>
+                        <div class="stone-preview" id="go-current-turn" style="background: #000;"></div>
+                    </span>
+                </div>
             </div>
         </div>
-        
+
     {% elif page.title == "Experiment #1: Minus, Plus" %}
         <!-- Counter Experiment -->
-        <div id="counter-experiment-{{ loop.index0 }}" style="max-width: 640px; margin: 0 auto;">
-            <div id="counter-session-container-{{ loop.index0 }}">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0;">
-                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
-                        <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
-                            <div id="counter-qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
-                        </div>
-                    </div>
-                    
-                    <div style="text-align: center; display: flex; align-items: center; justify-content: center;">
-                        <div id="counter-display-{{ loop.index0 }}" style="font-size: 10rem; font-weight: 200; color: #0066cc; line-height: 0.9; letter-spacing: -0.02em; width: 200px; height: 200px; display: flex; align-items: center; justify-content: center;">0</div>
-                    </div>
+        <div id="counter-experiment" style="max-width: 400px; margin: 0 auto; padding-bottom: 2rem;">
+            <div style="text-align: center;">
+                <div style="margin-bottom: 1rem;">
+                    <span id="counter-device-status" style="font-size: 0.85rem; color: #666;">0 connected</span>
+                    <span style="color: #ddd; margin: 0 0.5rem;">|</span>
+                    <button class="share-btn" onclick="shareExperiment('counter')">
+                        <span>Share</span>
+                    </button>
                 </div>
-                
-                <p style="margin: 1rem 0; font-size: 0.95rem; color: #666; text-align: center;">Scan with your phone, change the number to your liking.</p>
-                
-                <div style="margin: 1rem 0; text-align: center;">
-                    <div id="counter-device-status-{{ loop.index0 }}" style="font-size: 1.1rem; font-weight: 400; letter-spacing: 0.025em; color: #999;">Waiting for device...</div>
+                <div id="counter-display" style="font-size: 8rem; font-weight: 200; color: #0066cc; line-height: 1; letter-spacing: -0.02em;">0</div>
+                <div class="counter-controls">
+                    <button class="counter-btn" onclick="decrementCounter()">−</button>
+                    <button class="counter-btn" onclick="incrementCounter()">+</button>
                 </div>
             </div>
         </div>
-        
+
     {% elif page.title == "Experiment #3: Finger Painting" %}
         <!-- Drawing Canvas Experiment -->
-        <div id="drawing-experiment-{{ loop.index0 }}" style="max-width: 800px; margin: 0 auto;">
-            <div id="drawing-session-container-{{ loop.index0 }}">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 2rem; margin: 2rem 0 1.5rem 0; flex-wrap: wrap;">
-                    <!-- QR Code Section -->
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="text-align: center;">
-                            <div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 0.5rem; color: #333;">Join Canvas</div>
-                            <div style="border: 2px solid #ddd; border-radius: 8px; padding: 8px; display: inline-block;">
-                                <div id="drawing-qr-code-{{ loop.index0 }}" style="display: flex; align-items: center; justify-content: center;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Drawing Canvas Section -->
-                    <div style="text-align: center; display: flex; flex-direction: column; align-items: center;">
-                        <div style="margin-bottom: 1rem;">
-                            <div id="drawing-player-count-{{ loop.index0 }}" style="font-size: 0.9rem; color: #666;">
-                                0 players connected
-                            </div>
-                        </div>
-                                                 <div style="display: inline-block; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 2px solid #ddd;">
-                             <canvas id="drawing-canvas-{{ loop.index0 }}" width="300" height="533" style="display: block; cursor: crosshair; border-radius: 4px;"></canvas>
-                         </div>
-                        <div id="drawing-error-message-{{ loop.index0 }}" style="color: #dc3545; font-size: 0.9rem; margin-top: 0.5rem; min-height: 1.2rem;"></div>
-                    </div>
+        <div id="drawing-experiment" style="max-width: 500px; margin: 0 auto; padding-bottom: 2rem;">
+            <div style="text-align: center;">
+                <div style="margin-bottom: 0.75rem;">
+                    <span id="drawing-player-count" style="font-size: 0.85rem; color: #666;">0 players</span>
+                    <span style="color: #ddd; margin: 0 0.5rem;">|</span>
+                    <button class="share-btn" onclick="shareExperiment('drawing')">
+                        <span>Share</span>
+                    </button>
+                </div>
+                <div style="display: inline-block; background: #fff; padding: 8px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border: 2px solid #ddd;">
+                    <canvas id="drawing-canvas" width="300" height="400" style="display: block; cursor: crosshair; border-radius: 4px; touch-action: none;"></canvas>
+                </div>
+
+                <div class="drawing-controls">
+                    <div class="color-swatch active" style="background: #000000;" data-color="#000000" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #dc3545;" data-color="#dc3545" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #fd7e14;" data-color="#fd7e14" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #ffc107;" data-color="#ffc107" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #28a745;" data-color="#28a745" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #007bff;" data-color="#007bff" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #6f42c1;" data-color="#6f42c1" onclick="selectDrawingColor(this)"></div>
+                    <div class="color-swatch" style="background: #ffffff; border: 1px solid #ddd;" data-color="#ffffff" onclick="selectDrawingColor(this)"></div>
+                    <button class="clear-btn" onclick="clearDrawingCanvas()">Clear</button>
                 </div>
             </div>
         </div>
     {% endif %}
 </div>
-    {% endfor %}
+{% endfor %}
 
-<script src="https://unpkg.com/qrious@4.0.2/dist/qrious.min.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
@@ -118,206 +310,216 @@
             return 'https://peter-lab-backend.onrender.com';
         }
     };
-    
+
     const BACKEND_URL = getBackendUrl();
     const BOARD_SIZE = 9;
-    
-    // Separate socket connections for each experiment
+
+    // Socket connections
     let counterSocket;
     let goSocket;
     let drawingSocket;
-    let counterSessionId;
-    let goSessionId;
-    let drawingSessionId;
-    
-         // Game states
-     let goGameState = {
-         board: Array(9).fill().map(() => Array(9).fill(null)),
-         currentPlayer: 'black',
-         players: { white: null, black: null }
-     };
-    
-         // Initialize all experiments
-     function initExperiments() {
-         // Add small delay to ensure DOM is fully ready
-         setTimeout(() => {
-             initCounterExperiment();
-             initGoExperiment();
-             initDrawingExperiment();
-         }, 100);
-     }
-    
-    // Counter Experiment Functions
+
+    // Session IDs (using global sessions)
+    const counterSessionId = 'global-counter';
+    const goSessionId = 'global-go-game';
+    const drawingSessionId = 'global-drawing-canvas';
+
+    // Game states
+    let goGameState = {
+        board: Array(9).fill().map(() => Array(9).fill(null)),
+        currentPlayer: 'black',
+        players: { white: null, black: null }
+    };
+    let myGoColor = 'black';
+
+    // Drawing state
+    let drawingColor = '#000000';
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    // Track total connections for status bar
+    let totalConnections = 0;
+
+    // ========== INITIALIZATION ==========
+
+    function initExperiments() {
+        setTimeout(() => {
+            initCounterExperiment();
+            initGoExperiment();
+            initDrawingExperiment();
+        }, 100);
+    }
+
+    function updateGlobalConnectionStatus() {
+        const dot = document.getElementById('global-connection-dot');
+        const text = document.getElementById('global-connection-text');
+
+        const allConnected = counterSocket?.connected && goSocket?.connected && drawingSocket?.connected;
+
+        if (allConnected) {
+            dot.classList.add('connected');
+            text.textContent = 'Connected';
+        } else {
+            dot.classList.remove('connected');
+            text.textContent = 'Connecting...';
+        }
+    }
+
+    // ========== SHARE FUNCTIONALITY ==========
+
+    function shareExperiment(type) {
+        let url;
+        switch(type) {
+            case 'counter':
+                url = `${window.location.origin}/lab/experiment-1`;
+                break;
+            case 'go':
+                url = `${window.location.origin}/lab/experiment-2`;
+                break;
+            case 'drawing':
+                url = `${window.location.origin}/lab/experiment-3`;
+                break;
+        }
+
+        if (navigator.share) {
+            navigator.share({
+                title: 'Lab Experiment',
+                url: url
+            });
+        } else if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Link copied to clipboard!');
+            });
+        } else {
+            prompt('Copy this link:', url);
+        }
+    }
+
+    // ========== COUNTER EXPERIMENT ==========
+
     function initCounterExperiment() {
         counterSocket = io(BACKEND_URL);
-        
+
         counterSocket.on('connect', () => {
-            console.log('Counter experiment connected');
+            console.log('Counter connected');
+            updateGlobalConnectionStatus();
             counterSocket.emit('create-session');
         });
-        
+
+        counterSocket.on('disconnect', () => {
+            updateGlobalConnectionStatus();
+        });
+
         counterSocket.on('session-created', (data) => {
-            counterSessionId = data.sessionId;
-            const mobileUrl = `${window.location.origin}/lab/experiment-1?mobile=true&session=${counterSessionId}`;
-            
-                         // Generate QR code - find the counter experiment container
-             const qrContainer = document.querySelector('[id^="counter-qr-code-"]');
-             if (qrContainer) {
-                 qrContainer.innerHTML = '';
-                 const canvas = document.createElement('canvas');
-                 qrContainer.appendChild(canvas);
-                 
-                 new QRious({
-                     element: canvas,
-                     value: mobileUrl,
-                     size: 128,
-                     level: 'M'
-                 });
-                 
-                 // Make QR code clickable
-                 qrContainer.style.cursor = 'pointer';
-                 qrContainer.addEventListener('click', () => {
-                     window.open(mobileUrl, '_blank');
-                 });
-             }
-             
-             // Set initial counter value
-             const counterDisplay = document.querySelector('[id^="counter-display-"]');
+            const counterDisplay = document.getElementById('counter-display');
             if (counterDisplay && typeof data.counter !== 'undefined') {
                 counterDisplay.textContent = data.counter;
             }
         });
-        
-                 counterSocket.on('counter-update', (data) => {
-             const counterDisplay = document.querySelector('[id^="counter-display-"]');
-             if (counterDisplay) {
-                 counterDisplay.textContent = data.value;
-             }
-         });
-        
-        counterSocket.on('device-connected', (data) => {
-            updateCounterDeviceStatus('Device connected', true);
-        });
-        
-        counterSocket.on('device-disconnected', (data) => {
-            if (data.devices.length === 0) {
-                updateCounterDeviceStatus('Waiting for device...', false);
+
+        counterSocket.on('counter-update', (data) => {
+            const counterDisplay = document.getElementById('counter-display');
+            if (counterDisplay) {
+                counterDisplay.textContent = data.value;
             }
         });
+
+        counterSocket.on('device-connected', (data) => {
+            updateCounterStatus(data.devices?.length || 1);
+        });
+
+        counterSocket.on('device-disconnected', (data) => {
+            updateCounterStatus(data.devices?.length || 0);
+        });
     }
-    
-         function updateCounterDeviceStatus(message, isConnected) {
-         const status = document.querySelector('[id^="counter-device-status-"]');
-         if (status) {
-             status.textContent = message;
-             if (isConnected) {
-                 status.style.color = 'rgba(34, 197, 94, 0.9)';
-                 status.style.fontWeight = '500';
-             } else {
-                 status.style.color = '#999';
-                 status.style.fontWeight = '400';
-             }
-         }
-     }
-    
-         // Go Experiment Functions
-     function initGoExperiment() {
-         // Create Go board - find the go board container
-         const goBoardContainer = document.querySelector('[id^="go-board-"]');
-         if (goBoardContainer) {
-             createGoBoard(goBoardContainer.id);
-         }
-        
-        goSocket = io(BACKEND_URL);
-        
-                 goSocket.on('connect', () => {
-             console.log('Lab page - Go experiment connected');
-             goSocket.emit('create-go-session');
-         });
-        
-                 goSocket.on('go-session-created', (data) => {
-             goSessionId = data.sessionId;
-             console.log('Lab page - Go session created:', goSessionId, data);
-             
-             // Always use global session for URLs
-             const gameUrl = `${window.location.origin}/lab/experiment-2?mobile=true&session=global-go-game`;
-             
-             // Generate QR code
-             const qrCode = document.querySelector('[id^="go-qr-code-"]');
-             if (qrCode) {
-                 createQRCode(qrCode.id, gameUrl);
-                 
-                 // Make QR code clickable
-                 const qrContainer = qrCode.parentElement;
-                 qrContainer.style.cursor = 'pointer';
-                 qrContainer.addEventListener('click', () => {
-                     window.open(gameUrl, '_blank');
-                 });
-             }
-             
-             // Set up test link
-             const gameLink = document.querySelector('[id^="game-link-"]');
-             if (gameLink) gameLink.href = gameUrl;
-             
-             // Desktop also joins session as observer to get game updates
-             goSocket.emit('join-go-session', { sessionId: goSessionId, color: 'observer' });
-             
-             updateGoGameState(data.gameState);
-         });
-        
-                 goSocket.on('go-game-update', (data) => {
-             console.log('Desktop received game update:', data);
-             updateGoGameState(data.gameState);
-         });
-         
-         goSocket.on('go-player-joined', (data) => {
-             console.log('Player joined:', data);
-             updateGoPlayerStatus(data.players);
-         });
-         
-         goSocket.on('go-player-left', (data) => {
-             console.log('Player left:', data);
-             updateGoPlayerStatus(data.players);
-         });
-         
-         goSocket.on('go-invalid-move', (data) => {
-             console.log('Invalid move:', data);
-             showGoErrorMessage(data.reason);
-         });
-    }
-    
-    function createQRCode(containerId, url) {
-        const container = document.getElementById(containerId);
-        if (container) {
-            container.innerHTML = '';
-            const canvas = document.createElement('canvas');
-            container.appendChild(canvas);
-            
-            new QRious({
-                element: canvas,
-                value: url,
-                size: 128,
-                level: 'M'
-            });
+
+    function updateCounterStatus(count) {
+        const status = document.getElementById('counter-device-status');
+        if (status) {
+            status.textContent = `${count} connected`;
         }
     }
-    
-    function createGoBoard(containerId) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        
-        const boardSize = 380;
+
+    function incrementCounter() {
+        if (counterSocket) {
+            counterSocket.emit('increment', { sessionId: counterSessionId });
+        }
+    }
+
+    function decrementCounter() {
+        if (counterSocket) {
+            counterSocket.emit('decrement', { sessionId: counterSessionId });
+        }
+    }
+
+    // ========== GO BOARD EXPERIMENT ==========
+
+    function initGoExperiment() {
+        const boardContainer = document.getElementById('go-board');
+        if (boardContainer) {
+            createGoBoard(boardContainer);
+        }
+
+        goSocket = io(BACKEND_URL);
+
+        goSocket.on('connect', () => {
+            console.log('Go connected');
+            updateGlobalConnectionStatus();
+            goSocket.emit('create-go-session');
+        });
+
+        goSocket.on('disconnect', () => {
+            updateGlobalConnectionStatus();
+        });
+
+        goSocket.on('go-session-created', (data) => {
+            console.log('Go session created:', data);
+            // Join as player with current color
+            goSocket.emit('join-go-session', { sessionId: goSessionId, color: myGoColor });
+            updateGoGameState(data.gameState);
+        });
+
+        goSocket.on('go-game-update', (data) => {
+            console.log('Go game update:', data);
+            updateGoGameState(data.gameState);
+        });
+
+        goSocket.on('go-player-joined', (data) => {
+            console.log('Go player joined:', data);
+            updateGoPlayerCount(data.players);
+        });
+
+        goSocket.on('go-player-left', (data) => {
+            console.log('Go player left:', data);
+            updateGoPlayerCount(data.players);
+        });
+
+        goSocket.on('go-invalid-move', (data) => {
+            showGoError(data.reason);
+        });
+
+        goSocket.on('go-game-reset', (data) => {
+            updateGoGameState(data.gameState);
+        });
+
+        goSocket.on('go-color-switched', (data) => {
+            console.log('Color switched:', data);
+        });
+    }
+
+    function createGoBoard(container) {
+        const boardSize = 300;
         const cellSize = boardSize / (BOARD_SIZE + 1);
-        
-        // Create SVG board
+
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('width', boardSize);
         svg.setAttribute('height', boardSize);
+        svg.setAttribute('id', 'go-board-svg');
         svg.style.cursor = 'pointer';
-        
+
         // Draw grid lines
         for (let i = 1; i <= BOARD_SIZE; i++) {
-            // Horizontal lines
             const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             hLine.setAttribute('x1', cellSize);
             hLine.setAttribute('y1', i * cellSize);
@@ -326,8 +528,7 @@
             hLine.setAttribute('stroke', '#8B4513');
             hLine.setAttribute('stroke-width', '1');
             svg.appendChild(hLine);
-            
-            // Vertical lines
+
             const vLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             vLine.setAttribute('x1', i * cellSize);
             vLine.setAttribute('y1', cellSize);
@@ -337,199 +538,345 @@
             vLine.setAttribute('stroke-width', '1');
             svg.appendChild(vLine);
         }
-        
-                 // Add star points (handicap points) for 9x9 board
-         const starPoints = [[3,3], [3,7], [5,5], [7,3], [7,7]];
-         starPoints.forEach(([x, y]) => {
-             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-             circle.setAttribute('cx', x * cellSize);
-             circle.setAttribute('cy', y * cellSize);
-             circle.setAttribute('r', '3');
-             circle.setAttribute('fill', '#8B4513');
-             svg.appendChild(circle);
-         });
-        
-        svg.setAttribute('id', containerId + '-svg');
+
+        // Star points
+        const starPoints = [[3,3], [3,7], [5,5], [7,3], [7,7]];
+        starPoints.forEach(([x, y]) => {
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', x * cellSize);
+            circle.setAttribute('cy', y * cellSize);
+            circle.setAttribute('r', '3');
+            circle.setAttribute('fill', '#8B4513');
+            svg.appendChild(circle);
+        });
+
+        // Click handler
+        svg.addEventListener('click', (e) => {
+            const rect = svg.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const col = Math.round(x / cellSize) - 1;
+            const row = Math.round(y / cellSize) - 1;
+
+            if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+                makeGoMove(row, col);
+            }
+        });
+
         container.appendChild(svg);
     }
-    
-         function updateGoGameState(newGameState) {
-         console.log('Updating game state:', newGameState);
-         goGameState = newGameState;
-         
-         // Update board stones
-         const boardSvg = document.querySelector('[id$="-svg"]');
-         console.log('Found board SVG:', boardSvg);
-         if (boardSvg) {
-             updateGoBoardStones(boardSvg.id);
-         }
-         
-         // Update player status
-         updateGoPlayerStatus(goGameState.players);
-     }
-    
-         function updateGoBoardStones(svgId) {
-         const svg = document.getElementById(svgId);
-         console.log('Updating board stones, SVG:', svg, 'Game state:', goGameState);
-         
-         if (!svg) {
-             console.error('SVG not found:', svgId);
-             return;
-         }
-         
-         // Remove existing stones
-         const existingStones = svg.querySelectorAll('.stone');
-         existingStones.forEach(stone => stone.remove());
-         
-         const cellSize = parseInt(svg.getAttribute('width')) / (BOARD_SIZE + 1);
-         console.log('Cell size:', cellSize, 'Board size:', BOARD_SIZE);
-         
-         // Add stones
-         let stoneCount = 0;
-         for (let row = 0; row < BOARD_SIZE; row++) {
-             for (let col = 0; col < BOARD_SIZE; col++) {
-                 const stone = goGameState.board[row][col];
-                 if (stone) {
-                     stoneCount++;
-                     console.log(`Adding stone at ${row},${col}: ${stone}`);
-                     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                     circle.setAttribute('cx', (col + 1) * cellSize);
-                     circle.setAttribute('cy', (row + 1) * cellSize);
-                     circle.setAttribute('r', cellSize * 0.4);
-                     circle.setAttribute('fill', stone === 'black' ? '#000' : '#fff');
-                     circle.setAttribute('stroke', stone === 'black' ? '#333' : '#ccc');
-                     circle.setAttribute('stroke-width', '1');
-                     circle.classList.add('stone');
-                     svg.appendChild(circle);
-                 }
-             }
-         }
-         console.log(`Added ${stoneCount} stones to board`);
-     }
-    
-         function updateGoPlayerStatus(players) {
-         const connectedPlayers = Object.values(players).filter(p => p !== null).length;
-         const playerCount = document.querySelector('[id^="go-player-count-"]');
-         if (playerCount) {
-             playerCount.textContent = `${connectedPlayers} ${connectedPlayers === 1 ? 'player' : 'players'} connected`;
-         }
-     }
-     
-     function showGoErrorMessage(message) {
-         const errorElement = document.querySelector('[id^="go-error-message-"]');
-         if (errorElement) {
-             errorElement.textContent = message;
-             // Clear the error message after 3 seconds
-             setTimeout(() => {
-                 errorElement.textContent = '';
-             }, 3000);
-         }
-     }
-     
-     // Drawing Experiment Functions
-     function initDrawingExperiment() {
-         // Setup drawing canvas
-         const canvas = document.querySelector('[id^="drawing-canvas-"]');
-         if (canvas) {
-             setupDrawingCanvas(canvas);
-         }
-         
-         drawingSocket = io(BACKEND_URL);
-         
-         drawingSocket.on('connect', () => {
-             console.log('Lab page - Drawing experiment connected');
-             drawingSocket.emit('create-drawing-session');
-         });
-         
-         drawingSocket.on('drawing-session-created', (data) => {
-             drawingSessionId = data.sessionId;
-             console.log('Lab page - Drawing session created:', drawingSessionId, data);
-             
-             // Use global session for URLs
-             const drawingUrl = `${window.location.origin}/lab/experiment-3?mobile=true&session=global-drawing-canvas`;
-             
-             // Generate QR code
-             const qrCode = document.querySelector('[id^="drawing-qr-code-"]');
-             if (qrCode) {
-                 createQRCode(qrCode.id, drawingUrl);
-                 
-                 // Make QR code clickable
-                 const qrContainer = qrCode.parentElement;
-                 qrContainer.style.cursor = 'pointer';
-                 qrContainer.addEventListener('click', () => {
-                     window.open(drawingUrl, '_blank');
-                 });
-             }
-             
-             updateDrawingState(data.drawingState || []);
-         });
-         
-         drawingSocket.on('drawing-update', (data) => {
-             redrawCanvas(data.drawingState);
-         });
-         
-         drawingSocket.on('drawing-player-joined', (data) => {
-             updateDrawingPlayerCount(data.playerCount);
-         });
-         
-         drawingSocket.on('drawing-player-left', (data) => {
-             updateDrawingPlayerCount(data.playerCount);
-         });
-     }
-     
-     function setupDrawingCanvas(canvas) {
-         const ctx = canvas.getContext('2d');
-         ctx.lineCap = 'round';
-         ctx.lineJoin = 'round';
-         ctx.lineWidth = 3;
-         ctx.strokeStyle = '#000000';
-         
-         // Fill canvas with white background
-         ctx.fillStyle = '#ffffff';
-         ctx.fillRect(0, 0, canvas.width, canvas.height);
-     }
-     
-     function updateDrawingState(state) {
-         const canvas = document.querySelector('[id^="drawing-canvas-"]');
-         if (canvas) {
-             redrawCanvas(state);
-         }
-     }
-     
-     function redrawCanvas(state) {
-         const canvas = document.querySelector('[id^="drawing-canvas-"]');
-         if (!canvas) return;
-         
-         const ctx = canvas.getContext('2d');
-         
-         // Clear canvas
-         ctx.clearRect(0, 0, canvas.width, canvas.height);
-         ctx.fillStyle = '#ffffff';
-         ctx.fillRect(0, 0, canvas.width, canvas.height);
-         
-         // Redraw all strokes
-         state.forEach(stroke => {
-             ctx.beginPath();
-             ctx.moveTo(stroke.fromX, stroke.fromY);
-             ctx.lineTo(stroke.toX, stroke.toY);
-             ctx.strokeStyle = stroke.color;
-             ctx.lineWidth = stroke.lineWidth;
-             ctx.lineCap = 'round';
-             ctx.lineJoin = 'round';
-             ctx.stroke();
-         });
-     }
-     
-     function updateDrawingPlayerCount(count) {
-         const playerCountElement = document.querySelector('[id^="drawing-player-count-"]');
-         if (playerCountElement) {
-             const text = count === 1 ? '1 player connected' : `${count} players connected`;
-             playerCountElement.textContent = text;
-         }
-     }
-    
+
+    function makeGoMove(row, col) {
+        if (goSocket) {
+            goSocket.emit('go-make-move', {
+                sessionId: goSessionId,
+                row: row,
+                col: col,
+                color: myGoColor
+            });
+        }
+    }
+
+    function switchGoColor() {
+        myGoColor = myGoColor === 'black' ? 'white' : 'black';
+
+        // Update UI
+        const colorPreview = document.getElementById('go-my-color');
+        const switchBtn = document.getElementById('go-switch-color');
+
+        if (colorPreview) {
+            colorPreview.style.background = myGoColor === 'black' ? '#000' : '#fff';
+        }
+        if (switchBtn) {
+            switchBtn.textContent = myGoColor === 'black' ? 'Switch to White' : 'Switch to Black';
+        }
+
+        // Notify server
+        if (goSocket) {
+            goSocket.emit('go-switch-color', { sessionId: goSessionId, newColor: myGoColor });
+        }
+    }
+
+    function resetGoGame() {
+        if (goSocket && confirm('Reset the game board? This will clear all stones.')) {
+            goSocket.emit('go-reset-game', { sessionId: goSessionId });
+        }
+    }
+
+    function updateGoGameState(state) {
+        if (!state) return;
+        goGameState = state;
+
+        // Update board
+        const svg = document.getElementById('go-board-svg');
+        if (svg) {
+            // Remove existing stones
+            svg.querySelectorAll('.stone').forEach(s => s.remove());
+
+            const cellSize = parseInt(svg.getAttribute('width')) / (BOARD_SIZE + 1);
+
+            // Add stones
+            for (let row = 0; row < BOARD_SIZE; row++) {
+                for (let col = 0; col < BOARD_SIZE; col++) {
+                    const stone = goGameState.board[row][col];
+                    if (stone) {
+                        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        circle.setAttribute('cx', (col + 1) * cellSize);
+                        circle.setAttribute('cy', (row + 1) * cellSize);
+                        circle.setAttribute('r', cellSize * 0.4);
+                        circle.setAttribute('fill', stone === 'black' ? '#000' : '#fff');
+                        circle.setAttribute('stroke', stone === 'black' ? '#333' : '#ccc');
+                        circle.setAttribute('stroke-width', '1');
+                        circle.classList.add('stone');
+                        svg.appendChild(circle);
+                    }
+                }
+            }
+        }
+
+        // Update turn indicator
+        const turnIndicator = document.getElementById('go-current-turn');
+        if (turnIndicator && goGameState.currentPlayer) {
+            turnIndicator.style.background = goGameState.currentPlayer === 'black' ? '#000' : '#fff';
+        }
+
+        // Update player count
+        updateGoPlayerCount(goGameState.players);
+    }
+
+    function updateGoPlayerCount(players) {
+        const count = players ? Object.values(players).filter(p => p !== null).length : 0;
+        const el = document.getElementById('go-player-count');
+        if (el) {
+            el.textContent = `${count} ${count === 1 ? 'player' : 'players'}`;
+        }
+    }
+
+    function showGoError(message) {
+        const el = document.getElementById('go-error-message');
+        if (el) {
+            el.textContent = message;
+            setTimeout(() => { el.textContent = ''; }, 3000);
+        }
+    }
+
+    // ========== DRAWING EXPERIMENT ==========
+
+    function initDrawingExperiment() {
+        const canvas = document.getElementById('drawing-canvas');
+        if (canvas) {
+            setupDrawingCanvas(canvas);
+        }
+
+        drawingSocket = io(BACKEND_URL);
+
+        drawingSocket.on('connect', () => {
+            console.log('Drawing connected');
+            updateGlobalConnectionStatus();
+            drawingSocket.emit('create-drawing-session');
+        });
+
+        drawingSocket.on('disconnect', () => {
+            updateGlobalConnectionStatus();
+        });
+
+        drawingSocket.on('drawing-session-created', (data) => {
+            console.log('Drawing session created:', data);
+            // Join the session
+            drawingSocket.emit('join-drawing-session', { sessionId: drawingSessionId });
+            if (data.drawingState) {
+                redrawCanvas(data.drawingState);
+            }
+        });
+
+        drawingSocket.on('drawing-session-joined', (data) => {
+            console.log('Drawing session joined:', data);
+            if (data.drawingState) {
+                redrawCanvas(data.drawingState);
+            }
+            updateDrawingPlayerCount(data.playerCount || 0);
+        });
+
+        drawingSocket.on('drawing-update', (data) => {
+            redrawCanvas(data.drawingState);
+        });
+
+        drawingSocket.on('drawing-player-joined', (data) => {
+            updateDrawingPlayerCount(data.playerCount);
+        });
+
+        drawingSocket.on('drawing-player-left', (data) => {
+            updateDrawingPlayerCount(data.playerCount);
+        });
+
+        drawingSocket.on('drawing-cleared', (data) => {
+            redrawCanvas(data.drawingState || []);
+        });
+    }
+
+    function setupDrawingCanvas(canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 3;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Mouse events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch events
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+    }
+
+    function startDrawing(e) {
+        isDrawing = true;
+        const canvas = document.getElementById('drawing-canvas');
+        const rect = canvas.getBoundingClientRect();
+        lastX = e.clientX - rect.left;
+        lastY = e.clientY - rect.top;
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
+
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Draw locally
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = drawingColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Send to server
+        if (drawingSocket) {
+            drawingSocket.emit('drawing-data', {
+                sessionId: drawingSessionId,
+                fromX: lastX,
+                fromY: lastY,
+                toX: x,
+                toY: y,
+                color: drawingColor,
+                lineWidth: 3
+            });
+        }
+
+        lastX = x;
+        lastY = y;
+    }
+
+    function stopDrawing() {
+        isDrawing = false;
+    }
+
+    function handleTouchStart(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const canvas = document.getElementById('drawing-canvas');
+        const rect = canvas.getBoundingClientRect();
+
+        isDrawing = true;
+        lastX = touch.clientX - rect.left;
+        lastY = touch.clientY - rect.top;
+    }
+
+    function handleTouchMove(e) {
+        e.preventDefault();
+        if (!isDrawing) return;
+
+        const touch = e.touches[0];
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        // Draw locally
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = drawingColor;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Send to server
+        if (drawingSocket) {
+            drawingSocket.emit('drawing-data', {
+                sessionId: drawingSessionId,
+                fromX: lastX,
+                fromY: lastY,
+                toX: x,
+                toY: y,
+                color: drawingColor,
+                lineWidth: 3
+            });
+        }
+
+        lastX = x;
+        lastY = y;
+    }
+
+    function selectDrawingColor(el) {
+        // Remove active from all swatches
+        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        // Add active to clicked
+        el.classList.add('active');
+        // Set color
+        drawingColor = el.dataset.color;
+    }
+
+    function clearDrawingCanvas() {
+        if (drawingSocket && confirm('Clear the canvas? This affects everyone.')) {
+            drawingSocket.emit('clear-drawing-canvas', { sessionId: drawingSessionId });
+        }
+    }
+
+    function redrawCanvas(state) {
+        const canvas = document.getElementById('drawing-canvas');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (state && Array.isArray(state)) {
+            state.forEach(stroke => {
+                ctx.beginPath();
+                ctx.moveTo(stroke.fromX, stroke.fromY);
+                ctx.lineTo(stroke.toX, stroke.toY);
+                ctx.strokeStyle = stroke.color;
+                ctx.lineWidth = stroke.lineWidth || 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+            });
+        }
+    }
+
+    function updateDrawingPlayerCount(count) {
+        const el = document.getElementById('drawing-player-count');
+        if (el) {
+            el.textContent = `${count} ${count === 1 ? 'player' : 'players'}`;
+        }
+    }
+
     // Initialize when page loads
     document.addEventListener('DOMContentLoaded', initExperiments);
 </script>
 
-{% endblock content %} 
+{% endblock content %}
