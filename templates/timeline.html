@@ -277,6 +277,14 @@
     </div>
 </div>
 
+<!-- Info Panel (positioned by JS) -->
+<div class="info-panel" id="info-panel">
+    <h4 class="info-panel-title"></h4>
+    <p class="info-panel-subtitle"></p>
+    <div class="info-panel-divider"></div>
+    <p class="info-panel-description"></p>
+</div>
+
 <script>
 // Draw connector lines from cards to their timeline bars
 function drawConnectors() {
@@ -500,6 +508,210 @@ function setupHoverHighlighting() {
 }
 
 window.addEventListener('load', setupHoverHighlighting);
+
+// Info Panel content data
+const panelContent = {
+    // Employment
+    'botm': {
+        title: 'Book of the Month',
+        subtitle: 'Senior DevOps Engineer • 2023 - present',
+        description: '<ul><li>Lead platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Manage production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul>'
+    },
+    'shipyard': {
+        title: 'Shipyard',
+        subtitle: 'Cofounder & CTO • 2018 - 2023',
+        description: '<ul><li>Co-founded and built full MVP of Kubernetes-backed ephemeral environments platform</li><li>Designed entire initial architecture: custom K8s controllers, Helm charts, Terraform, Python/Golang microservices</li><li>Built CI/CD integrations for GitHub, GitLab, and Bitbucket</li><li>Led 7-person engineering team through multiple funding rounds</li><li>Grew platform to serve dozens of companies running thousands of ephemeral environments monthly</li><li>Spoke at DevOpsDays conferences about ephemeral environments and developer experience</li></ul>'
+    },
+    'lucky13': {
+        title: 'Lucky Number 13',
+        subtitle: 'DevOps Consultant • 2016 - 2020',
+        description: '<ul><li>Independent DevOps consulting practice serving ML, CAD, and IoT companies</li><li>Built self-hosted Jupyter notebook environments for data science teams</li><li>Designed Python microservices architectures and production Kubernetes clusters on GCP</li><li>Helped early-stage startups establish cloud infrastructure foundations and CI/CD pipelines</li></ul>'
+    },
+    'propellr': {
+        title: 'Propellr',
+        subtitle: 'Lead Backend Engineer • 2014 - 2016',
+        description: '<ul><li>Led engineering for fintech platform connecting real estate developers with investors</li><li>Built Python/Flask backends, Angular frontends, and AWS deployment pipelines</li><li>Introduced infrastructure automation via Ansible — company\'s first reproducible deployments</li><li>Worked directly with founders to translate business requirements into technical architecture</li></ul>'
+    },
+    'happydogs': {
+        title: 'Happy Dogs NYC',
+        subtitle: 'Software Engineer • 2012 - 2014',
+        description: '<ul><li>Sole developer for internal operations system serving dog daycare chain across multiple NYC locations</li><li>Built Django backend handling scheduling, client management, and billing</li><li>Deployed and maintained application on DigitalOcean</li></ul>'
+    },
+    'hunter-sa': {
+        title: 'Hunter College',
+        subtitle: 'System Administrator • 2010 - 2012',
+        description: '<ul><li>One of six sysadmins managing IT infrastructure for 60,000+ students and faculty</li><li>Managed DNS, Active Directory, LDAP, email infrastructure, and campus website</li><li>Gained enterprise-scale systems administration experience while completing CS degree</li></ul>'
+    },
+    'morgan': {
+        title: 'Morgan Stanley',
+        subtitle: 'Software Engineering Intern • 2008',
+        description: '<ul><li>Summer internship in technology division</li><li>Built AJAX-powered dynamic content loading for internal web application</li><li>First exposure to professional development practices and enterprise-scale systems</li></ul>'
+    },
+    // Education
+    'hunter-ba': {
+        title: 'Hunter College',
+        subtitle: 'BA Computer Science • 2009 - 2014',
+        description: '<ul><li>Bachelor of Arts in Computer Science</li><li>Part of City University of New York (CUNY) system</li><li>Worked as system administrator on campus while completing degree</li></ul>'
+    },
+    'stuy': {
+        title: 'Stuyvesant High School',
+        subtitle: 'CS Program • 2005 - 2009',
+        description: '<ul><li>One of NYC\'s nine specialized public high schools</li><li>Competitive entrance exam required</li><li>Participated in Computer Science program</li></ul>'
+    },
+    // Projects
+    'dontdie': {
+        title: 'Don\'t Die',
+        subtitle: 'Personal Project • 2025',
+        description: '<ul><li>Jackbox-style zombie dice party game for in-person play</li><li>One device hosts, others join via phone browser — no app download required</li><li>Built with React Native with real-time WebSocket communication</li></ul>'
+    },
+    'lowkey': {
+        title: 'Lowkey',
+        subtitle: 'Personal Project • 2025',
+        description: '<ul><li>Node.js CLI for managing secrets across multiple backends</li><li>Syncs between AWS Secrets Manager, Kubernetes Secrets, .env files, and JSON</li><li>Interactive terminal browser with fuzzy search and live editing</li></ul>'
+    },
+    'turtle': {
+        title: 'Turtle',
+        subtitle: 'Personal Project • 2025',
+        description: '<ul><li>Self-hosted web app for browser-based terminal access and runnable runbooks</li><li>Real-time WebSocket streaming, YAML runbook definitions</li><li>Single-container deployment for DevOps and incident response</li></ul>'
+    },
+    'snorlax': {
+        title: 'Snorlax',
+        subtitle: 'Personal Project • 2024',
+        description: '<ul><li>Kubernetes Operator that sleeps/wakes Deployments and Ingresses on schedules</li><li>Implemented in Golang using controller-runtime library</li><li>Cost-savings tool to scale down non-production environments during off-hours</li></ul>'
+    },
+    'redub': {
+        title: 'Redub',
+        subtitle: 'Personal Project • 2017',
+        description: '<ul><li>Desktop app for redubbing audio in videos</li><li>Load video with SRT subtitles, record new audio per segment, export with replaced audio</li><li>Built with Electron and React</li></ul>'
+    },
+    'hooks': {
+        title: 'Hooks',
+        subtitle: 'Personal Project • 2016',
+        description: '<ul><li>React Native mobile app for running scripts on remote servers via SSH</li><li>List servers and scripts, tap to run, see real-time output on phone</li><li>No server-side installation required — just SSH access</li></ul>'
+    },
+    'rnssh': {
+        title: 'React Native SSH',
+        subtitle: 'Open Source • 2016',
+        description: '<ul><li>SSH client component for React Native applications</li><li>Native SSH connectivity for iOS and Android</li><li>Built as dependency for Hooks app, released as open source</li></ul>'
+    },
+    'thegrid': {
+        title: 'The Grid',
+        subtitle: 'Personal Project • 2011',
+        description: '<ul><li>Real-time multiplayer HTML5 canvas experiment</li><li>Multiple browser clients connect to shared world via WebSockets</li><li>Built with Node.js and Socket.io</li></ul>'
+    },
+    // Civic
+    'astoria': {
+        title: 'Astoria Tech',
+        subtitle: 'Founder & Organizer • 2019 - present',
+        description: '<ul><li>Founded neighborhood tech community meetup in Astoria, Queens</li><li>Running 6+ years with monthly events — talks, demos, and networking</li><li>Manage astoria.app website, coordinate speakers, host at local venues</li></ul>'
+    },
+    'nycmesh': {
+        title: 'NYC Mesh',
+        subtitle: 'Founder • 2012 - 2015',
+        description: '<ul><li>Founded and built early technical foundation of community-owned ISP</li><li>Organized initial volunteers, established network architecture, deployed first nodes</li><li>Now grown to 1,200+ nodes providing internet across NYC</li></ul>'
+    },
+    // Talks
+    'devops-seattle': {
+        title: 'DevOpsDays Seattle 2022',
+        subtitle: 'Conference Talk • 2022',
+        description: '<ul><li>Presented on ephemeral environments and developer experience</li><li>Shared lessons from building Shipyard</li><li>Covered preview environments for faster feedback loops</li></ul>'
+    },
+    'devops-raleigh': {
+        title: 'DevOpsDays Raleigh 2022',
+        subtitle: 'Conference Talk • 2022',
+        description: '<ul><li>Spoke on building preview environments for development teams</li><li>Covered technical architecture behind ephemeral environments</li><li>Discussed cultural changes needed for effective adoption</li></ul>'
+    },
+    'hope-2014': {
+        title: 'HOPE X 2014',
+        subtitle: 'Conference Talk • 2014',
+        description: '<ul><li>Presented at Hackers On Planet Earth conference</li><li>Discussed NYC Mesh and building community wireless networks</li><li>Covered mesh networking protocols and decentralized communication</li></ul>'
+    }
+};
+
+// Info Panel functionality
+function setupInfoPanel() {
+    const panel = document.getElementById('info-panel');
+    const cards = document.querySelectorAll('.gantt-card[data-id]');
+    const bars = document.querySelectorAll('.bar[data-id]');
+
+    if (!panel) return;
+
+    let hideTimeout;
+
+    function showPanel(element, id) {
+        const content = panelContent[id];
+        if (!content) return;
+
+        clearTimeout(hideTimeout);
+
+        // Determine if element is on left or right side
+        const isLeft = element.closest('.gantt-education') !== null ||
+                       element.closest('.gantt-employment') !== null ||
+                       element.closest('.gantt-talks-left') !== null ||
+                       element.closest('.bars-left') !== null;
+
+        // Get element position
+        const rect = element.getBoundingClientRect();
+        const cat = element.dataset.cat || element.closest('.bar-col')?.classList[1] || 'employment';
+
+        // Populate panel
+        panel.querySelector('.info-panel-title').textContent = content.title;
+        panel.querySelector('.info-panel-subtitle').textContent = content.subtitle;
+        panel.querySelector('.info-panel-description').innerHTML = content.description;
+        panel.setAttribute('data-cat', cat);
+
+        // Position panel
+        const panelWidth = 320;
+        const margin = 20;
+        let left, top;
+
+        if (isLeft) {
+            // Show panel on far left of viewport
+            left = margin;
+            panel.classList.remove('from-right');
+            panel.classList.add('from-left');
+        } else {
+            // Show panel on far right of viewport
+            left = window.innerWidth - panelWidth - margin;
+            panel.classList.remove('from-left');
+            panel.classList.add('from-right');
+        }
+
+        // Vertical position: align with element, clamp to viewport
+        top = rect.top - 20;
+        top = Math.max(margin, Math.min(top, window.innerHeight - 300));
+
+        panel.style.left = left + 'px';
+        panel.style.top = top + 'px';
+
+        // Show with animation
+        requestAnimationFrame(() => {
+            panel.classList.add('visible');
+        });
+    }
+
+    function hidePanel() {
+        hideTimeout = setTimeout(() => {
+            panel.classList.remove('visible');
+        }, 150);
+    }
+
+    // Attach to cards
+    cards.forEach(card => {
+        const id = card.dataset.id;
+        card.addEventListener('mouseenter', () => showPanel(card, id));
+        card.addEventListener('mouseleave', hidePanel);
+    });
+
+    // Attach to bars
+    bars.forEach(bar => {
+        const id = bar.dataset.id;
+        bar.addEventListener('mouseenter', () => showPanel(bar, id));
+        bar.addEventListener('mouseleave', hidePanel);
+    });
+}
+
+window.addEventListener('load', setupInfoPanel);
 </script>
 
 {% endblock content %}

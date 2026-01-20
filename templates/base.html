@@ -747,6 +747,100 @@
         .gantt-card[data-cat="talks"] h3 a { color: #e74c3c; }
         .gantt-card[data-cat="talks"] .role { color: #e74c3c; }
 
+        /* Info Panel - hover tooltip for timeline items */
+        .info-panel {
+            position: fixed;
+            width: 320px;
+            max-height: 80vh;
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 1rem 1.25rem;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateX(0);
+            transition: opacity 200ms ease-out, transform 200ms ease-out;
+            overflow-y: auto;
+        }
+
+        .info-panel.visible {
+            opacity: 1;
+        }
+
+        .info-panel.from-left {
+            transform: translateX(-10px);
+        }
+
+        .info-panel.from-left.visible {
+            transform: translateX(0);
+        }
+
+        .info-panel.from-right {
+            transform: translateX(10px);
+        }
+
+        .info-panel.from-right.visible {
+            transform: translateX(0);
+        }
+
+        .info-panel-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0 0 0.25rem 0;
+            line-height: 1.3;
+        }
+
+        .info-panel-subtitle {
+            font-size: 0.8rem;
+            color: #666;
+            margin: 0 0 0.75rem 0;
+        }
+
+        .info-panel-divider {
+            height: 1px;
+            background: rgba(0, 0, 0, 0.08);
+            margin: 0.75rem 0;
+        }
+
+        .info-panel-description {
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #444;
+            margin: 0;
+        }
+
+        .info-panel-description ul {
+            margin: 0;
+            padding-left: 1.1rem;
+            list-style-type: disc;
+        }
+
+        .info-panel-description li {
+            margin-bottom: 0.5rem;
+        }
+
+        .info-panel-description li:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Category colors for panel titles */
+        .info-panel[data-cat="employment"] .info-panel-title { color: #4a90e2; }
+        .info-panel[data-cat="education"] .info-panel-title { color: #9b59b6; }
+        .info-panel[data-cat="civic"] .info-panel-title { color: #2ecc71; }
+        .info-panel[data-cat="projects"] .info-panel-title { color: #f39c12; }
+        .info-panel[data-cat="talks"] .info-panel-title { color: #e74c3c; }
+
+        /* Hide info panel on mobile */
+        @media (max-width: 700px) {
+            .info-panel {
+                display: none;
+            }
+        }
+
         /* Hover highlighting transitions */
         .gantt-card, .bar, .gantt-connectors path, .gantt-connectors circle {
             transition: opacity 0.3s ease;
