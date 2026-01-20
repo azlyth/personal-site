@@ -987,7 +987,7 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-right: 15px;
+                padding-right: 40px;
             }
 
             .gantt-employment {
@@ -995,7 +995,7 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-right: 15px;
+                padding-right: 40px;
             }
 
             /* Center timeline */
@@ -1010,7 +1010,7 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-left: 15px;
+                padding-left: 40px;
             }
 
             .gantt-civic {
@@ -1018,7 +1018,7 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-left: 15px;
+                padding-left: 40px;
             }
 
             /* Right talks column goes into right column */
@@ -1027,7 +1027,7 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-left: 15px;
+                padding-left: 40px;
             }
 
             /* Left talks stay in education column but smaller */
@@ -1035,31 +1035,31 @@
                 display: block;
             }
 
-            /* Mobile card styling - smaller text */
+            /* Mobile card styling */
             .gantt-card {
                 position: absolute;
             }
 
             .gantt-card-content {
-                max-width: 100px;
+                max-width: 110px;
             }
 
             .gantt-card h3 {
-                font-size: 0.6rem;
+                font-size: 0.72rem;
                 line-height: 1.2;
             }
 
             .gantt-card .role {
-                font-size: 0.5rem;
+                font-size: 0.6rem;
             }
 
             .gantt-card .years {
-                font-size: 0.5rem;
+                font-size: 0.6rem;
             }
 
-            /* Left column - Employment cards align right (near bars) */
+            /* Left column - Employment cards align right (near bars) with offset */
             .gantt-employment .gantt-card {
-                right: 0;
+                right: 15px;
                 left: auto;
             }
 
@@ -1067,39 +1067,39 @@
                 text-align: right;
             }
 
-            /* Left column - Education cards align left (away from bars) */
+            /* Left column - Education cards align right (near timeline) with offset */
             .gantt-education .gantt-card {
-                right: auto;
-                left: 0;
+                right: 15px;
+                left: auto;
             }
 
             .gantt-education .gantt-card-content {
-                text-align: left;
+                text-align: right;
             }
 
-            /* Right column - Projects cards align left (near bars) */
+            /* Right column - Projects cards align left (near bars) with offset */
             .gantt-projects .gantt-card {
                 right: auto;
-                left: 0;
+                left: 15px;
             }
 
             .gantt-projects .gantt-card-content {
                 text-align: left;
             }
 
-            /* Right column - Civic cards align right (away from bars) */
+            /* Right column - Civic cards align left (near timeline) with offset */
             .gantt-civic .gantt-card {
-                right: 0;
-                left: auto;
+                right: auto;
+                left: 15px;
             }
 
             .gantt-civic .gantt-card-content {
-                text-align: right;
+                text-align: left;
             }
 
-            /* Left talks - align with employment (right side of left column) */
+            /* Left talks - align with employment (right side of left column) with offset */
             .gantt-education .gantt-card[data-cat="talks"] {
-                right: 0;
+                right: 15px;
                 left: auto;
             }
 
@@ -1107,14 +1107,38 @@
                 text-align: right;
             }
 
-            /* Right talks - align left (near bars) */
+            /* Right talks (HOPE X) - align with civic (near timeline, under NYC Mesh) with offset */
             .gantt-talks-right .gantt-card {
                 right: auto;
-                left: 0;
+                left: 15px;
             }
 
             .gantt-talks-right .gantt-card-content {
                 text-align: left;
+            }
+
+            /* HOPE X - offset below NYC Mesh on mobile */
+            .gantt-talks-right .gantt-card[data-id="hope-2014"] {
+                top: 65% !important;
+            }
+
+            /* Astoria Tech - offset below Turtle on mobile */
+            .gantt-civic .gantt-card[data-id="astoria"] {
+                top: 20% !important;
+            }
+
+            /* Align project cards with bar centers on mobile */
+            .gantt-projects .gantt-card[data-id="dontdie"] {
+                top: 1% !important;
+            }
+            .gantt-projects .gantt-card[data-id="lowkey"] {
+                top: 5% !important;
+            }
+            .gantt-projects .gantt-card[data-id="turtle"] {
+                top: 10% !important;
+            }
+            .gantt-projects .gantt-card[data-id="snorlax"] {
+                top: 15% !important;
             }
 
             /* Smaller bars */

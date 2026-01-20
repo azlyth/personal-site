@@ -87,4 +87,5 @@ The timeline page (`templates/projects.html`) displays work history, projects, a
 - Use simple present tense commit messages (e.g., "Add dark mode toggle")
 - Do not include Claude Code footer in commits
 - Wait for user to verify fixes before staging/committing
+- Only commit when explicitly told to do so
 - "test, add, commit" means: run tests, if passing then git add and commit
