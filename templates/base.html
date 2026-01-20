@@ -964,84 +964,159 @@
         .bar-col.civic .bar { background: #2ecc71; }
         .bar-col.projects .bar { background: #f39c12; }
 
-        /* Mobile - simple vertical list by category */
+        /* Mobile - condensed 2-column timeline */
         @media (max-width: 700px) {
             .gantt-timeline {
-                display: flex;
-                flex-direction: column;
-                gap: 1.5rem;
-                height: auto;
-                padding: 0;
+                display: grid;
+                grid-template-columns: 1fr 70px 1fr;
+                gap: 0;
+                max-width: 100%;
+                height: 1100px;
+                position: relative;
+                padding: 0 0.25rem;
             }
 
-            /* Hide center bars and connectors */
-            .gantt-center,
+            /* Hide connectors on mobile - too complex */
             .gantt-connectors {
                 display: none;
             }
 
-            /* Each column becomes a vertical section */
-            .gantt-education,
-            .gantt-employment,
-            .gantt-projects,
-            .gantt-civic,
-            .gantt-talks,
-            .gantt-talks-right {
-                position: static;
-                display: flex;
-                flex-direction: column;
-                gap: 0.75rem;
+            /* Left column: Education + Employment merged */
+            .gantt-education {
+                grid-column: 1;
+                grid-row: 1;
+                position: relative;
                 min-width: auto;
-                padding: 0;
+                padding-right: 8px;
             }
 
-            /* Order sections logically */
-            .gantt-employment { order: 1; }
-            .gantt-education { order: 2; }
-            .gantt-projects { order: 3; }
-            .gantt-civic { order: 4; }
-            .gantt-talks-right { order: 5; }
+            .gantt-employment {
+                grid-column: 1;
+                grid-row: 1;
+                position: relative;
+                min-width: auto;
+                padding-right: 8px;
+            }
 
-            /* Hide left talks column (merged into education) */
+            /* Center timeline */
+            .gantt-center {
+                grid-column: 2;
+                grid-row: 1;
+            }
+
+            /* Right column: Projects + Civic merged */
+            .gantt-projects {
+                grid-column: 3;
+                grid-row: 1;
+                position: relative;
+                min-width: auto;
+                padding-left: 8px;
+            }
+
+            .gantt-civic {
+                grid-column: 3;
+                grid-row: 1;
+                position: relative;
+                min-width: auto;
+                padding-left: 8px;
+            }
+
+            /* Hide the separate talks columns on mobile */
+            .gantt-talks-right {
+                display: none;
+            }
+
+            /* Also hide talks cards in education column on mobile */
             .gantt-education .gantt-card[data-cat="talks"] {
                 display: none;
             }
 
-            /* Cards become static, flow naturally */
+            /* Mobile card styling - smaller text */
             .gantt-card {
-                position: static !important;
-                display: flex;
-                align-items: flex-start;
-                padding: 0.5rem 0;
-                border-left: 3px solid #ddd;
-                padding-left: 0.75rem;
+                position: absolute;
             }
 
             .gantt-card-content {
-                text-align: left !important;
-                max-width: none;
+                max-width: 100px;
             }
 
-            /* Category border colors */
-            .gantt-card[data-cat="employment"] { border-left-color: #4a90e2; }
-            .gantt-card[data-cat="education"] { border-left-color: #9b59b6; }
-            .gantt-card[data-cat="civic"] { border-left-color: #2ecc71; }
-            .gantt-card[data-cat="projects"] { border-left-color: #f39c12; }
-            .gantt-card[data-cat="talks"] { border-left-color: #e74c3c; }
+            .gantt-card h3 {
+                font-size: 0.6rem;
+                line-height: 1.2;
+            }
 
-            /* Section headers for mobile */
-            .gantt-employment::before,
-            .gantt-education::before,
-            .gantt-projects::before,
-            .gantt-civic::before,
-            .gantt-talks-right::before {
-                content: attr(data-mobile-title);
-                font-size: 0.7rem;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #888;
-                margin-bottom: 0.25rem;
+            .gantt-card .role {
+                font-size: 0.5rem;
+                display: none; /* Hide role on mobile to save space */
+            }
+
+            .gantt-card .years {
+                font-size: 0.5rem;
+            }
+
+            /* Left column - Employment cards align right (near bars) */
+            .gantt-employment .gantt-card {
+                right: 0;
+                left: auto;
+            }
+
+            .gantt-employment .gantt-card-content {
+                text-align: right;
+            }
+
+            /* Left column - Education cards align left (away from bars) */
+            .gantt-education .gantt-card {
+                right: auto;
+                left: 0;
+            }
+
+            .gantt-education .gantt-card-content {
+                text-align: left;
+            }
+
+            /* Right column - Projects cards align left (near bars) */
+            .gantt-projects .gantt-card {
+                right: auto;
+                left: 0;
+            }
+
+            .gantt-projects .gantt-card-content {
+                text-align: left;
+            }
+
+            /* Right column - Civic cards align right (away from bars) */
+            .gantt-civic .gantt-card {
+                right: 0;
+                left: auto;
+            }
+
+            .gantt-civic .gantt-card-content {
+                text-align: right;
+            }
+
+            /* Smaller bars */
+            .bar-col {
+                width: 12px;
+            }
+
+            .bars-left, .bars-right {
+                gap: 4px;
+            }
+
+            .gantt-bars {
+                gap: 4px;
+            }
+
+            .bars-spine {
+                width: 20px;
+            }
+
+            .gantt-spine {
+                width: 20px;
+            }
+
+            .year-marker {
+                font-size: 0.45rem;
             }
         }
 
