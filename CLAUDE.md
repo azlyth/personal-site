@@ -44,11 +44,37 @@ Current experiments:
 2. `experiment-go.html` - Collaborative 9x9 Go board
 3. `experiment-drawing.html` - Real-time drawing canvas
 
+### Timeline Page (`/projects`)
+The timeline page (`templates/projects.html`) displays work history, projects, and education using absolute positioning.
+
+**Layout:**
+- Four columns: Employment, Civic, Projects, Education
+- Single year column on left (2025-2008) with year markers at ~5.56% intervals
+- Column height: `min-height: 90rem` in CSS
+- Items positioned with `top: X%; height: Y%` inline styles
+
+**Positioning math:**
+- Years 2025 to 2008 = 18 year markers
+- Each year ≈ 5.56% of total height (100/18)
+- Year positions: 2025=0%, 2024=5.56%, 2023=11.11%, ..., 2008=94.44%
+
+**Color scheme (defined in base.html CSS):**
+- Employment: Blue (`#4a90e2`)
+- Civic: Green (`#2ecc71`)
+- Projects: Orange (`#f39c12`)
+- Education: Purple (`#9b59b6`)
+
+**Important constraints:**
+- Items in the same column should not overlap vertically
+- Projects need at least 5-6% height each for text readability
+- Education items (Hunter College, Stuyvesant) should be sequential, not overlapping
+
 ### Template System
 - `templates/base.html` - Base layout (includes all CSS, nav, footer, cloud animations)
 - `templates/index.html` - Homepage
 - `templates/section.html` - Blog listing
 - `templates/page.html` - Individual blog post
+- `templates/projects.html` - Timeline/Projects page with work history
 - `templates/lab.html` - Lab index (embeds all experiments inline)
 - `templates/experiment-*.html` - Individual experiment pages
 
