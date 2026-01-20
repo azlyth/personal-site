@@ -319,8 +319,8 @@
     let goSocket;
     let drawingSocket;
 
-    // Session IDs (using global sessions)
-    const counterSessionId = 'global-counter';
+    // Session IDs (using global sessions for Go and Drawing, dynamic for counter)
+    let counterSessionId = null;
     const goSessionId = 'global-go-game';
     const drawingSessionId = 'global-drawing-canvas';
 
@@ -412,6 +412,8 @@
         });
 
         counterSocket.on('session-created', (data) => {
+            counterSessionId = data.sessionId;
+            console.log('Counter session created:', counterSessionId);
             const counterDisplay = document.getElementById('counter-display');
             if (counterDisplay && typeof data.counter !== 'undefined') {
                 counterDisplay.textContent = data.counter;
@@ -442,13 +444,13 @@
     }
 
     function incrementCounter() {
-        if (counterSocket) {
+        if (counterSocket && counterSessionId) {
             counterSocket.emit('increment', { sessionId: counterSessionId });
         }
     }
 
     function decrementCounter() {
-        if (counterSocket) {
+        if (counterSocket && counterSessionId) {
             counterSocket.emit('decrement', { sessionId: counterSessionId });
         }
     }
