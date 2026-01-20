@@ -6,155 +6,330 @@
 <h1>Timeline</h1>
 
 <div class="timeline-legend">
-    <span class="leg-employment">Employment</span>
     <span class="leg-education">Education</span>
+    <span class="leg-employment">Employment</span>
     <span class="leg-civic">Civic</span>
     <span class="leg-projects">Projects</span>
 </div>
 
-<div class="timeline">
-    <!-- Left column: Employment + Education (50px per year) -->
-    <div class="tl-col tl-col-left">
-        <!-- Book of the Month: Apr 2023-present -->
-        <div class="tl-item" data-cat="employment" style="top: 0px; height: 115px;">
-            <h3><a href="https://www.bookofthemonth.com" target="_blank">Book of the Month</a></h3>
-            <span class="role">Senior DevOps Engineer</span>
-            <p>Platform & SRE</p>
+<div class="gantt-timeline">
+    <!-- SVG overlay for connector lines - drawn by JavaScript -->
+    <svg class="gantt-connectors"></svg>
+
+    <!-- Left column: Employment + Education -->
+    <div class="gantt-left">
+        <div class="gantt-card" data-cat="employment" data-id="botm">
+            <div class="gantt-card-content">
+                <h3><a href="https://www.bookofthemonth.com" target="_blank">Book of the Month</a></h3>
+                <span class="role">Senior DevOps Engineer</span>
+                <span class="years">2023 - present</span>
+            </div>
         </div>
 
-        <!-- Shipyard: May 2018 - Jan 2023 -->
-        <div class="tl-item" data-cat="employment" style="top: 105px; height: 245px;">
-            <h3><a href="https://shipyard.build" target="_blank">Shipyard</a></h3>
-            <span class="role">Cofounder & CTO</span>
-            <p>K8s ephemeral environments</p>
+        <div class="gantt-card" data-cat="employment" data-id="shipyard">
+            <div class="gantt-card-content">
+                <h3><a href="https://shipyard.build" target="_blank">Shipyard</a></h3>
+                <span class="role">Cofounder & CTO</span>
+                <span class="years">2018 - 2023</span>
+            </div>
         </div>
 
-        <!-- Lucky Number 13: Nov 2016 - May 2019 -->
-        <div class="tl-item" data-cat="employment" style="top: 290px; height: 160px;">
-            <h3>Lucky Number 13</h3>
-            <span class="role">DevOps Consultant</span>
-            <p>K8s, GCP, automation</p>
+        <div class="gantt-card" data-cat="employment" data-id="lucky13">
+            <div class="gantt-card-content">
+                <h3>Lucky Number 13</h3>
+                <span class="role">DevOps Consultant</span>
+                <span class="years">2016 - 2019</span>
+            </div>
         </div>
 
-        <!-- Propellr: Jul 2014 - Oct 2016 -->
-        <div class="tl-item" data-cat="employment" style="top: 460px; height: 100px;">
-            <h3><a href="https://www.crunchbase.com/organization/propellr" target="_blank">Propellr</a></h3>
-            <span class="role">Head of Engineering</span>
-            <p>Fintech, Python/Flask</p>
+        <div class="gantt-card" data-cat="employment" data-id="propellr">
+            <div class="gantt-card-content">
+                <h3><a href="https://www.crunchbase.com/organization/propellr" target="_blank">Propellr</a></h3>
+                <span class="role">Head of Engineering</span>
+                <span class="years">2014 - 2016</span>
+            </div>
         </div>
 
-        <!-- Hunter College (Education): Sept 2009 - Jun 2014 -->
-        <div class="tl-item" data-cat="education" style="top: 555px; height: 245px; right: 52%;">
-            <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
-            <span class="role">BA Computer Science</span>
+        <div class="gantt-card" data-cat="education" data-id="hunter-ba">
+            <div class="gantt-card-content">
+                <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
+                <span class="role">BA Computer Science</span>
+                <span class="years">2009 - 2014</span>
+            </div>
         </div>
 
-        <!-- Happy Dogs NYC: Oct 2012 - Jun 2014 -->
-        <div class="tl-item" data-cat="employment" style="top: 565px; height: 85px; left: 52%;">
-            <h3><a href="https://happydogsnyc.com" target="_blank">Happy Dogs NYC</a></h3>
-            <span class="role">Software Engineer</span>
+        <div class="gantt-card" data-cat="employment" data-id="happydogs">
+            <div class="gantt-card-content">
+                <h3><a href="https://happydogsnyc.com" target="_blank">Happy Dogs NYC</a></h3>
+                <span class="role">Software Engineer</span>
+                <span class="years">2012 - 2014</span>
+            </div>
         </div>
 
-        <!-- Hunter College (Job): Mar 2010 - Oct 2012 -->
-        <div class="tl-item" data-cat="employment" style="top: 665px; height: 85px; left: 52%;">
-            <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
-            <span class="role">System Administrator</span>
+        <div class="gantt-card" data-cat="employment" data-id="hunter-sa">
+            <div class="gantt-card-content">
+                <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
+                <span class="role">System Administrator</span>
+                <span class="years">2010 - 2012</span>
+            </div>
         </div>
 
-        <!-- Stuyvesant HS: 2005 - Jun 2009 -->
-        <div class="tl-item" data-cat="education" style="top: 810px; height: 190px; right: 52%;">
-            <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
-            <span class="role">CS Program</span>
+        <div class="gantt-card" data-cat="education" data-id="stuy">
+            <div class="gantt-card-content">
+                <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
+                <span class="role">CS Program</span>
+                <span class="years">2005 - 2009</span>
+            </div>
         </div>
 
-        <!-- Morgan Stanley: Jun-Oct 2008 -->
-        <div class="tl-item" data-cat="employment" style="top: 865px; height: 40px; left: 52%;">
-            <h3><a href="https://www.morganstanley.com" target="_blank">Morgan Stanley</a></h3>
-            <span class="role">Intern</span>
+        <div class="gantt-card" data-cat="employment" data-id="morgan">
+            <div class="gantt-card-content">
+                <h3><a href="https://www.morganstanley.com" target="_blank">Morgan Stanley</a></h3>
+                <span class="role">Intern</span>
+                <span class="years">2008</span>
+            </div>
         </div>
     </div>
 
-    <!-- Center: Year spine (50px per year) -->
-    <div class="tl-spine">
-        <span class="tl-year" style="top: 0px;">2025</span>
-        <span class="tl-year" style="top: 50px;">2024</span>
-        <span class="tl-year" style="top: 100px;">2023</span>
-        <span class="tl-year" style="top: 150px;">2022</span>
-        <span class="tl-year" style="top: 200px;">2021</span>
-        <span class="tl-year" style="top: 250px;">2020</span>
-        <span class="tl-year" style="top: 300px;">2019</span>
-        <span class="tl-year" style="top: 350px;">2018</span>
-        <span class="tl-year" style="top: 400px;">2017</span>
-        <span class="tl-year" style="top: 450px;">2016</span>
-        <span class="tl-year" style="top: 500px;">2015</span>
-        <span class="tl-year" style="top: 550px;">2014</span>
-        <span class="tl-year" style="top: 600px;">2013</span>
-        <span class="tl-year" style="top: 650px;">2012</span>
-        <span class="tl-year" style="top: 700px;">2011</span>
-        <span class="tl-year" style="top: 750px;">2010</span>
-        <span class="tl-year" style="top: 800px;">2009</span>
-        <span class="tl-year" style="top: 850px;">2008</span>
-        <span class="tl-year" style="top: 900px;">2007</span>
-        <span class="tl-year" style="top: 950px;">2006</span>
-        <span class="tl-year" style="top: 1000px;">2005</span>
+    <!-- Center: Timeline spine with time-accurate bars -->
+    <div class="gantt-center">
+        <!-- Black spine line with year markers -->
+        <div class="gantt-spine">
+            <div class="spine-line"></div>
+            <span class="year-marker" style="top: 0%">2025</span>
+            <span class="year-marker" style="top: 25%">2020</span>
+            <span class="year-marker" style="top: 50%">2015</span>
+            <span class="year-marker" style="top: 75%">2010</span>
+            <span class="year-marker" style="top: 100%">2005</span>
+        </div>
+
+        <!-- Bar columns: LEFT (Education+Overlap, Employment) | SPINE | RIGHT (Civic, Projects) -->
+        <div class="gantt-bars">
+            <!-- Left side bars (before spine) -->
+            <div class="bars-left">
+                <!-- Education column (also holds Lucky 13 overlap) - Purple/Blue -->
+                <div class="bar-col education-overlap">
+                    <!-- Lucky 13: 2016-2019 (blue, overlaps with Shipyard) -->
+                    <div class="bar employment-bar" data-id="lucky13" style="top: 30%; height: 15%"></div>
+                    <!-- Hunter BA: 2009-2014 -->
+                    <div class="bar" data-id="hunter-ba" style="top: 55%; height: 24%"></div>
+                    <!-- Stuyvesant: 2005-2009 -->
+                    <div class="bar" data-id="stuy" style="top: 81%; height: 19%"></div>
+                </div>
+
+                <!-- Employment Primary column - Blue -->
+                <div class="bar-col employment">
+                    <!-- Book of Month: 2023-2025 -->
+                    <div class="bar" data-id="botm" style="top: 0%; height: 9%"></div>
+                    <!-- Shipyard: 2018-2023 -->
+                    <div class="bar" data-id="shipyard" style="top: 11%; height: 24%"></div>
+                    <!-- Propellr: 2014-2016 -->
+                    <div class="bar" data-id="propellr" style="top: 46%; height: 9%"></div>
+                    <!-- Happy Dogs: 2012-2014 -->
+                    <div class="bar" data-id="happydogs" style="top: 56%; height: 9%"></div>
+                    <!-- Hunter SysAdmin: 2010-2012 -->
+                    <div class="bar" data-id="hunter-sa" style="top: 66%; height: 9%"></div>
+                    <!-- Morgan Stanley: 2008 -->
+                    <div class="bar" data-id="morgan" style="top: 85%; height: 5%"></div>
+                </div>
+            </div>
+
+            <!-- Central spine spacer -->
+            <div class="bars-spine"></div>
+
+            <!-- Right side bars (after spine) -->
+            <div class="bars-right">
+                <!-- Civic column - Green -->
+                <div class="bar-col civic">
+                    <!-- Astoria Tech: 2019-2025 -->
+                    <div class="bar" data-id="astoria" style="top: 0%; height: 30%"></div>
+                    <!-- NYC Mesh: 2012-2015 -->
+                    <div class="bar" data-id="nycmesh" style="top: 51%; height: 14%"></div>
+                </div>
+
+                <!-- Projects column - Orange -->
+                <div class="bar-col projects">
+                    <!-- Don't Die: 2025 -->
+                    <div class="bar" data-id="dontdie" style="top: 0%; height: 4%"></div>
+                    <!-- Lowkey: 2025 -->
+                    <div class="bar" data-id="lowkey" style="top: 5%; height: 4%"></div>
+                    <!-- Turtle: 2024 -->
+                    <div class="bar" data-id="turtle" style="top: 10%; height: 4%"></div>
+                    <!-- Snorlax: 2024 -->
+                    <div class="bar" data-id="snorlax" style="top: 15%; height: 4%"></div>
+                    <!-- Redub: 2017 -->
+                    <div class="bar" data-id="redub" style="top: 40%; height: 4%"></div>
+                    <!-- Hooks: 2016 -->
+                    <div class="bar" data-id="hooks" style="top: 45%; height: 4%"></div>
+                    <!-- React Native SSH: 2016 -->
+                    <div class="bar" data-id="rnssh" style="top: 50%; height: 4%"></div>
+                    <!-- The Grid: 2011 -->
+                    <div class="bar" data-id="thegrid" style="top: 70%; height: 4%"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Right column: Civic + Projects (50px per year) -->
-    <div class="tl-col tl-col-right">
-        <!-- Astoria Tech: 2019-present -->
-        <div class="tl-item" data-cat="civic" style="top: 0px; height: 300px; left: 52%;">
-            <h3><a href="https://astoria.app" target="_blank">Astoria Tech</a></h3>
-            <span class="role">Organizer</span>
-            <p>Queens tech community</p>
+    <!-- Right column: Civic + Projects -->
+    <div class="gantt-right">
+        <div class="gantt-card" data-cat="civic" data-id="astoria">
+            <div class="gantt-card-content">
+                <h3><a href="https://astoria.app" target="_blank">Astoria Tech</a></h3>
+                <span class="role">Organizer</span>
+                <span class="years">2019 - present</span>
+            </div>
         </div>
 
-        <!-- Don't Die: 2025 -->
-        <div class="tl-item" data-cat="projects" style="top: 0px; height: 25px; right: 52%;">
-            <h3><a href="https://github.com/azlyth/last-one-alive" target="_blank">Don't Die</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="dontdie">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/azlyth/last-one-alive" target="_blank">Don't Die</a></h3>
+                <span class="years">2025</span>
+            </div>
         </div>
 
-        <!-- Lowkey: 2025 -->
-        <div class="tl-item" data-cat="projects" style="top: 28px; height: 25px; right: 52%;">
-            <h3><a href="https://github.com/moonbeam-nyc/lowkey" target="_blank">Lowkey</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="lowkey">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/moonbeam-nyc/lowkey" target="_blank">Lowkey</a></h3>
+                <span class="years">2025</span>
+            </div>
         </div>
 
-        <!-- Turtle: 2024 -->
-        <div class="tl-item" data-cat="projects" style="top: 56px; height: 25px; right: 52%;">
-            <h3><a href="https://github.com/moonbeam-nyc/turtle" target="_blank">Turtle</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="turtle">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/moonbeam-nyc/turtle" target="_blank">Turtle</a></h3>
+                <span class="years">2024</span>
+            </div>
         </div>
 
-        <!-- Snorlax: 2024 -->
-        <div class="tl-item" data-cat="projects" style="top: 84px; height: 25px; right: 52%;">
-            <h3><a href="https://github.com/moonbeam-nyc/snorlax" target="_blank">Snorlax</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="snorlax">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/moonbeam-nyc/snorlax" target="_blank">Snorlax</a></h3>
+                <span class="years">2024</span>
+            </div>
         </div>
 
-        <!-- Redub: 2017 -->
-        <div class="tl-item" data-cat="projects" style="top: 400px; height: 25px;">
-            <h3><a href="https://github.com/azlyth/redub" target="_blank">Redub</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="redub">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/azlyth/redub" target="_blank">Redub</a></h3>
+                <span class="years">2017</span>
+            </div>
         </div>
 
-        <!-- Hooks: 2016 -->
-        <div class="tl-item" data-cat="projects" style="top: 450px; height: 25px;">
-            <h3><a href="https://github.com/azlyth/hooks" target="_blank">Hooks</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="hooks">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/azlyth/hooks" target="_blank">Hooks</a></h3>
+                <span class="years">2016</span>
+            </div>
         </div>
 
-        <!-- React Native SSH: 2016 -->
-        <div class="tl-item" data-cat="projects" style="top: 478px; height: 25px;">
-            <h3><a href="https://github.com/nicklockwood/react-native-ssh" target="_blank">React Native SSH</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="rnssh">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/nicklockwood/react-native-ssh" target="_blank">React Native SSH</a></h3>
+                <span class="years">2016</span>
+            </div>
         </div>
 
-        <!-- NYC Mesh: 2012-2015 -->
-        <div class="tl-item" data-cat="civic" style="top: 500px; height: 150px;">
-            <h3><a href="https://nycmesh.net" target="_blank">NYC Mesh</a></h3>
-            <span class="role">Founder</span>
-            <p>Community ISP, 1,200+ nodes</p>
+        <div class="gantt-card" data-cat="civic" data-id="nycmesh">
+            <div class="gantt-card-content">
+                <h3><a href="https://nycmesh.net" target="_blank">NYC Mesh</a></h3>
+                <span class="role">Founder</span>
+                <span class="years">2012 - 2015</span>
+            </div>
         </div>
 
-        <!-- The Grid: 2011 -->
-        <div class="tl-item" data-cat="projects" style="top: 700px; height: 25px;">
-            <h3><a href="https://github.com/azlyth/thegrid" target="_blank">The Grid</a></h3>
+        <div class="gantt-card" data-cat="projects" data-id="thegrid">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/azlyth/thegrid" target="_blank">The Grid</a></h3>
+                <span class="years">2011</span>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+// Draw connector lines from cards to their timeline bars
+function drawConnectors() {
+    const svg = document.querySelector('.gantt-connectors');
+    const timeline = document.querySelector('.gantt-timeline');
+    if (!svg || !timeline) return;
+
+    // Clear existing paths
+    svg.innerHTML = '';
+
+    const timelineRect = timeline.getBoundingClientRect();
+
+    // Get all cards and bars
+    const cards = document.querySelectorAll('.gantt-card[data-id]');
+    const colors = {
+        employment: '#4a90e2',
+        education: '#9b59b6',
+        civic: '#2ecc71',
+        projects: '#f39c12'
+    };
+
+    cards.forEach(card => {
+        const id = card.dataset.id;
+        const cat = card.dataset.cat;
+        const bar = document.querySelector(`.bar[data-id="${id}"]`);
+        if (!bar) return;
+
+        const cardRect = card.getBoundingClientRect();
+        const barRect = bar.getBoundingClientRect();
+
+        // Calculate positions relative to timeline container
+        const isLeft = card.closest('.gantt-left') !== null;
+
+        let cardX, cardY, barX, barY;
+
+        // Offset to push dot away from text
+        const dotOffset = 12;
+
+        if (isLeft) {
+            // Left card: connect from right edge of card (with offset) to center of bar
+            cardX = cardRect.right - timelineRect.left + dotOffset;
+            cardY = cardRect.top - timelineRect.top + 10; // Offset to title area
+            barX = barRect.left - timelineRect.left + barRect.width / 2;
+            barY = barRect.top - timelineRect.top + barRect.height / 2; // CENTER of bar
+        } else {
+            // Right card: connect from left edge of card (with offset) to center of bar
+            cardX = cardRect.left - timelineRect.left - dotOffset;
+            cardY = cardRect.top - timelineRect.top + 10;
+            barX = barRect.left - timelineRect.left + barRect.width / 2;
+            barY = barRect.top - timelineRect.top + barRect.height / 2; // CENTER of bar
+        }
+
+        // Create the path
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${cardX} ${cardY} L ${barX} ${barY}`);
+        path.setAttribute('stroke', colors[cat]);
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('fill', 'none');
+        path.setAttribute('opacity', '0.5');
+
+        // Add endpoint circles
+        const cardDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        cardDot.setAttribute('cx', cardX);
+        cardDot.setAttribute('cy', cardY);
+        cardDot.setAttribute('r', '3');
+        cardDot.setAttribute('fill', colors[cat]);
+
+        const barDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        barDot.setAttribute('cx', barX);
+        barDot.setAttribute('cy', barY);
+        barDot.setAttribute('r', '3');
+        barDot.setAttribute('fill', colors[cat]);
+
+        svg.appendChild(path);
+        svg.appendChild(cardDot);
+        svg.appendChild(barDot);
+    });
+}
+
+// Run on load and resize
+window.addEventListener('load', drawConnectors);
+window.addEventListener('resize', drawConnectors);
+// Also run after a short delay to ensure layout is complete
+setTimeout(drawConnectors, 100);
+</script>
 
 {% endblock content %}
