@@ -43,7 +43,7 @@
 
         <div class="gantt-card" data-cat="education" data-id="stuy" style="top: 90%">
             <div class="gantt-card-content">
-                <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
+                <h3><a href="https://stuy.edu" target="_blank">Stuyvesant HS</a></h3>
                 <span class="role">CS Program</span>
                 <span class="years">2005 - 2009</span>
             </div>
@@ -54,7 +54,7 @@
     <div class="gantt-employment" data-mobile-title="Employment">
         <div class="gantt-card" data-cat="employment" data-id="botm" style="top: 0%">
             <div class="gantt-card-content">
-                <h3><a href="https://www.bookofthemonth.com" target="_blank">Book of the Month</a></h3>
+                <h3><a href="https://bookofthemonth.com" target="_blank">Book of the Month</a></h3>
                 <span class="role">Senior DevOps Engineer</span>
                 <span class="years">2023 - present</span>
             </div>
@@ -102,7 +102,7 @@
 
         <div class="gantt-card" data-cat="employment" data-id="morgan" style="top: 85%">
             <div class="gantt-card-content">
-                <h3><a href="https://www.morganstanley.com" target="_blank">Morgan Stanley</a></h3>
+                <h3><a href="https://morganstanley.com" target="_blank">Morgan Stanley</a></h3>
                 <span class="role">Intern</span>
                 <span class="years">2008</span>
             </div>
@@ -515,12 +515,12 @@ const panelContent = {
     'botm': {
         title: 'Book of the Month',
         subtitle: 'Senior DevOps Engineer • 2023 - present',
-        description: '<ul><li>Lead platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Manage production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://bookofthemonth.com" loading="lazy"></iframe></div><ul><li>Lead platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Manage production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul><p class="info-panel-link"><a href="https://bookofthemonth.com" target="_blank">Visit website →</a></p>'
     },
     'shipyard': {
         title: 'Shipyard',
         subtitle: 'Cofounder & CTO • 2018 - 2023',
-        description: '<ul><li>Co-founded and built full MVP of Kubernetes-backed ephemeral environments platform</li><li>Designed entire initial architecture: custom K8s controllers, Helm charts, Terraform, Python/Golang microservices</li><li>Built CI/CD integrations for GitHub, GitLab, and Bitbucket</li><li>Led 7-person engineering team through multiple funding rounds</li><li>Grew platform to serve dozens of companies running thousands of ephemeral environments monthly</li><li>Spoke at DevOpsDays conferences about ephemeral environments and developer experience</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://shipyard.build" loading="lazy"></iframe></div><ul><li>Co-founded and built full MVP of Kubernetes-backed ephemeral environments platform</li><li>Designed entire initial architecture: custom K8s controllers, Helm charts, Terraform, Python/Golang microservices</li><li>Built CI/CD integrations for GitHub, GitLab, and Bitbucket</li><li>Led 7-person engineering team through multiple funding rounds</li><li>Grew platform to serve dozens of companies running thousands of ephemeral environments monthly</li><li>Spoke at DevOpsDays conferences about ephemeral environments and developer experience</li></ul><p class="info-panel-link"><a href="https://shipyard.build" target="_blank">Visit website →</a></p>'
     },
     'lucky13': {
         title: 'Lucky Number 13',
@@ -530,119 +530,128 @@ const panelContent = {
     'propellr': {
         title: 'Propellr',
         subtitle: 'Lead Backend Engineer • 2014 - 2016',
-        description: '<ul><li>Led engineering for fintech platform connecting real estate developers with investors</li><li>Built Python/Flask backends, Angular frontends, and AWS deployment pipelines</li><li>Introduced infrastructure automation via Ansible — company\'s first reproducible deployments</li><li>Worked directly with founders to translate business requirements into technical architecture</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://www.crunchbase.com/organization/propellr" loading="lazy"></iframe></div><ul><li>Led engineering for fintech platform connecting real estate developers with investors</li><li>Built Python/Flask backends, Angular frontends, and AWS deployment pipelines</li><li>Introduced infrastructure automation via Ansible — company\'s first reproducible deployments</li><li>Worked directly with founders to translate business requirements into technical architecture</li></ul><p class="info-panel-link"><a href="https://www.crunchbase.com/organization/propellr" target="_blank">View on Crunchbase →</a></p>'
     },
     'happydogs': {
         title: 'Happy Dogs NYC',
         subtitle: 'Software Engineer • 2012 - 2014',
-        description: '<ul><li>Sole developer for internal operations system serving dog daycare chain across multiple NYC locations</li><li>Built Django backend handling scheduling, client management, and billing</li><li>Deployed and maintained application on DigitalOcean</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://happydogsnyc.com" loading="lazy"></iframe></div><ul><li>Sole developer for internal operations system serving dog daycare chain across multiple NYC locations</li><li>Built Django backend handling scheduling, client management, and billing</li><li>Deployed and maintained application on DigitalOcean</li></ul><p class="info-panel-link"><a href="https://happydogsnyc.com" target="_blank">Visit website →</a></p>'
     },
     'hunter-sa': {
         title: 'Hunter College',
         subtitle: 'System Administrator • 2010 - 2012',
-        description: '<ul><li>One of six sysadmins managing IT infrastructure for 60,000+ students and faculty</li><li>Managed DNS, Active Directory, LDAP, email infrastructure, and campus website</li><li>Gained enterprise-scale systems administration experience while completing CS degree</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://hunter.cuny.edu" loading="lazy"></iframe></div><ul><li>One of six sysadmins managing IT infrastructure for 60,000+ students and faculty</li><li>Managed DNS, Active Directory, LDAP, email infrastructure, and campus website</li><li>Gained enterprise-scale systems administration experience while completing CS degree</li></ul><p class="info-panel-link"><a href="https://hunter.cuny.edu" target="_blank">Visit website →</a></p>'
     },
     'morgan': {
         title: 'Morgan Stanley',
         subtitle: 'Software Engineering Intern • 2008',
-        description: '<ul><li>Summer internship in technology division</li><li>Built AJAX-powered dynamic content loading for internal web application</li><li>First exposure to professional development practices and enterprise-scale systems</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://morganstanley.com" loading="lazy"></iframe></div><ul><li>Summer internship in technology division</li><li>Built AJAX-powered dynamic content loading for internal web application</li><li>First exposure to professional development practices and enterprise-scale systems</li></ul><p class="info-panel-link"><a href="https://morganstanley.com" target="_blank">Visit website →</a></p>'
     },
     // Education
     'hunter-ba': {
         title: 'Hunter College',
         subtitle: 'BA Computer Science • 2009 - 2014',
-        description: '<ul><li>Bachelor of Arts in Computer Science</li><li>Part of City University of New York (CUNY) system</li><li>Worked as system administrator on campus while completing degree</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://hunter.cuny.edu" loading="lazy"></iframe></div><ul><li>Bachelor of Arts in Computer Science</li><li>Part of City University of New York (CUNY) system</li><li>Worked as system administrator on campus while completing degree</li></ul><p class="info-panel-link"><a href="https://hunter.cuny.edu" target="_blank">Visit website →</a></p>'
     },
     'stuy': {
         title: 'Stuyvesant High School',
         subtitle: 'CS Program • 2005 - 2009',
-        description: '<ul><li>One of NYC\'s nine specialized public high schools</li><li>Competitive entrance exam required</li><li>Participated in Computer Science program</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://stuy.edu" loading="lazy"></iframe></div><ul><li>One of NYC\'s nine specialized public high schools</li><li>Competitive entrance exam required</li><li>Participated in Computer Science program</li></ul><p class="info-panel-link"><a href="https://stuy.edu" target="_blank">Visit website →</a></p>'
     },
     // Projects
     'dontdie': {
         title: 'Don\'t Die',
         subtitle: 'Personal Project • 2025',
-        description: '<ul><li>Jackbox-style zombie dice party game for in-person play</li><li>One device hosts, others join via phone browser — no app download required</li><li>Built with React Native with real-time WebSocket communication</li></ul>'
+        description: '<ul><li>Jackbox-style zombie dice party game for in-person play</li><li>One device hosts, others join via phone browser — no app download required</li><li>Built with React Native with real-time WebSocket communication</li></ul><p class="info-panel-link"><a href="https://github.com/azlyth/last-one-alive" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'lowkey': {
         title: 'Lowkey',
-        subtitle: 'Personal Project • 2025',
-        description: '<ul><li>Node.js CLI for managing secrets across multiple backends</li><li>Syncs between AWS Secrets Manager, Kubernetes Secrets, .env files, and JSON</li><li>Interactive terminal browser with fuzzy search and live editing</li></ul>'
+        subtitle: 'Open Source • 2025',
+        description: '<ul><li>Node.js CLI for managing secrets across multiple backends</li><li>Syncs between AWS Secrets Manager, Kubernetes Secrets, .env files, and JSON</li><li>Interactive terminal browser with fuzzy search and live editing</li></ul><p class="info-panel-link"><a href="https://github.com/moonbeam-nyc/lowkey" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'turtle': {
         title: 'Turtle',
-        subtitle: 'Personal Project • 2025',
-        description: '<ul><li>Self-hosted web app for browser-based terminal access and runnable runbooks</li><li>Real-time WebSocket streaming, YAML runbook definitions</li><li>Single-container deployment for DevOps and incident response</li></ul>'
+        subtitle: 'Open Source • 2025',
+        description: '<ul><li>Self-hosted web app for browser-based terminal access and runnable runbooks</li><li>Real-time WebSocket streaming, YAML runbook definitions</li><li>Single-container deployment for DevOps and incident response</li></ul><p class="info-panel-link"><a href="https://github.com/moonbeam-nyc/turtle" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'snorlax': {
         title: 'Snorlax',
-        subtitle: 'Personal Project • 2024',
-        description: '<ul><li>Kubernetes Operator that sleeps/wakes Deployments and Ingresses on schedules</li><li>Implemented in Golang using controller-runtime library</li><li>Cost-savings tool to scale down non-production environments during off-hours</li></ul>'
+        subtitle: 'Open Source • 2024',
+        description: '<ul><li>Kubernetes Operator that sleeps/wakes Deployments and Ingresses on schedules</li><li>Implemented in Golang using controller-runtime library</li><li>Cost-savings tool to scale down non-production environments during off-hours</li></ul><p class="info-panel-link"><a href="https://github.com/moonbeam-nyc/snorlax" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'redub': {
         title: 'Redub',
         subtitle: 'Personal Project • 2017',
-        description: '<ul><li>Desktop app for redubbing audio in videos</li><li>Load video with SRT subtitles, record new audio per segment, export with replaced audio</li><li>Built with Electron and React</li></ul>'
+        description: '<ul><li>Desktop app for redubbing audio in videos</li><li>Load video with SRT subtitles, record new audio per segment, export with replaced audio</li><li>Built with Electron and React</li></ul><p class="info-panel-link"><a href="https://github.com/azlyth/redub" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'hooks': {
         title: 'Hooks',
         subtitle: 'Personal Project • 2016',
-        description: '<ul><li>React Native mobile app for running scripts on remote servers via SSH</li><li>List servers and scripts, tap to run, see real-time output on phone</li><li>No server-side installation required — just SSH access</li></ul>'
+        description: '<ul><li>React Native mobile app for running scripts on remote servers via SSH</li><li>List servers and scripts, tap to run, see real-time output on phone</li><li>No server-side installation required — just SSH access</li></ul><p class="info-panel-link"><a href="https://github.com/azlyth/hooks" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'rnssh': {
         title: 'React Native SSH',
         subtitle: 'Open Source • 2016',
-        description: '<ul><li>SSH client component for React Native applications</li><li>Native SSH connectivity for iOS and Android</li><li>Built as dependency for Hooks app, released as open source</li></ul>'
+        description: '<ul><li>SSH client component for React Native applications</li><li>Native SSH connectivity for iOS and Android</li><li>Built as dependency for Hooks app, released as open source</li></ul><p class="info-panel-link"><a href="https://github.com/nicklockwood/react-native-ssh" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     'thegrid': {
         title: 'The Grid',
         subtitle: 'Personal Project • 2011',
-        description: '<ul><li>Real-time multiplayer HTML5 canvas experiment</li><li>Multiple browser clients connect to shared world via WebSockets</li><li>Built with Node.js and Socket.io</li></ul>'
+        description: '<ul><li>Real-time multiplayer HTML5 canvas experiment</li><li>Multiple browser clients connect to shared world via WebSockets</li><li>Built with Node.js and Socket.io</li></ul><p class="info-panel-link"><a href="https://github.com/azlyth/thegrid" target="_blank"><i class="fa-brands fa-github"></i>View on GitHub →</a></p>'
     },
     // Civic
     'astoria': {
         title: 'Astoria Tech',
         subtitle: 'Founder & Organizer • 2019 - present',
-        description: '<ul><li>Founded neighborhood tech community meetup in Astoria, Queens</li><li>Running 6+ years with monthly events — talks, demos, and networking</li><li>Manage astoria.app website, coordinate speakers, host at local venues</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://astoria.app" loading="lazy"></iframe></div><ul><li>Founded neighborhood tech community meetup in Astoria, Queens</li><li>Running 6+ years with monthly events — talks, demos, and networking</li><li>Manage astoria.app website, coordinate speakers, host at local venues</li></ul><p class="info-panel-link"><a href="https://astoria.app" target="_blank">Visit website →</a></p>'
     },
     'nycmesh': {
         title: 'NYC Mesh',
         subtitle: 'Founder • 2012 - 2015',
-        description: '<ul><li>Founded and built early technical foundation of community-owned ISP</li><li>Organized initial volunteers, established network architecture, deployed first nodes</li><li>Now grown to 1,200+ nodes providing internet across NYC</li></ul>'
+        description: '<div class="info-panel-site"><iframe src="https://nycmesh.net" loading="lazy"></iframe></div><ul><li>Founded and built early technical foundation of community-owned ISP</li><li>Organized initial volunteers, established network architecture, deployed first nodes</li><li>Now grown to 1,200+ nodes providing internet across NYC</li></ul><p class="info-panel-link"><a href="https://nycmesh.net" target="_blank">Visit website →</a></p>'
     },
     // Talks
     'devops-seattle': {
         title: 'DevOpsDays Seattle 2022',
         subtitle: 'Conference Talk • 2022',
-        description: '<ul><li>Presented on ephemeral environments and developer experience</li><li>Shared lessons from building Shipyard</li><li>Covered preview environments for faster feedback loops</li></ul>'
+        description: '<div class="info-panel-video"><iframe src="https://www.youtube.com/embed/xE_nlt8Lyk4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><ul><li>Presented on ephemeral environments and developer experience</li><li>Shared lessons from building Shipyard</li><li>Covered preview environments for faster feedback loops</li></ul><p class="info-panel-link"><a href="https://www.youtube.com/watch?v=xE_nlt8Lyk4" target="_blank">Watch on YouTube →</a></p>'
     },
     'devops-raleigh': {
         title: 'DevOpsDays Raleigh 2022',
         subtitle: 'Conference Talk • 2022',
-        description: '<ul><li>Spoke on building preview environments for development teams</li><li>Covered technical architecture behind ephemeral environments</li><li>Discussed cultural changes needed for effective adoption</li></ul>'
+        description: '<div class="info-panel-video"><iframe src="https://www.youtube.com/embed/bsEGCOaUsts" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><ul><li>Spoke on building preview environments for development teams</li><li>Covered technical architecture behind ephemeral environments</li><li>Discussed cultural changes needed for effective adoption</li></ul><p class="info-panel-link"><a href="https://www.youtube.com/watch?v=bsEGCOaUsts" target="_blank">Watch on YouTube →</a></p>'
     },
     'hope-2014': {
         title: 'HOPE X 2014',
         subtitle: 'Conference Talk • 2014',
-        description: '<ul><li>Presented at Hackers On Planet Earth conference</li><li>Discussed NYC Mesh and building community wireless networks</li><li>Covered mesh networking protocols and decentralized communication</li></ul>'
+        description: '<div class="info-panel-video"><iframe src="https://www.youtube.com/embed/RY-GQFueD9I" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><ul><li>Presented at Hackers On Planet Earth conference</li><li>Discussed NYC Mesh and building community wireless networks</li><li>Covered mesh networking protocols and decentralized communication</li></ul><p class="info-panel-link"><a href="https://www.youtube.com/watch?v=RY-GQFueD9I" target="_blank">Watch on YouTube →</a></p>'
     }
 };
 
 // Info Panel functionality
 function setupInfoPanel() {
     const panel = document.getElementById('info-panel');
+    const timeline = document.querySelector('.gantt-timeline');
     const cards = document.querySelectorAll('.gantt-card[data-id]');
     const bars = document.querySelectorAll('.bar[data-id]');
 
     if (!panel) return;
 
     let hideTimeout;
+    let currentId = null;
+    let isPinned = false;
 
-    function showPanel(element, id) {
+    function showPanel(element, id, pin = false) {
         const content = panelContent[id];
         if (!content) return;
 
         clearTimeout(hideTimeout);
+        currentId = id;
+
+        if (pin) {
+            isPinned = true;
+            panel.classList.add('pinned');
+        }
 
         // Determine if element is on left or right side
         const isLeft = element.closest('.gantt-education') !== null ||
@@ -659,6 +668,7 @@ function setupInfoPanel() {
         panel.querySelector('.info-panel-subtitle').textContent = content.subtitle;
         panel.querySelector('.info-panel-description').innerHTML = content.description;
         panel.setAttribute('data-cat', cat);
+        panel.setAttribute('data-side', isLeft ? 'left' : 'right');
 
         // Position panel
         const panelWidth = 320;
@@ -677,9 +687,11 @@ function setupInfoPanel() {
             panel.classList.add('from-right');
         }
 
-        // Vertical position: align with element, clamp to viewport
+        // Vertical position: align with element, but keep panel fully visible
+        // Estimate panel height (with iframe ~180px + content ~200px + padding)
+        const estimatedPanelHeight = 450;
         top = rect.top - 20;
-        top = Math.max(margin, Math.min(top, window.innerHeight - 300));
+        top = Math.max(margin, Math.min(top, window.innerHeight - estimatedPanelHeight));
 
         panel.style.left = left + 'px';
         panel.style.top = top + 'px';
@@ -688,26 +700,157 @@ function setupInfoPanel() {
         requestAnimationFrame(() => {
             panel.classList.add('visible');
         });
+
+        // Keep highlight active
+        highlightById(id);
     }
 
-    function hidePanel() {
+    function hidePanel(force = false) {
+        if (isPinned && !force) return;
+
         hideTimeout = setTimeout(() => {
-            panel.classList.remove('visible');
+            if (!isPinned) {
+                panel.classList.remove('visible');
+                currentId = null;
+                clearHighlightsGlobal();
+            }
         }, 150);
     }
+
+    function unpinPanel() {
+        isPinned = false;
+        panel.classList.remove('pinned');
+        panel.classList.remove('visible');
+        currentId = null;
+        clearHighlightsGlobal();
+    }
+
+    // Helper to highlight by ID (reuse existing highlight logic)
+    function highlightById(id) {
+        timeline.classList.add('has-hover');
+
+        // Clear existing highlights
+        document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+
+        // Highlight card
+        const card = document.querySelector(`.gantt-card[data-id="${id}"]`);
+        if (card) {
+            card.classList.add('highlight');
+            const connectsCard = card.dataset.connectsCard;
+            if (connectsCard) {
+                const targetCard = document.querySelector(`.gantt-card[data-id="${connectsCard}"]`);
+                if (targetCard) targetCard.classList.add('highlight');
+                const targetBar = document.querySelector(`.bar[data-id="${connectsCard}"]`);
+                if (targetBar) targetBar.classList.add('highlight');
+                document.querySelectorAll(`.gantt-connectors path[data-from="${connectsCard}"], .gantt-connectors circle[data-from="${connectsCard}"]`).forEach(el => el.classList.add('highlight'));
+            }
+        }
+
+        // Highlight bar
+        const bar = document.querySelector(`.bar[data-id="${id}"]`);
+        if (bar) bar.classList.add('highlight');
+
+        // Highlight connectors
+        document.querySelectorAll(`.gantt-connectors path[data-from="${id}"], .gantt-connectors circle[data-from="${id}"]`).forEach(el => el.classList.add('highlight'));
+
+        // Highlight talks that connect to this item
+        document.querySelectorAll(`.gantt-card[data-connects-card="${id}"]`).forEach(talk => {
+            talk.classList.add('highlight');
+            const talkId = talk.dataset.id;
+            document.querySelectorAll(`.gantt-connectors path[data-from="${talkId}"], .gantt-connectors circle[data-from="${talkId}"]`).forEach(el => el.classList.add('highlight'));
+        });
+    }
+
+    function clearHighlightsGlobal() {
+        timeline.classList.remove('has-hover');
+        document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+    }
+
+    // Keep panel open when hovering over it
+    panel.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimeout);
+    });
+
+    panel.addEventListener('mouseleave', () => {
+        if (!isPinned) {
+            hidePanel();
+        }
+    });
+
+    // Click outside to unpin
+    document.addEventListener('click', (e) => {
+        if (isPinned && !panel.contains(e.target) && !e.target.closest('.gantt-card') && !e.target.closest('.bar')) {
+            unpinPanel();
+        }
+    });
 
     // Attach to cards
     cards.forEach(card => {
         const id = card.dataset.id;
-        card.addEventListener('mouseenter', () => showPanel(card, id));
-        card.addEventListener('mouseleave', hidePanel);
+
+        card.addEventListener('mouseenter', () => {
+            if (!isPinned) {
+                showPanel(card, id);
+            }
+        });
+
+        card.addEventListener('mouseleave', () => {
+            if (!isPinned) {
+                hidePanel();
+            }
+        });
+
+        // Click to pin
+        card.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (isPinned && currentId === id) {
+                // Clicking same item unpins
+                unpinPanel();
+            } else {
+                // Pin to this item
+                if (isPinned) {
+                    // Switch to new item
+                    isPinned = false;
+                    panel.classList.remove('pinned');
+                }
+                showPanel(card, id, true);
+            }
+        });
     });
 
     // Attach to bars
     bars.forEach(bar => {
         const id = bar.dataset.id;
-        bar.addEventListener('mouseenter', () => showPanel(bar, id));
-        bar.addEventListener('mouseleave', hidePanel);
+
+        bar.addEventListener('mouseenter', () => {
+            if (!isPinned) {
+                showPanel(bar, id);
+            }
+        });
+
+        bar.addEventListener('mouseleave', () => {
+            if (!isPinned) {
+                hidePanel();
+            }
+        });
+
+        // Click to pin
+        bar.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (isPinned && currentId === id) {
+                unpinPanel();
+            } else {
+                if (isPinned) {
+                    isPinned = false;
+                    panel.classList.remove('pinned');
+                }
+                showPanel(bar, id, true);
+            }
+        });
     });
 }
 

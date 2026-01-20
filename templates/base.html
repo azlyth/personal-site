@@ -700,6 +700,10 @@
             text-align: left;
         }
 
+        .gantt-card {
+            cursor: pointer;
+        }
+
         .gantt-card h3 {
             font-size: 0.8rem;
             font-weight: 600;
@@ -768,6 +772,7 @@
         }
 
         .info-panel.visible {
+            pointer-events: auto;
             opacity: 1;
         }
 
@@ -833,6 +838,62 @@
         .info-panel[data-cat="civic"] .info-panel-title { color: #2ecc71; }
         .info-panel[data-cat="projects"] .info-panel-title { color: #f39c12; }
         .info-panel[data-cat="talks"] .info-panel-title { color: #e74c3c; }
+
+        /* Video embed in info panel */
+        .info-panel-video {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            margin-bottom: 0.75rem;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .info-panel-video iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Site preview embed in info panel */
+        .info-panel-site {
+            position: relative;
+            width: 100%;
+            height: 180px;
+            margin-bottom: 0.75rem;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .info-panel-site iframe {
+            width: 300%;
+            height: 300%;
+            border: none;
+            transform: scale(0.333);
+            transform-origin: top left;
+        }
+
+        /* Link in info panel */
+        .info-panel-link {
+            margin: 0.75rem 0 0 0;
+            font-size: 0.85rem;
+        }
+
+        .info-panel-link a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+
+        .info-panel-link a:hover {
+            text-decoration: underline;
+        }
+
+        .info-panel-link .fa-github {
+            margin-right: 0.3rem;
+        }
 
         /* Hide info panel on mobile */
         @media (max-width: 700px) {
@@ -954,6 +1015,7 @@
             width: 100%;
             border-radius: 0;
             min-height: 8px;
+            cursor: pointer;
         }
 
         /* Bar colors by category */
