@@ -627,17 +627,15 @@
             z-index: 10;
         }
 
-        /* Four card columns */
+        /* Four card columns - use relative positioning for absolute children */
         .gantt-education, .gantt-employment, .gantt-projects, .gantt-civic {
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
+            position: relative;
             padding: 0.5rem 0;
         }
 
-        /* Left side columns - align right */
+        /* Left side columns need min-width for absolute children */
         .gantt-education, .gantt-employment {
-            align-items: flex-end;
+            min-width: 120px;
         }
 
         .gantt-education {
@@ -648,9 +646,9 @@
             padding-right: 20px;
         }
 
-        /* Right side columns - align left */
+        /* Right side columns need min-width for absolute children */
         .gantt-projects, .gantt-civic {
-            align-items: flex-start;
+            min-width: 120px;
         }
 
         .gantt-projects {
@@ -661,11 +659,17 @@
             padding-left: 15px;
         }
 
-        /* Card styling */
+        /* Card styling - absolute positioned to match bar locations */
         .gantt-card {
-            display: flex;
-            align-items: flex-start;
-            position: relative;
+            position: absolute;
+            right: 0;
+        }
+
+        /* Right side cards align left */
+        .gantt-projects .gantt-card,
+        .gantt-civic .gantt-card {
+            right: auto;
+            left: 0;
         }
 
         .gantt-card-content {
