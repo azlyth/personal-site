@@ -607,17 +607,17 @@
 
         .timeline {
             position: relative;
-            max-width: 1000px;
+            max-width: 800px;
             margin: 0 auto;
             display: grid;
-            grid-template-columns: 1fr 1fr 50px 1fr 1fr;
+            grid-template-columns: 1fr 40px 1fr;
             gap: 4px;
         }
 
         /* Content columns */
         .tl-col {
             position: relative;
-            min-height: 1500px;
+            min-height: 1000px;
         }
 
         /* Center spine with years */
@@ -654,37 +654,67 @@
             white-space: nowrap;
         }
 
-        /* Timeline items - absolutely positioned */
+        /* Timeline items - absolutely positioned, compact style */
         .tl-item {
             position: absolute;
             left: 2px;
             right: 2px;
-            padding: 0.4rem 0.5rem;
-            background: #fff;
-            border-radius: 3px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            padding: 0.2rem 0.4rem;
+            background: transparent;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
-            overflow: hidden;
-            font-size: 0.8rem;
+            overflow: visible;
+            font-size: 0.75rem;
+            line-height: 1.2;
         }
 
-        /* Left side columns (employment, education) - right-aligned text */
-        .tl-col-employment .tl-item,
-        .tl-col-education .tl-item {
+        /* Duration indicator line */
+        .tl-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        /* Left column - right-aligned text, line on right */
+        .tl-col-left .tl-item {
             text-align: right;
-            border-right: 3px solid;
-            border-radius: 3px 0 0 3px;
+            padding-right: 8px;
         }
 
-        /* Right side columns (projects, civic) - left-aligned text */
-        .tl-col-projects .tl-item,
-        .tl-col-civic .tl-item {
-            text-align: left;
-            border-left: 3px solid;
-            border-radius: 0 3px 3px 0;
+        .tl-col-left .tl-item::before {
+            right: 0;
         }
+
+        /* Right column - left-aligned text, line on left */
+        .tl-col-right .tl-item {
+            text-align: left;
+            padding-left: 8px;
+        }
+
+        .tl-col-right .tl-item::before {
+            left: 0;
+        }
+
+        /* Category colors via data attribute */
+        .tl-item[data-cat="employment"]::before { background: #4a90e2; }
+        .tl-item[data-cat="employment"] h3, .tl-item[data-cat="employment"] h3 a { color: #4a90e2; }
+        .tl-item[data-cat="employment"] .role { color: #4a90e2; }
+
+        .tl-item[data-cat="education"]::before { background: #9b59b6; }
+        .tl-item[data-cat="education"] h3, .tl-item[data-cat="education"] h3 a { color: #9b59b6; }
+        .tl-item[data-cat="education"] .role { color: #9b59b6; }
+
+        .tl-item[data-cat="civic"]::before { background: #2ecc71; }
+        .tl-item[data-cat="civic"] h3, .tl-item[data-cat="civic"] h3 a { color: #2ecc71; }
+        .tl-item[data-cat="civic"] .role { color: #2ecc71; }
+
+        .tl-item[data-cat="projects"]::before { background: #f39c12; }
+        .tl-item[data-cat="projects"] h3, .tl-item[data-cat="projects"] h3 a { color: #f39c12; }
+        .tl-item[data-cat="projects"] .role { color: #f39c12; }
 
         .tl-item h3 {
             font-size: 0.85rem;
@@ -721,37 +751,8 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
 
-        /* Category colors - by column */
-        .tl-col-employment .tl-item {
-            border-color: #4a90e2;
-            background: rgba(74, 144, 226, 0.06);
-        }
-        .tl-col-employment .tl-item h3 a, .tl-col-employment .tl-item h3 { color: #4a90e2; }
-        .tl-col-employment .tl-item .role { color: #4a90e2; }
-
-        .tl-col-education .tl-item {
-            border-color: #9b59b6;
-            background: rgba(155, 89, 182, 0.06);
-        }
-        .tl-col-education .tl-item h3 a, .tl-col-education .tl-item h3 { color: #9b59b6; }
-        .tl-col-education .tl-item .role { color: #9b59b6; }
-
-        .tl-col-projects .tl-item {
-            border-color: #f39c12;
-            background: rgba(243, 156, 18, 0.06);
-        }
-        .tl-col-projects .tl-item h3 a, .tl-col-projects .tl-item h3 { color: #f39c12; }
-        .tl-col-projects .tl-item .role { color: #f39c12; }
-
-        .tl-col-civic .tl-item {
-            border-color: #2ecc71;
-            background: rgba(46, 204, 113, 0.06);
-        }
-        .tl-col-civic .tl-item h3 a, .tl-col-civic .tl-item h3 { color: #2ecc71; }
-        .tl-col-civic .tl-item .role { color: #2ecc71; }
-
         /* Mobile - stack everything */
-        @media (max-width: 700px) {
+        @media (max-width: 600px) {
             .timeline {
                 display: block;
                 padding: 0 1rem;
@@ -770,9 +771,12 @@
                 position: static !important;
                 margin-bottom: 0.5rem;
                 text-align: left !important;
-                border-left: 3px solid !important;
-                border-right: none !important;
-                border-radius: 0 3px 3px 0 !important;
+                padding-left: 10px !important;
+            }
+
+            .tl-item::before {
+                left: 0 !important;
+                right: auto !important;
             }
         }
 
