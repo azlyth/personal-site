@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>{% block title %}Peter @ WWW{% endblock title %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -604,13 +605,14 @@
         .timeline-legend .leg-civic::before { background: #2ecc71; }
         .timeline-legend .leg-projects::before { background: #f39c12; }
         .timeline-legend .leg-education::before { background: #9b59b6; }
+        .timeline-legend .leg-talks::before { background: #e74c3c; }
 
-        /* Gantt Timeline - 5 column grid: Education | Employment | Timeline | Projects | Civic */
+        /* Gantt Timeline - 6 column grid: Education | Employment | Timeline | Projects | Civic | Talks */
         .gantt-timeline {
             display: grid;
-            grid-template-columns: auto auto 200px auto auto;
+            grid-template-columns: auto auto 200px auto auto auto;
             gap: 0;
-            max-width: 1100px;
+            max-width: 1200px;
             margin: 0 auto;
             height: 550px;
             position: relative;
@@ -627,8 +629,8 @@
             z-index: 10;
         }
 
-        /* Four card columns - use relative positioning for absolute children */
-        .gantt-education, .gantt-employment, .gantt-projects, .gantt-civic {
+        /* Card columns - use relative positioning for absolute children */
+        .gantt-education, .gantt-employment, .gantt-projects, .gantt-civic, .gantt-talks {
             position: relative;
             padding: 0.5rem 0;
         }
@@ -636,6 +638,11 @@
         /* Left side columns need min-width for absolute children */
         .gantt-education, .gantt-employment {
             min-width: 120px;
+        }
+
+        .gantt-talks-left {
+            min-width: 100px;
+            padding-right: 10px;
         }
 
         .gantt-education {
@@ -649,6 +656,11 @@
         /* Right side columns need min-width for absolute children */
         .gantt-projects, .gantt-civic {
             min-width: 120px;
+        }
+
+        .gantt-talks-right {
+            min-width: 70px;
+            padding-left: 4px;
         }
 
         .gantt-projects {
@@ -667,7 +679,8 @@
 
         /* Right side cards align left */
         .gantt-projects .gantt-card,
-        .gantt-civic .gantt-card {
+        .gantt-civic .gantt-card,
+        .gantt-talks-right .gantt-card {
             right: auto;
             left: 0;
         }
@@ -677,7 +690,8 @@
         }
 
         .gantt-education .gantt-card-content,
-        .gantt-employment .gantt-card-content {
+        .gantt-employment .gantt-card-content,
+        .gantt-talks-left .gantt-card-content {
             text-align: right;
         }
 
@@ -728,6 +742,18 @@
         .gantt-card[data-cat="projects"] h3,
         .gantt-card[data-cat="projects"] h3 a { color: #f39c12; }
         .gantt-card[data-cat="projects"] .role { color: #f39c12; }
+
+        .gantt-card[data-cat="talks"] h3,
+        .gantt-card[data-cat="talks"] h3 a { color: #e74c3c; }
+        .gantt-card[data-cat="talks"] .role { color: #e74c3c; }
+
+        /* YouTube icon for talks */
+        .yt-icon::before {
+            font-family: "Font Awesome 6 Brands";
+            content: "\f167";
+            color: #e74c3c;
+            font-size: 0.85em;
+        }
 
         /* Center timeline area */
         .gantt-center {
@@ -869,7 +895,7 @@
         <nav>
             <div class="nav-links">
                 <a href="{{ get_url(path='/') }}">Home</a>
-                <a href="{{ get_url(path='/projects/') }}">Projects</a>
+                <a href="{{ get_url(path='/timeline/') }}">Timeline</a>
                 <a href="{{ get_url(path='/blog/') }}">Blog</a>
                 <a href="{{ get_url(path='/lab/') }}">Lab</a>
             </div>
