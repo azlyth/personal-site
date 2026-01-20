@@ -16,8 +16,27 @@
     <!-- SVG overlay for connector lines - drawn by JavaScript -->
     <svg class="gantt-connectors"></svg>
 
-    <!-- Left column: Employment + Education -->
-    <div class="gantt-left">
+    <!-- Column 1: Education cards -->
+    <div class="gantt-education">
+        <div class="gantt-card" data-cat="education" data-id="hunter-ba">
+            <div class="gantt-card-content">
+                <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
+                <span class="role">BA Computer Science</span>
+                <span class="years">2009 - 2014</span>
+            </div>
+        </div>
+
+        <div class="gantt-card" data-cat="education" data-id="stuy">
+            <div class="gantt-card-content">
+                <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
+                <span class="role">CS Program</span>
+                <span class="years">2005 - 2009</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Column 2: Employment cards -->
+    <div class="gantt-employment">
         <div class="gantt-card" data-cat="employment" data-id="botm">
             <div class="gantt-card-content">
                 <h3><a href="https://www.bookofthemonth.com" target="_blank">Book of the Month</a></h3>
@@ -50,14 +69,6 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="education" data-id="hunter-ba">
-            <div class="gantt-card-content">
-                <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
-                <span class="role">BA Computer Science</span>
-                <span class="years">2009 - 2014</span>
-            </div>
-        </div>
-
         <div class="gantt-card" data-cat="employment" data-id="happydogs">
             <div class="gantt-card-content">
                 <h3><a href="https://happydogsnyc.com" target="_blank">Happy Dogs NYC</a></h3>
@@ -74,14 +85,6 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="education" data-id="stuy">
-            <div class="gantt-card-content">
-                <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
-                <span class="role">CS Program</span>
-                <span class="years">2005 - 2009</span>
-            </div>
-        </div>
-
         <div class="gantt-card" data-cat="employment" data-id="morgan">
             <div class="gantt-card-content">
                 <h3><a href="https://www.morganstanley.com" target="_blank">Morgan Stanley</a></h3>
@@ -91,7 +94,7 @@
         </div>
     </div>
 
-    <!-- Center: Timeline spine with time-accurate bars -->
+    <!-- Column 3: Timeline center with bars -->
     <div class="gantt-center">
         <!-- Black spine line with year markers -->
         <div class="gantt-spine">
@@ -107,7 +110,7 @@
         <div class="gantt-bars">
             <!-- Left side bars (before spine) -->
             <div class="bars-left">
-                <!-- Education column (also holds Lucky 13 overlap) - Purple/Blue -->
+                <!-- Education column (also holds Lucky 13 overlap) -->
                 <div class="bar-col education-overlap">
                     <!-- Lucky 13: 2016-2019 (blue, overlaps with Shipyard) -->
                     <div class="bar employment-bar" data-id="lucky13" style="top: 30%; height: 15%"></div>
@@ -170,16 +173,8 @@
         </div>
     </div>
 
-    <!-- Right column: Civic + Projects -->
-    <div class="gantt-right">
-        <div class="gantt-card" data-cat="civic" data-id="astoria">
-            <div class="gantt-card-content">
-                <h3><a href="https://astoria.app" target="_blank">Astoria Tech</a></h3>
-                <span class="role">Organizer</span>
-                <span class="years">2019 - present</span>
-            </div>
-        </div>
-
+    <!-- Column 4: Projects cards -->
+    <div class="gantt-projects">
         <div class="gantt-card" data-cat="projects" data-id="dontdie">
             <div class="gantt-card-content">
                 <h3><a href="https://github.com/azlyth/last-one-alive" target="_blank">Don't Die</a></h3>
@@ -229,18 +224,29 @@
             </div>
         </div>
 
+        <div class="gantt-card" data-cat="projects" data-id="thegrid">
+            <div class="gantt-card-content">
+                <h3><a href="https://github.com/azlyth/thegrid" target="_blank">The Grid</a></h3>
+                <span class="years">2011</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Column 5: Civic cards -->
+    <div class="gantt-civic">
+        <div class="gantt-card" data-cat="civic" data-id="astoria">
+            <div class="gantt-card-content">
+                <h3><a href="https://astoria.app" target="_blank">Astoria Tech</a></h3>
+                <span class="role">Organizer</span>
+                <span class="years">2019 - present</span>
+            </div>
+        </div>
+
         <div class="gantt-card" data-cat="civic" data-id="nycmesh">
             <div class="gantt-card-content">
                 <h3><a href="https://nycmesh.net" target="_blank">NYC Mesh</a></h3>
                 <span class="role">Founder</span>
                 <span class="years">2012 - 2015</span>
-            </div>
-        </div>
-
-        <div class="gantt-card" data-cat="projects" data-id="thegrid">
-            <div class="gantt-card-content">
-                <h3><a href="https://github.com/azlyth/thegrid" target="_blank">The Grid</a></h3>
-                <span class="years">2011</span>
             </div>
         </div>
     </div>
@@ -277,7 +283,7 @@ function drawConnectors() {
         const barRect = bar.getBoundingClientRect();
 
         // Calculate positions relative to timeline container
-        const isLeft = card.closest('.gantt-left') !== null;
+        const isLeft = card.closest('.gantt-education') !== null || card.closest('.gantt-employment') !== null;
 
         let cardX, cardY, barX, barY;
 

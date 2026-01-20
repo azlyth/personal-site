@@ -605,12 +605,12 @@
         .timeline-legend .leg-projects::before { background: #f39c12; }
         .timeline-legend .leg-education::before { background: #9b59b6; }
 
-        /* Gantt Timeline - 3 column grid */
+        /* Gantt Timeline - 5 column grid: Education | Employment | Timeline | Projects | Civic */
         .gantt-timeline {
             display: grid;
-            grid-template-columns: 1fr 240px 1fr;
+            grid-template-columns: auto auto 200px auto auto;
             gap: 0;
-            max-width: 1050px;
+            max-width: 1100px;
             margin: 0 auto;
             height: 550px;
             position: relative;
@@ -627,22 +627,38 @@
             z-index: 10;
         }
 
-        /* Left and right card columns */
-        .gantt-left, .gantt-right {
+        /* Four card columns */
+        .gantt-education, .gantt-employment, .gantt-projects, .gantt-civic {
             display: flex;
             flex-direction: column;
             gap: 0.4rem;
             padding: 0.5rem 0;
         }
 
-        .gantt-left {
+        /* Left side columns - align right */
+        .gantt-education, .gantt-employment {
             align-items: flex-end;
-            padding-right: 35px;
         }
 
-        .gantt-right {
+        .gantt-education {
+            padding-right: 15px;
+        }
+
+        .gantt-employment {
+            padding-right: 20px;
+        }
+
+        /* Right side columns - align left */
+        .gantt-projects, .gantt-civic {
             align-items: flex-start;
-            padding-left: 35px;
+        }
+
+        .gantt-projects {
+            padding-left: 20px;
+        }
+
+        .gantt-civic {
+            padding-left: 15px;
         }
 
         /* Card styling */
@@ -656,11 +672,13 @@
             max-width: 200px;
         }
 
-        .gantt-left .gantt-card-content {
+        .gantt-education .gantt-card-content,
+        .gantt-employment .gantt-card-content {
             text-align: right;
         }
 
-        .gantt-right .gantt-card-content {
+        .gantt-projects .gantt-card-content,
+        .gantt-civic .gantt-card-content {
             text-align: left;
         }
 
@@ -812,7 +830,7 @@
                 display: none;
             }
 
-            .gantt-left, .gantt-right {
+            .gantt-education, .gantt-employment, .gantt-projects, .gantt-civic {
                 align-items: flex-start;
                 padding: 0;
                 gap: 0.75rem;
