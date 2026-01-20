@@ -981,13 +981,13 @@
                 display: none;
             }
 
-            /* Left column: Education + Employment merged */
+            /* Left column: Education + Employment + Talks merged */
             .gantt-education {
                 grid-column: 1;
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-right: 8px;
+                padding-right: 15px;
             }
 
             .gantt-employment {
@@ -995,7 +995,7 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-right: 8px;
+                padding-right: 15px;
             }
 
             /* Center timeline */
@@ -1004,13 +1004,13 @@
                 grid-row: 1;
             }
 
-            /* Right column: Projects + Civic merged */
+            /* Right column: Projects + Civic + Talks merged */
             .gantt-projects {
                 grid-column: 3;
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-left: 8px;
+                padding-left: 15px;
             }
 
             .gantt-civic {
@@ -1018,17 +1018,21 @@
                 grid-row: 1;
                 position: relative;
                 min-width: auto;
-                padding-left: 8px;
+                padding-left: 15px;
             }
 
-            /* Hide the separate talks columns on mobile */
+            /* Right talks column goes into right column */
             .gantt-talks-right {
-                display: none;
+                grid-column: 3;
+                grid-row: 1;
+                position: relative;
+                min-width: auto;
+                padding-left: 15px;
             }
 
-            /* Also hide talks cards in education column on mobile */
+            /* Left talks stay in education column but smaller */
             .gantt-education .gantt-card[data-cat="talks"] {
-                display: none;
+                display: block;
             }
 
             /* Mobile card styling - smaller text */
@@ -1047,7 +1051,6 @@
 
             .gantt-card .role {
                 font-size: 0.5rem;
-                display: none; /* Hide role on mobile to save space */
             }
 
             .gantt-card .years {
@@ -1092,6 +1095,26 @@
 
             .gantt-civic .gantt-card-content {
                 text-align: right;
+            }
+
+            /* Left talks - align with employment (right side of left column) */
+            .gantt-education .gantt-card[data-cat="talks"] {
+                right: 0;
+                left: auto;
+            }
+
+            .gantt-education .gantt-card[data-cat="talks"] .gantt-card-content {
+                text-align: right;
+            }
+
+            /* Right talks - align left (near bars) */
+            .gantt-talks-right .gantt-card {
+                right: auto;
+                left: 0;
+            }
+
+            .gantt-talks-right .gantt-card-content {
+                text-align: left;
             }
 
             /* Smaller bars */
