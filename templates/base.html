@@ -964,23 +964,57 @@
         .bar-col.civic .bar { background: #2ecc71; }
         .bar-col.projects .bar { background: #f39c12; }
 
-        /* Mobile - stack everything vertically */
+        /* Mobile - simple vertical list by category */
         @media (max-width: 700px) {
             .gantt-timeline {
-                display: block;
+                display: flex;
+                flex-direction: column;
+                gap: 1.5rem;
                 height: auto;
-                padding: 0 1rem;
+                padding: 0;
             }
 
+            /* Hide center bars and connectors */
             .gantt-center,
             .gantt-connectors {
                 display: none;
             }
 
-            .gantt-education, .gantt-employment, .gantt-projects, .gantt-civic {
-                align-items: flex-start;
-                padding: 0;
+            /* Each column becomes a vertical section */
+            .gantt-education,
+            .gantt-employment,
+            .gantt-projects,
+            .gantt-civic,
+            .gantt-talks,
+            .gantt-talks-right {
+                position: static;
+                display: flex;
+                flex-direction: column;
                 gap: 0.75rem;
+                min-width: auto;
+                padding: 0;
+            }
+
+            /* Order sections logically */
+            .gantt-employment { order: 1; }
+            .gantt-education { order: 2; }
+            .gantt-projects { order: 3; }
+            .gantt-civic { order: 4; }
+            .gantt-talks-right { order: 5; }
+
+            /* Hide left talks column (merged into education) */
+            .gantt-education .gantt-card[data-cat="talks"] {
+                display: none;
+            }
+
+            /* Cards become static, flow naturally */
+            .gantt-card {
+                position: static !important;
+                display: flex;
+                align-items: flex-start;
+                padding: 0.5rem 0;
+                border-left: 3px solid #ddd;
+                padding-left: 0.75rem;
             }
 
             .gantt-card-content {
@@ -988,20 +1022,27 @@
                 max-width: none;
             }
 
-            /* Mobile: colored bar on left side */
-            .gantt-card::before {
-                content: '';
-                width: 4px;
-                min-height: 100%;
-                border-radius: 2px;
-                margin-right: 0.75rem;
-                flex-shrink: 0;
-            }
+            /* Category border colors */
+            .gantt-card[data-cat="employment"] { border-left-color: #4a90e2; }
+            .gantt-card[data-cat="education"] { border-left-color: #9b59b6; }
+            .gantt-card[data-cat="civic"] { border-left-color: #2ecc71; }
+            .gantt-card[data-cat="projects"] { border-left-color: #f39c12; }
+            .gantt-card[data-cat="talks"] { border-left-color: #e74c3c; }
 
-            .gantt-card[data-cat="employment"]::before { background: #4a90e2; }
-            .gantt-card[data-cat="education"]::before { background: #9b59b6; }
-            .gantt-card[data-cat="civic"]::before { background: #2ecc71; }
-            .gantt-card[data-cat="projects"]::before { background: #f39c12; }
+            /* Section headers for mobile */
+            .gantt-employment::before,
+            .gantt-education::before,
+            .gantt-projects::before,
+            .gantt-civic::before,
+            .gantt-talks-right::before {
+                content: attr(data-mobile-title);
+                font-size: 0.7rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: #888;
+                margin-bottom: 0.25rem;
+            }
         }
 
     </style>
