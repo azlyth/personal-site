@@ -576,219 +576,204 @@
         }
 
 
-        /* Timeline page styles - Single year column with horizontal lines */
-        .timeline-header {
+        /* Timeline page styles - River of time with duration */
+        .timeline-legend {
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid #e0e0e0;
-            margin-left: 50px;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
         }
 
-        .timeline-header span {
-            flex: 1;
+        .timeline-legend span {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
             font-size: 0.75rem;
-            font-weight: 600;
             color: #666;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            text-align: center;
-            padding: 0.25rem 0;
         }
 
-        .timeline-header span:nth-child(1) { color: #4a90e2; }
-        .timeline-header span:nth-child(2) { color: #2ecc71; }
-        .timeline-header span:nth-child(3) { color: #f39c12; }
-        .timeline-header span:nth-child(4) { color: #9b59b6; }
+        .timeline-legend span::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .timeline-legend .leg-employment::before { background: #4a90e2; }
+        .timeline-legend .leg-civic::before { background: #2ecc71; }
+        .timeline-legend .leg-projects::before { background: #f39c12; }
+        .timeline-legend .leg-education::before { background: #9b59b6; }
 
         .timeline {
+            position: relative;
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr 50px 1fr 1fr;
+            gap: 4px;
+        }
+
+        /* Content columns */
+        .tl-col {
+            position: relative;
+            min-height: 1500px;
+        }
+
+        /* Center spine with years */
+        .tl-spine {
+            position: relative;
             display: flex;
-            gap: 0.5rem;
-            position: relative;
+            flex-direction: column;
         }
 
-        /* Year column on the left */
-        .tl-years {
-            flex: 0 0 45px;
-            position: relative;
-        }
-
-        /* Vertical line through years column */
-        .tl-years::before {
+        .tl-spine::before {
             content: '';
             position: absolute;
-            right: 0;
+            left: 50%;
+            transform: translateX(-50%);
             top: 0;
             bottom: 0;
-            width: 2px;
-            background: #e0e0e0;
-            z-index: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, #ddd, #ccc);
         }
 
-        /* Year labels - positioned absolutely */
+        /* Year markers */
         .tl-year {
             position: absolute;
-            right: 8px;
+            left: 50%;
+            transform: translateX(-50%);
             background: #fff;
-            padding: 0.1rem 0.3rem;
-            font-size: 0.65rem;
-            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 700;
             color: #888;
-            z-index: 1;
-            line-height: 1;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            z-index: 5;
             white-space: nowrap;
         }
 
-
-        /* Column containers */
-        .tl-col {
-            flex: 1;
-            position: relative;
-            min-height: 90rem;
-        }
-
-        /* Timeline items - positioned absolutely */
+        /* Timeline items - absolutely positioned */
         .tl-item {
             position: absolute;
-            left: 0;
-            right: 0;
+            left: 2px;
+            right: 2px;
             padding: 0.4rem 0.5rem;
+            background: #fff;
             border-radius: 3px;
-            transition: background 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
             overflow: hidden;
+            font-size: 0.8rem;
         }
 
-        .tl-item:hover {
-            filter: brightness(0.97);
+        /* Left side columns (employment, education) - right-aligned text */
+        .tl-col-employment .tl-item,
+        .tl-col-education .tl-item {
+            text-align: right;
+            border-right: 3px solid;
+            border-radius: 3px 0 0 3px;
+        }
+
+        /* Right side columns (projects, civic) - left-aligned text */
+        .tl-col-projects .tl-item,
+        .tl-col-civic .tl-item {
+            text-align: left;
+            border-left: 3px solid;
+            border-radius: 0 3px 3px 0;
         }
 
         .tl-item h3 {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: 600;
             margin: 0;
-            line-height: 1.2;
+            line-height: 1.3;
+        }
+
+        .tl-item h3 a {
+            text-decoration: none;
         }
 
         .tl-item .role {
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-style: italic;
+            display: block;
         }
 
         .tl-item p {
             font-size: 0.7rem;
             line-height: 1.3;
-            margin: 0.15rem 0 0 0;
+            margin: 0.15rem 0 0;
+            color: #666;
         }
 
         .tl-item .sub {
             font-size: 0.65rem;
-            margin-top: 0.2rem;
-            opacity: 0.8;
+            margin-top: auto;
+            padding-top: 0.3rem;
+            opacity: 0.7;
         }
 
-        /* Color accents - Employment (blue, left border) */
+        .tl-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        /* Category colors - by column */
         .tl-col-employment .tl-item {
-            border-left: 3px solid #4a90e2;
-            color: #4a90e2;
-            background: rgba(74, 144, 226, 0.08);
+            border-color: #4a90e2;
+            background: rgba(74, 144, 226, 0.06);
         }
+        .tl-col-employment .tl-item h3 a, .tl-col-employment .tl-item h3 { color: #4a90e2; }
+        .tl-col-employment .tl-item .role { color: #4a90e2; }
 
-        .tl-col-employment .tl-item h3 a {
-            color: #4a90e2;
-        }
-
-        /* Concurrent/side-gig items - dashed border to indicate part-time/consulting */
-        .tl-col-employment .tl-item.concurrent {
-            border-left: 2px dashed #4a90e2;
-            background: rgba(74, 144, 226, 0.04);
-        }
-
-        /* Projects (orange) */
-        .tl-col-projects .tl-item {
-            border-left: 3px solid #f39c12;
-            color: #f39c12;
-            background: rgba(243, 156, 18, 0.08);
-        }
-
-        .tl-col-projects .tl-item h3 a {
-            color: #f39c12;
-        }
-
-        /* Civic (green) */
-        .tl-col-civic .tl-item {
-            border-left: 3px solid #2ecc71;
-            color: #2ecc71;
-            background: rgba(46, 204, 113, 0.08);
-        }
-
-        .tl-col-civic .tl-item h3 a {
-            color: #2ecc71;
-        }
-
-        /* Education (purple) */
         .tl-col-education .tl-item {
-            border-left: 3px solid #9b59b6;
-            color: #9b59b6;
-            background: rgba(155, 89, 182, 0.08);
+            border-color: #9b59b6;
+            background: rgba(155, 89, 182, 0.06);
         }
+        .tl-col-education .tl-item h3 a, .tl-col-education .tl-item h3 { color: #9b59b6; }
+        .tl-col-education .tl-item .role { color: #9b59b6; }
 
-        .tl-col-education .tl-item h3 a {
-            color: #9b59b6;
+        .tl-col-projects .tl-item {
+            border-color: #f39c12;
+            background: rgba(243, 156, 18, 0.06);
         }
+        .tl-col-projects .tl-item h3 a, .tl-col-projects .tl-item h3 { color: #f39c12; }
+        .tl-col-projects .tl-item .role { color: #f39c12; }
 
-        /* Mobile */
-        @media (max-width: 600px) {
-            .timeline-header {
-                display: none;
-            }
+        .tl-col-civic .tl-item {
+            border-color: #2ecc71;
+            background: rgba(46, 204, 113, 0.06);
+        }
+        .tl-col-civic .tl-item h3 a, .tl-col-civic .tl-item h3 { color: #2ecc71; }
+        .tl-col-civic .tl-item .role { color: #2ecc71; }
 
+        /* Mobile - stack everything */
+        @media (max-width: 700px) {
             .timeline {
-                flex-direction: column;
-                gap: 2rem;
+                display: block;
+                padding: 0 1rem;
             }
 
             .tl-col {
-                min-height: auto;
                 position: static;
+                min-height: auto;
             }
 
-            .tl-years {
+            .tl-spine {
                 display: none;
             }
 
             .tl-item {
-                position: static;
-                margin-bottom: 1rem;
-            }
-
-            .tl-col-employment .tl-item {
-                border-right: none;
-                border-left: 3px solid #4a90e2;
-                text-align: left;
-                align-items: flex-start;
-            }
-
-            /* Mobile section labels */
-            .tl-col::before {
-                display: block;
-                font-size: 0.7rem;
-                font-weight: 600;
-                color: #888;
-                text-transform: uppercase;
-                letter-spacing: 0.02em;
+                position: static !important;
                 margin-bottom: 0.5rem;
-                padding-bottom: 0.5rem;
-                border-bottom: 1px solid #eee;
+                text-align: left !important;
+                border-left: 3px solid !important;
+                border-right: none !important;
+                border-radius: 0 3px 3px 0 !important;
             }
-
-            .tl-col-employment::before { content: 'Employment'; }
-            .tl-col-projects::before { content: 'Projects'; }
-            .tl-col-civic::before { content: 'Civic'; }
-            .tl-col-education::before { content: 'Education'; }
         }
 
     </style>

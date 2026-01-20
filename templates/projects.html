@@ -5,99 +5,117 @@
 {% block content %}
 <h1>Timeline</h1>
 
-<div class="timeline-header">
-    <span>Employment</span>
-    <span>Civic</span>
-    <span>Projects</span>
-    <span>Education</span>
+<div class="timeline-legend">
+    <span class="leg-education">Education</span>
+    <span class="leg-employment">Employment</span>
+    <span class="leg-civic">Civic</span>
+    <span class="leg-projects">Projects</span>
 </div>
 
 <div class="timeline">
-    <!-- Years Column (single, on the left) -->
-    <div class="tl-years">
-        <span class="tl-year" style="top: 0%;">2025</span>
-        <span class="tl-year" style="top: 5.56%;">2024</span>
-        <span class="tl-year" style="top: 11.11%;">2023</span>
-        <span class="tl-year" style="top: 16.67%;">2022</span>
-        <span class="tl-year" style="top: 22.22%;">2021</span>
-        <span class="tl-year" style="top: 27.78%;">2020</span>
-        <span class="tl-year" style="top: 33.33%;">2019</span>
-        <span class="tl-year" style="top: 38.89%;">2018</span>
-        <span class="tl-year" style="top: 44.44%;">2017</span>
-        <span class="tl-year" style="top: 50%;">2016</span>
-        <span class="tl-year" style="top: 55.56%;">2015</span>
-        <span class="tl-year" style="top: 61.11%;">2014</span>
-        <span class="tl-year" style="top: 66.67%;">2013</span>
-        <span class="tl-year" style="top: 72.22%;">2012</span>
-        <span class="tl-year" style="top: 77.78%;">2011</span>
-        <span class="tl-year" style="top: 83.33%;">2010</span>
-        <span class="tl-year" style="top: 88.89%;">2009</span>
-        <span class="tl-year" style="top: 94.44%;">2008</span>
+    <!-- Column 1: Education (far left) -->
+    <div class="tl-col tl-col-education">
+        <div class="tl-item" style="top: 770px; height: 350px;">
+            <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
+            <span class="role">BA Computer Science</span>
+            <p>CUNY</p>
+            <div class="sub">Sept 2009–Jun 2014</div>
+        </div>
+
+        <div class="tl-item" style="top: 1130px; height: 270px;">
+            <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
+            <span class="role">CS Program</span>
+            <p>NYC specialized HS</p>
+            <div class="sub">2005–Jun 2009</div>
+        </div>
     </div>
 
-    <!-- Employment Column -->
+    <!-- Column 2: Employment (next to spine, left) -->
     <div class="tl-col tl-col-employment">
-        <!-- Book of the Month: Apr 2023-2025 -->
-        <div class="tl-item" style="top: 0%; height: 12%;">
+        <div class="tl-item" style="top: 0px; height: 160px;">
             <h3><a href="https://www.bookofthemonth.com" target="_blank">Book of the Month</a></h3>
             <span class="role">Senior DevOps Engineer</span>
             <p>Platform & SRE, 500M+ req/mo</p>
             <div class="sub">Apr 2023–present</div>
         </div>
-        <!-- Shipyard: 2018-Jan 2023 -->
-        <div class="tl-item" style="top: 14%; height: 30%;">
+
+        <div class="tl-item" style="top: 150px; height: 340px;">
             <h3><a href="https://shipyard.build" target="_blank">Shipyard</a></h3>
             <span class="role">Cofounder & CTO</span>
             <p>K8s ephemeral environments</p>
-            <div class="sub">2018–Jan 2023</div>
+            <div class="sub">May 2018–Jan 2023</div>
         </div>
-        <!-- Lucky Number 13: 2017-2019 (concurrent with early Shipyard) -->
-        <div class="tl-item concurrent" style="top: 33.5%; height: 16%;">
+
+        <div class="tl-item" style="top: 405px; height: 235px;">
             <h3>Lucky Number 13</h3>
             <span class="role">DevOps Consultant</span>
             <p>K8s, GCP, automation</p>
-            <div class="sub">2017–2019</div>
+            <div class="sub">Nov 2016–May 2019</div>
         </div>
-        <!-- Propellr: 2014-2016 -->
-        <div class="tl-item" style="top: 50%; height: 16%;">
+
+        <div class="tl-item" style="top: 640px; height: 130px;">
             <h3><a href="https://www.crunchbase.com/organization/propellr" target="_blank">Propellr</a></h3>
-            <span class="role">Lead Full Stack</span>
+            <span class="role">Head of Engineering</span>
             <p>Fintech, Python/Flask</p>
-            <div class="sub">2014–2016</div>
+            <div class="sub">Jul 2014–Oct 2016</div>
         </div>
-        <!-- Happy Dogs NYC: 2012-2013 -->
-        <div class="tl-item" style="top: 67%; height: 10%;">
+
+        <div class="tl-item" style="top: 790px; height: 120px;">
             <h3><a href="https://happydogsnyc.com" target="_blank">Happy Dogs NYC</a></h3>
             <span class="role">Software Engineer</span>
             <p>Django ops system</p>
-            <div class="sub">2012–2013</div>
+            <div class="sub">Oct 2012–Jun 2014</div>
         </div>
-        <!-- Hunter College (Job): 2010-2011 -->
-        <div class="tl-item" style="top: 78%; height: 10%;">
+
+        <div class="tl-item" style="top: 930px; height: 120px;">
             <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
             <span class="role">System Administrator</span>
             <p>Infra for 60k users</p>
-            <div class="sub">2010–2011</div>
+            <div class="sub">Mar 2010–Oct 2012</div>
         </div>
-        <!-- Morgan Stanley: Summer 2008 -->
-        <div class="tl-item" style="top: 94.5%; height: 5%;">
+
+        <div class="tl-item" style="top: 1210px; height: 60px;">
             <h3><a href="https://www.morganstanley.com" target="_blank">Morgan Stanley</a></h3>
             <span class="role">Intern</span>
-            <div class="sub">Summer 2008</div>
+            <div class="sub">Jun–Oct 2008</div>
         </div>
     </div>
 
-    <!-- Civic Column (now 2nd) -->
+    <!-- Column 3: Year spine -->
+    <div class="tl-spine">
+        <span class="tl-year" style="top: 0px;">2025</span>
+        <span class="tl-year" style="top: 70px;">2024</span>
+        <span class="tl-year" style="top: 140px;">2023</span>
+        <span class="tl-year" style="top: 210px;">2022</span>
+        <span class="tl-year" style="top: 280px;">2021</span>
+        <span class="tl-year" style="top: 350px;">2020</span>
+        <span class="tl-year" style="top: 420px;">2019</span>
+        <span class="tl-year" style="top: 490px;">2018</span>
+        <span class="tl-year" style="top: 560px;">2017</span>
+        <span class="tl-year" style="top: 630px;">2016</span>
+        <span class="tl-year" style="top: 700px;">2015</span>
+        <span class="tl-year" style="top: 770px;">2014</span>
+        <span class="tl-year" style="top: 840px;">2013</span>
+        <span class="tl-year" style="top: 910px;">2012</span>
+        <span class="tl-year" style="top: 980px;">2011</span>
+        <span class="tl-year" style="top: 1050px;">2010</span>
+        <span class="tl-year" style="top: 1120px;">2009</span>
+        <span class="tl-year" style="top: 1190px;">2008</span>
+        <span class="tl-year" style="top: 1260px;">2007</span>
+        <span class="tl-year" style="top: 1330px;">2006</span>
+        <span class="tl-year" style="top: 1400px;">2005</span>
+    </div>
+
+    <!-- Column 4: Civic (next to spine, right) -->
     <div class="tl-col tl-col-civic">
-        <!-- Astoria Tech: 2019-2025 -->
-        <div class="tl-item" style="top: 0%; height: 38%;">
+        <div class="tl-item" style="top: 0px; height: 420px;">
             <h3><a href="https://astoria.app" target="_blank">Astoria Tech</a></h3>
             <span class="role">Organizer</span>
             <p>Queens tech community</p>
             <div class="sub">2019–present</div>
         </div>
-        <!-- NYC Mesh: 2012-2015 -->
-        <div class="tl-item" style="top: 56%; height: 21%;">
+
+        <div class="tl-item" style="top: 700px; height: 210px;">
             <h3><a href="https://nycmesh.net" target="_blank">NYC Mesh</a></h3>
             <span class="role">Founder</span>
             <p>Community ISP, 1,200+ nodes</p>
@@ -105,65 +123,46 @@
         </div>
     </div>
 
-    <!-- Projects Column (now 3rd) -->
+    <!-- Column 5: Projects (far right) -->
     <div class="tl-col tl-col-projects">
-        <!-- Last One Alive: 2025 -->
-        <div class="tl-item" style="top: 0%; height: 5%;">
-            <h3><a href="https://github.com/azlyth/last-one-alive" target="_blank">Last One Alive</a></h3>
-            <p>Party game with 3D</p>
+        <div class="tl-item" style="top: 0px; height: 35px;">
+            <h3><a href="https://github.com/azlyth/last-one-alive" target="_blank">Don't Die</a></h3>
+            <p>Party game with 3D physics</p>
         </div>
-        <!-- Turtle: 2025 -->
-        <div class="tl-item" style="top: 6%; height: 5%;">
-            <h3><a href="https://github.com/moonbeam-nyc/turtle" target="_blank">Turtle</a></h3>
-            <p>Web terminal + runbooks</p>
-        </div>
-        <!-- Lowkey: 2024 -->
-        <div class="tl-item" style="top: 12%; height: 5%;">
+
+        <div class="tl-item" style="top: 40px; height: 35px;">
             <h3><a href="https://github.com/moonbeam-nyc/lowkey" target="_blank">Lowkey</a></h3>
             <p>Secrets sync CLI</p>
         </div>
-        <!-- Snorlax: 2024 -->
-        <div class="tl-item" style="top: 18%; height: 5%;">
+
+        <div class="tl-item" style="top: 80px; height: 35px;">
+            <h3><a href="https://github.com/moonbeam-nyc/turtle" target="_blank">Turtle</a></h3>
+            <p>Web terminal + runbooks</p>
+        </div>
+
+        <div class="tl-item" style="top: 120px; height: 35px;">
             <h3><a href="https://github.com/moonbeam-nyc/snorlax" target="_blank">Snorlax</a></h3>
             <p>K8s sleep/wake operator</p>
         </div>
-        <!-- Redub: 2017 -->
-        <div class="tl-item" style="top: 44%; height: 5%;">
+
+        <div class="tl-item" style="top: 560px; height: 35px;">
             <h3><a href="https://github.com/azlyth/redub" target="_blank">Redub</a></h3>
             <p>Video redubbing app</p>
         </div>
-        <!-- Hooks: 2016 -->
-        <div class="tl-item" style="top: 50%; height: 5%;">
+
+        <div class="tl-item" style="top: 630px; height: 35px;">
             <h3><a href="https://github.com/azlyth/hooks" target="_blank">Hooks</a></h3>
             <p>Mobile SSH execution</p>
         </div>
-        <!-- React Native SSH: 2016 -->
-        <div class="tl-item" style="top: 56%; height: 5%;">
-            <h3><a href="https://github.com/nicklockwood/react-native-ssh" target="_blank">React Native SSH</a></h3>
-            <p>SSH library</p>
-        </div>
-        <!-- The Grid: 2011 -->
-        <div class="tl-item" style="top: 78%; height: 5%;">
-            <h3><a href="https://github.com/azlyth/thegrid" target="_blank">The Grid</a></h3>
-            <p>Collaborative canvas</p>
-        </div>
-    </div>
 
-    <!-- Education Column -->
-    <div class="tl-col tl-col-education">
-        <!-- Hunter College (Education): Sept 2009-2014 -->
-        <div class="tl-item" style="top: 61%; height: 27%;">
-            <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
-            <span class="role">BA Computer Science</span>
-            <p>CUNY</p>
-            <div class="sub">Sept 2009–2014</div>
+        <div class="tl-item" style="top: 670px; height: 35px;">
+            <h3><a href="https://github.com/nicklockwood/react-native-ssh" target="_blank">React Native SSH</a></h3>
+            <p>SSH library contribution</p>
         </div>
-        <!-- Stuyvesant HS: until June 2009 -->
-        <div class="tl-item" style="top: 89%; height: 11%;">
-            <h3><a href="https://stuy.enschool.org" target="_blank">Stuyvesant HS</a></h3>
-            <span class="role">CS Program</span>
-            <p>NYC specialized HS</p>
-            <div class="sub">–June 2009</div>
+
+        <div class="tl-item" style="top: 980px; height: 35px;">
+            <h3><a href="https://github.com/azlyth/thegrid" target="_blank">The Grid</a></h3>
+            <p>2D physics chat space</p>
         </div>
     </div>
 </div>
