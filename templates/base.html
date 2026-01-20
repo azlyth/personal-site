@@ -747,6 +747,28 @@
         .gantt-card[data-cat="talks"] h3 a { color: #e74c3c; }
         .gantt-card[data-cat="talks"] .role { color: #e74c3c; }
 
+        /* Hover highlighting transitions */
+        .gantt-card, .bar, .gantt-connectors path, .gantt-connectors circle {
+            transition: opacity 0.3s ease;
+        }
+
+        .gantt-timeline.has-hover .gantt-card,
+        .gantt-timeline.has-hover .bar,
+        .gantt-timeline.has-hover .gantt-connectors path,
+        .gantt-timeline.has-hover .gantt-connectors circle {
+            opacity: 0.25;
+        }
+
+        .gantt-timeline.has-hover .gantt-card.highlight,
+        .gantt-timeline.has-hover .bar.highlight {
+            opacity: 1;
+        }
+
+        .gantt-timeline.has-hover .gantt-connectors path.highlight,
+        .gantt-timeline.has-hover .gantt-connectors circle.highlight {
+            opacity: 0.8;
+        }
+
         /* YouTube icon for talks */
         .yt-icon::before {
             font-family: "Font Awesome 6 Brands";

@@ -372,6 +372,7 @@ function drawConnectors() {
         path.setAttribute('stroke', colors[cat]);
         path.setAttribute('stroke-width', '1.5');
         path.setAttribute('fill', 'none');
+        path.setAttribute('data-from', id);
 
         // Talks get dashed lines and lower opacity
         if (cat === 'talks') {
@@ -387,12 +388,14 @@ function drawConnectors() {
         cardDot.setAttribute('cy', cardY);
         cardDot.setAttribute('r', cat === 'talks' ? '2.5' : '3');
         cardDot.setAttribute('fill', colors[cat]);
+        cardDot.setAttribute('data-from', id);
 
         const targetDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         targetDot.setAttribute('cx', targetX);
         targetDot.setAttribute('cy', targetY);
         targetDot.setAttribute('r', cat === 'talks' ? '2.5' : '3');
         targetDot.setAttribute('fill', colors[cat]);
+        targetDot.setAttribute('data-from', id);
 
         svg.appendChild(path);
         svg.appendChild(cardDot);
@@ -405,6 +408,98 @@ window.addEventListener('load', drawConnectors);
 window.addEventListener('resize', drawConnectors);
 // Also run after a short delay to ensure layout is complete
 setTimeout(drawConnectors, 100);
+
+// Hover highlighting
+function setupHoverHighlighting() {
+    const timeline = document.querySelector('.gantt-timeline');
+    const cards = document.querySelectorAll('.gantt-card[data-id]');
+    const bars = document.querySelectorAll('.bar[data-id]');
+
+    function clearHighlights() {
+        timeline.classList.remove('has-hover');
+        document.querySelectorAll('.highlight').forEach(el => el.classList.remove('highlight'));
+    }
+
+    function highlightChain(card) {
+        timeline.classList.add('has-hover');
+        const id = card.dataset.id;
+        const connectsCard = card.dataset.connectsCard;
+
+        // Highlight the hovered card
+        card.classList.add('highlight');
+
+        // Highlight its bar (if it has one)
+        const bar = document.querySelector(`.bar[data-id="${id}"]`);
+        if (bar) bar.classList.add('highlight');
+
+        // Highlight connector lines for this card
+        document.querySelectorAll(`.gantt-connectors path[data-from="${id}"], .gantt-connectors circle[data-from="${id}"]`).forEach(el => {
+            el.classList.add('highlight');
+        });
+
+        // If it's a talk that connects to another card, highlight that chain too
+        if (connectsCard) {
+            const targetCard = document.querySelector(`.gantt-card[data-id="${connectsCard}"]`);
+            if (targetCard) {
+                targetCard.classList.add('highlight');
+                // And highlight the target's bar
+                const targetBar = document.querySelector(`.bar[data-id="${connectsCard}"]`);
+                if (targetBar) targetBar.classList.add('highlight');
+                // And the target's connector lines
+                document.querySelectorAll(`.gantt-connectors path[data-from="${connectsCard}"], .gantt-connectors circle[data-from="${connectsCard}"]`).forEach(el => {
+                    el.classList.add('highlight');
+                });
+            }
+        }
+
+        // Also highlight any talks that connect to this card (reverse direction)
+        document.querySelectorAll(`.gantt-card[data-connects-card="${id}"]`).forEach(talk => {
+            talk.classList.add('highlight');
+            const talkId = talk.dataset.id;
+            document.querySelectorAll(`.gantt-connectors path[data-from="${talkId}"], .gantt-connectors circle[data-from="${talkId}"]`).forEach(el => {
+                el.classList.add('highlight');
+            });
+        });
+    }
+
+    function highlightBar(bar) {
+        timeline.classList.add('has-hover');
+        const id = bar.dataset.id;
+
+        // Highlight the bar
+        bar.classList.add('highlight');
+
+        // Highlight its card
+        const card = document.querySelector(`.gantt-card[data-id="${id}"]`);
+        if (card) card.classList.add('highlight');
+
+        // Highlight connector lines
+        document.querySelectorAll(`.gantt-connectors path[data-from="${id}"], .gantt-connectors circle[data-from="${id}"]`).forEach(el => {
+            el.classList.add('highlight');
+        });
+
+        // Also highlight any talks that connect to this card
+        document.querySelectorAll(`.gantt-card[data-connects-card="${id}"]`).forEach(talk => {
+            talk.classList.add('highlight');
+            const talkId = talk.dataset.id;
+            document.querySelectorAll(`.gantt-connectors path[data-from="${talkId}"], .gantt-connectors circle[data-from="${talkId}"]`).forEach(el => {
+                el.classList.add('highlight');
+            });
+        });
+    }
+
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', () => highlightChain(card));
+        card.addEventListener('mouseleave', clearHighlights);
+    });
+
+    bars.forEach(bar => {
+        bar.addEventListener('mouseenter', () => highlightBar(bar));
+        bar.addEventListener('mouseleave', clearHighlights);
+    });
+}
+
+window.addEventListener('load', setupHoverHighlighting);
 </script>
 
 {% endblock content %}
