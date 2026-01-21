@@ -3,14 +3,34 @@
 {% block title %}{{ section.title }} - Peter Valdez{% endblock title %}
 
 {% block content %}
-<ul class="post-list">
-{% for page in section.pages %}
-    <li>
-        <div class="post-title">
-            <a href="{{ page.permalink | safe }}">{{ page.title }}</a>
+{% if section.pages %}
+    {% set latest = section.pages | first %}
+
+    <!-- Featured latest post -->
+    <article class="featured-post">
+        <h1 class="featured-title"><a href="{{ latest.permalink | safe }}">{{ latest.title }}</a></h1>
+        <div class="post-meta">{{ latest.date | date(format="%B %d, %Y") }}</div>
+        <div class="featured-content">
+            {{ latest.content | safe }}
         </div>
-        <div class="post-date">{{ page.date | date(format="%B %d, %Y") }}</div>
-    </li>
-{% endfor %}
-</ul>
+    </article>
+
+    {% if section.pages | length > 1 %}
+    <!-- Older posts -->
+    <div class="older-posts-divider"></div>
+    <h2 class="older-posts-heading">Older Posts</h2>
+    <ul class="post-list">
+    {% for page in section.pages %}
+        {% if not loop.first %}
+        <li>
+            <div class="post-title">
+                <a href="{{ page.permalink | safe }}">{{ page.title }}</a>
+            </div>
+            <div class="post-date">{{ page.date | date(format="%B %d, %Y") }}</div>
+        </li>
+        {% endif %}
+    {% endfor %}
+    </ul>
+    {% endif %}
+{% endif %}
 {% endblock content %} 
