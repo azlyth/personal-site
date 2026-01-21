@@ -613,7 +613,7 @@
             grid-template-columns: auto auto 200px auto auto auto;
             gap: 0;
             max-width: 1200px;
-            margin: 0 auto;
+            margin: 2rem auto 0;
             height: 550px;
             position: relative;
         }
@@ -895,10 +895,46 @@
             margin-right: 0.3rem;
         }
 
-        /* Hide info panel on mobile */
+        /* Info panel on mobile - bottom sheet style */
         @media (max-width: 700px) {
             .info-panel {
-                display: none;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                top: auto;
+                width: 100%;
+                max-height: 60vh;
+                border-radius: 16px 16px 0 0;
+                transform: translateY(100%);
+                transition: transform 300ms ease-out, opacity 200ms ease-out;
+            }
+
+            .info-panel.visible {
+                transform: translateY(0);
+            }
+
+            .info-panel.from-left,
+            .info-panel.from-right,
+            .info-panel.from-left.visible,
+            .info-panel.from-right.visible {
+                transform: translateY(100%);
+            }
+
+            .info-panel.visible.from-left,
+            .info-panel.visible.from-right {
+                transform: translateY(0);
+            }
+
+            /* Add a drag handle indicator */
+            .info-panel::before {
+                content: '';
+                display: block;
+                width: 40px;
+                height: 4px;
+                background: #ccc;
+                border-radius: 2px;
+                margin: 0 auto 0.75rem auto;
             }
         }
 
@@ -1179,19 +1215,63 @@
                 text-align: left;
             }
 
-            /* HOPE X - offset below NYC Mesh on mobile */
-            .gantt-talks-right .gantt-card[data-id="hope-2014"] {
-                top: 65% !important;
+            /* Mobile card positions - align with corresponding bars */
+
+            /* Employment cards - aligned with blue bars */
+            .gantt-employment .gantt-card[data-id="botm"] {
+                top: 0% !important;
+            }
+            .gantt-employment .gantt-card[data-id="shipyard"] {
+                top: 11% !important;
+            }
+            .gantt-employment .gantt-card[data-id="lucky13"] {
+                top: 25% !important;
+            }
+            .gantt-employment .gantt-card[data-id="propellr"] {
+                top: 46% !important;
+            }
+            .gantt-employment .gantt-card[data-id="happydogs"] {
+                top: 56% !important;
+            }
+            .gantt-employment .gantt-card[data-id="hunter-sa"] {
+                top: 66% !important;
+            }
+            .gantt-employment .gantt-card[data-id="morgan"] {
+                top: 85% !important;
             }
 
-            /* Astoria Tech - offset below Turtle on mobile */
+            /* Education cards - aligned with purple bars */
+            .gantt-education .gantt-card[data-id="hunter-ba"] {
+                top: 55% !important;
+            }
+            .gantt-education .gantt-card[data-id="stuy"] {
+                top: 81% !important;
+            }
+
+            /* Talks on left side - position near related items */
+            .gantt-education .gantt-card[data-id="devops-seattle"] {
+                top: 15% !important;
+            }
+            .gantt-education .gantt-card[data-id="devops-raleigh"] {
+                top: 21% !important;
+            }
+
+            /* Civic cards - aligned with green bars */
             .gantt-civic .gantt-card[data-id="astoria"] {
-                top: 20% !important;
+                top: 0% !important;
+            }
+            .gantt-civic .gantt-card[data-id="nycmesh"] {
+                top: 51% !important;
             }
 
-            /* Align project cards with bar centers on mobile */
+            /* HOPE X - right under NYC Mesh on mobile (they're connected) */
+            .gantt-talks-right .gantt-card[data-id="hope-2014"] {
+                top: 57% !important;
+            }
+
+            /* Project cards - aligned with orange bars */
             .gantt-projects .gantt-card[data-id="dontdie"] {
-                top: 1% !important;
+                top: 0% !important;
             }
             .gantt-projects .gantt-card[data-id="lowkey"] {
                 top: 5% !important;
@@ -1201,6 +1281,18 @@
             }
             .gantt-projects .gantt-card[data-id="snorlax"] {
                 top: 15% !important;
+            }
+            .gantt-projects .gantt-card[data-id="redub"] {
+                top: 40% !important;
+            }
+            .gantt-projects .gantt-card[data-id="hooks"] {
+                top: 45% !important;
+            }
+            .gantt-projects .gantt-card[data-id="rnssh"] {
+                top: 50% !important;
+            }
+            .gantt-projects .gantt-card[data-id="thegrid"] {
+                top: 70% !important;
             }
 
             /* Smaller bars */

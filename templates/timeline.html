@@ -5,14 +5,6 @@
 {% block content %}
 <h1>Timeline</h1>
 
-<div class="timeline-legend">
-    <span class="leg-talks">Talks</span>
-    <span class="leg-education">Education</span>
-    <span class="leg-employment">Employment</span>
-    <span class="leg-civic">Civic</span>
-    <span class="leg-projects">Projects</span>
-</div>
-
 <div class="gantt-timeline">
     <!-- SVG overlay for connector lines - drawn by JavaScript -->
     <svg class="gantt-connectors"></svg>
@@ -114,7 +106,7 @@
         <!-- Black spine line with year markers -->
         <div class="gantt-spine">
             <div class="spine-line"></div>
-            <span class="year-marker" style="top: 0%">2025</span>
+            <span class="year-marker" style="top: 0%">2026</span>
             <span class="year-marker" style="top: 25%">2020</span>
             <span class="year-marker" style="top: 50%">2015</span>
             <span class="year-marker" style="top: 75%">2010</span>
@@ -249,7 +241,7 @@
 
     <!-- Column 5: Civic cards -->
     <div class="gantt-civic" data-mobile-title="Civic">
-        <div class="gantt-card" data-cat="civic" data-id="astoria" style="top: 14%">
+        <div class="gantt-card" data-cat="civic" data-id="astoria" data-bar-connect="bottom" style="top: 24%">
             <div class="gantt-card-content">
                 <h3><a href="https://astoria.app" target="_blank">Astoria Tech</a></h3>
                 <span class="role">Organizer</span>
@@ -257,7 +249,7 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="civic" data-id="nycmesh" style="top: 58%">
+        <div class="gantt-card" data-cat="civic" data-id="nycmesh" style="top: 56%">
             <div class="gantt-card-content">
                 <h3><a href="https://nycmesh.net" target="_blank">NYC Mesh</a></h3>
                 <span class="role">Founder</span>
@@ -340,38 +332,47 @@ function drawConnectors() {
         const lineOffsetY = parseInt(card.dataset.lineOffsetY) || 0;
 
         if (connectsCard) {
-            // Talk connecting to another card
-            // Stagger connection points for multiple talks connecting to same card
-            const allTalksToSameCard = document.querySelectorAll(`.gantt-card[data-connects-card="${connectsCard}"]`);
-            let talkIndex = 0;
-            allTalksToSameCard.forEach((t, i) => { if (t === card) talkIndex = i; });
-            const staggerOffset = talkIndex * 15; // 15px vertical stagger
-
+            // Talk connecting to another card - diagonal line to center of target card
             if (isLeft) {
                 // Left talk connecting to a card on its right
                 cardX = cardRect.right - timelineRect.left + dotOffset;
                 cardY = cardRect.top - timelineRect.top + 10 + lineOffsetY;
                 targetX = targetRect.left - timelineRect.left - dotOffset;
-                targetY = targetRect.top - timelineRect.top + 10 + staggerOffset;
+                // Connect to vertical center of target card
+                targetY = targetRect.top - timelineRect.top + targetRect.height / 2;
             } else {
                 // Right talk connecting to a card on its left
                 cardX = cardRect.left - timelineRect.left - dotOffset;
                 cardY = cardRect.top - timelineRect.top + 10 + lineOffsetY;
                 targetX = targetRect.right - timelineRect.left + dotOffset;
-                targetY = targetRect.top - timelineRect.top + 10 + staggerOffset;
+                // Connect to vertical center of target card
+                targetY = targetRect.top - timelineRect.top + targetRect.height / 2;
             }
         } else if (isLeft) {
-            // Left card: connect from right edge of card (with offset) to center of bar
+            // Left card: connect from right edge of card to center of bar
             cardX = cardRect.right - timelineRect.left + dotOffset;
             cardY = cardRect.top - timelineRect.top + 10; // Offset to title area
             targetX = targetRect.left - timelineRect.left + targetRect.width / 2;
-            targetY = targetRect.top - timelineRect.top + targetRect.height / 2; // CENTER of bar
+            // Connect to bar - check for custom connection point
+            const barConnect = card.dataset.barConnect;
+            if (barConnect === 'bottom') {
+                targetY = targetRect.top - timelineRect.top + targetRect.height - 3;
+            } else {
+                targetY = targetRect.top - timelineRect.top + targetRect.height / 2;
+            }
         } else {
-            // Right card: connect from left edge of card (with offset) to center of bar
+            // Right card: connect from left edge of card to center of bar
             cardX = cardRect.left - timelineRect.left - dotOffset;
             cardY = cardRect.top - timelineRect.top + 10;
             targetX = targetRect.left - timelineRect.left + targetRect.width / 2;
-            targetY = targetRect.top - timelineRect.top + targetRect.height / 2; // CENTER of bar
+            // Connect to bar - check for custom connection point
+            const barConnect = card.dataset.barConnect;
+            if (barConnect === 'bottom') {
+                // Horizontal line at card's Y level, connecting to 80% down the bar
+                targetY = cardY;
+            } else {
+                targetY = targetRect.top - timelineRect.top + targetRect.height / 2;
+            }
         }
 
         // Create the path
@@ -670,19 +671,28 @@ function setupInfoPanel() {
         panel.setAttribute('data-cat', cat);
         panel.setAttribute('data-side', isLeft ? 'left' : 'right');
 
-        // Position panel
+        // Position panel adjacent to the element
         const panelWidth = 320;
+        const gap = 10;
         const margin = 20;
         let left, top;
 
         if (isLeft) {
-            // Show panel on far left of viewport
-            left = margin;
+            // Show panel to the left of the element
+            left = rect.left - panelWidth - gap;
+            // If panel would go off-screen left, show it on the right instead
+            if (left < margin) {
+                left = rect.right + gap;
+            }
             panel.classList.remove('from-right');
             panel.classList.add('from-left');
         } else {
-            // Show panel on far right of viewport
-            left = window.innerWidth - panelWidth - margin;
+            // Show panel to the right of the element
+            left = rect.right + gap;
+            // If panel would go off-screen right, show it on the left instead
+            if (left + panelWidth > window.innerWidth - margin) {
+                left = rect.left - panelWidth - gap;
+            }
             panel.classList.remove('from-left');
             panel.classList.add('from-right');
         }
