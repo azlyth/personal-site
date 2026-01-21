@@ -592,20 +592,38 @@
                 display: block;
                 border-radius: 14px;
             }
-            
+
             nav {
                 flex-direction: column;
                 align-items: center;
-                gap: 1rem;
+                gap: 0.75rem;
+                margin-bottom: 1.5rem;
             }
-            
+
             nav .site-title {
                 order: -1;
                 min-width: auto;
+                font-size: 0.9rem;
             }
-            
+
+            nav .site-title .marquee-line {
+                display: none;
+            }
+
+            nav .site-title .marquee-container {
+                width: auto;
+            }
+
             nav .nav-links {
-                text-align: center;
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 0.5rem 1.5rem;
+            }
+
+            nav .nav-links a {
+                margin-right: 0;
+                font-size: 0.95rem;
             }
         }
 
@@ -1159,6 +1177,7 @@
                 height: 1100px;
                 position: relative;
                 padding: 0 0.25rem;
+                margin-top: 1rem;
             }
 
             /* Hide connectors on mobile - too complex */
@@ -1358,16 +1377,16 @@
 
             /* Project cards - aligned with orange bars */
             .gantt-projects .gantt-card[data-id="dontdie"] {
-                top: 0% !important;
-            }
-            .gantt-projects .gantt-card[data-id="lowkey"] {
-                top: 5% !important;
-            }
-            .gantt-projects .gantt-card[data-id="turtle"] {
                 top: 10% !important;
             }
+            .gantt-projects .gantt-card[data-id="lowkey"] {
+                top: 18% !important;
+            }
+            .gantt-projects .gantt-card[data-id="turtle"] {
+                top: 26% !important;
+            }
             .gantt-projects .gantt-card[data-id="snorlax"] {
-                top: 15% !important;
+                top: 34% !important;
             }
             .gantt-projects .gantt-card[data-id="redub"] {
                 top: 40% !important;
