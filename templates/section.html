@@ -2,35 +2,87 @@
 
 {% block title %}{{ section.title }} - Peter Valdez{% endblock title %}
 
+{% block container_class %} blog-container{% endblock container_class %}
+
 {% block content %}
 {% if section.pages %}
-    {% set latest = section.pages | first %}
+<div class="blog-layout">
+    <!-- Left sidebar: post list -->
+    <aside class="blog-sidebar">
+        <ul class="blog-post-list">
+        {% for page in section.pages %}
+            <li class="blog-post-item{% if loop.first %} active{% endif %}" data-post-id="{{ loop.index }}">
+                <div class="blog-post-item-title">{{ page.title }}</div>
+                <div class="blog-post-item-date">{{ page.date | date(format="%B %d, %Y") }}</div>
+            </li>
+        {% endfor %}
+        </ul>
+    </aside>
 
-    <!-- Featured latest post -->
-    <article class="featured-post">
-        <h1 class="featured-title"><a href="{{ latest.permalink | safe }}">{{ latest.title }}</a></h1>
-        <div class="post-meta">{{ latest.date | date(format="%B %d, %Y") }}</div>
-        <div class="featured-content">
-            {{ latest.content | safe }}
-        </div>
-    </article>
-
-    {% if section.pages | length > 1 %}
-    <!-- Older posts -->
-    <div class="older-posts-divider"></div>
-    <h2 class="older-posts-heading">Older Posts</h2>
-    <ul class="post-list">
-    {% for page in section.pages %}
-        {% if not loop.first %}
-        <li>
-            <div class="post-title">
-                <a href="{{ page.permalink | safe }}">{{ page.title }}</a>
+    <!-- Right content: full post -->
+    <main class="blog-content">
+        {% for page in section.pages %}
+        <article class="blog-content-post{% if loop.first %} active{% endif %}" data-post-id="{{ loop.index }}">
+            <h1><a href="{{ page.permalink | safe }}">{{ page.title }}</a></h1>
+            <div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>
+            <div class="blog-post-body">
+                {{ page.content | safe }}
             </div>
-            <div class="post-date">{{ page.date | date(format="%B %d, %Y") }}</div>
-        </li>
-        {% endif %}
-    {% endfor %}
-    </ul>
-    {% endif %}
+        </article>
+        {% endfor %}
+    </main>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const postItems = document.querySelectorAll('.blog-post-item');
+    const postContents = document.querySelectorAll('.blog-content-post');
+
+    // Handle URL hash on load
+    function showPostFromHash() {
+        const hash = window.location.hash;
+        if (hash && hash.startsWith('#post-')) {
+            const postId = hash.replace('#post-', '');
+            selectPost(postId);
+        }
+    }
+
+    function selectPost(postId) {
+        // Update sidebar active state
+        postItems.forEach(item => {
+            if (item.dataset.postId === postId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        // Update content visibility
+        postContents.forEach(post => {
+            if (post.dataset.postId === postId) {
+                post.classList.add('active');
+            } else {
+                post.classList.remove('active');
+            }
+        });
+    }
+
+    // Click handlers for post items
+    postItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const postId = this.dataset.postId;
+            selectPost(postId);
+            // Update URL hash without scrolling
+            history.replaceState(null, null, '#post-' + postId);
+        });
+    });
+
+    // Handle hash on load
+    showPostFromHash();
+
+    // Handle hash changes
+    window.addEventListener('hashchange', showPostFromHash);
+});
+</script>
 {% endif %}
-{% endblock content %} 
+{% endblock content %}
