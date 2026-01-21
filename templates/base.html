@@ -407,174 +407,32 @@
             }
         }
 
-        /* Wavy wispy cloud effect */
+        /* Pixel cloud text effect */
         .cloud-text {
             display: inline-block;
-            animation: cloud-float 4s ease-in-out infinite;
-            text-shadow: 
-                0 0 3px rgba(135, 206, 235, 0.6),
-                0 0 8px rgba(135, 206, 235, 0.4),
-                0 0 12px rgba(135, 206, 235, 0.2);
-            color: #4a90e2;
-            letter-spacing: 0.1em;
-            transform-origin: center;
-        }
-
-        @keyframes cloud-float {
-            0%, 100% {
-                transform: translateY(0px) rotate(0deg) scale(1);
-                text-shadow: 
-                    0 0 3px rgba(135, 206, 235, 0.6),
-                    0 0 8px rgba(135, 206, 235, 0.4),
-                    0 0 12px rgba(135, 206, 235, 0.2);
-            }
-            25% {
-                transform: translateY(-2px) rotate(0.5deg) scale(1.02);
-                text-shadow: 
-                    0 0 5px rgba(135, 206, 235, 0.7),
-                    0 0 10px rgba(135, 206, 235, 0.5),
-                    0 0 15px rgba(135, 206, 235, 0.3);
-            }
-            50% {
-                transform: translateY(-3px) rotate(-0.5deg) scale(1.01);
-                text-shadow: 
-                    0 0 4px rgba(135, 206, 235, 0.8),
-                    0 0 12px rgba(135, 206, 235, 0.6),
-                    0 0 18px rgba(135, 206, 235, 0.4);
-            }
-            75% {
-                transform: translateY(-1px) rotate(0.3deg) scale(1.03);
-                text-shadow: 
-                    0 0 6px rgba(135, 206, 235, 0.6),
-                    0 0 9px rgba(135, 206, 235, 0.4),
-                    0 0 14px rgba(135, 206, 235, 0.3);
-            }
+            color: #7ec8e3;
+            cursor: pointer;
+            position: relative;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-shadow:
+                1px 1px 0 #5ba3c0,
+                2px 2px 0 #4a8fa8;
+            transition: all 0.2s ease;
+            image-rendering: pixelated;
         }
 
         .cloud-text:hover {
-            animation-duration: 2s;
-            text-shadow: 
-                0 0 8px rgba(135, 206, 235, 0.8),
-                0 0 15px rgba(135, 206, 235, 0.6),
-                0 0 25px rgba(135, 206, 235, 0.4);
-            cursor: pointer;
+            color: #a8e6ff;
+            text-shadow:
+                1px 1px 0 #7ec8e3,
+                2px 2px 0 #5ba3c0,
+                0 0 20px rgba(126, 200, 227, 0.5);
+            transform: translateY(-1px);
         }
 
-        /* Flying cloud animation styles - moved below */
-
-        .cloud-drift-right {
-            animation: drift-right 4s ease-out forwards;
-        }
-
-        .cloud-drift-left {
-            animation: drift-left 4s ease-out forwards;
-        }
-
-        .cloud-drift-up {
-            animation: drift-up 3.5s ease-out forwards;
-        }
-
-        .cloud-drift-down {
-            animation: drift-down 4.5s ease-out forwards;
-        }
-
-                @keyframes drift-right {
-            0% {
-                transform: translateX(-200px) translateY(0) scale(1);
-                opacity: 0;
-            }
-            5% {
-                opacity: 1;
-                transform: translateX(-150px) translateY(-20px) scale(1);
-            }
-            15% {
-                transform: translateX(5vw) translateY(15px) scale(1);
-            }
-            25% {
-                transform: translateX(20vw) translateY(-25px) scale(1);
-            }
-            35% {
-                transform: translateX(35vw) translateY(20px) scale(1);
-            }
-            45% {
-                transform: translateX(45vw) translateY(-15px) scale(1);
-            }
-            55% {
-                transform: translateX(55vw) translateY(25px) scale(1);
-            }
-            65% {
-                transform: translateX(65vw) translateY(-20px) scale(1);
-            }
-            75% {
-                transform: translateX(75vw) translateY(15px) scale(1);
-            }
-            85% {
-                transform: translateX(85vw) translateY(-10px) scale(1);
-            }
-            95% {
-                opacity: 1;
-                transform: translateX(95vw) translateY(10px) scale(1);
-            }
-            100% {
-                transform: translateX(calc(100vw + 200px)) translateY(5px) scale(1);
-                opacity: 0;
-            }
-        }
-
-        .flying-cloud {
-            position: fixed;
-            font-size: 2rem;
-            color: rgba(135, 206, 235, 0.8);
-            z-index: 1000;
-            pointer-events: none;
-            text-shadow: 
-                0 0 5px rgba(135, 206, 235, 0.6),
-                0 0 10px rgba(135, 206, 235, 0.4);
-        }
-
-        @keyframes drift-left {
-            0% {
-                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateX(-100vw) translateY(-30px) scale(1.1) rotate(-360deg);
-                opacity: 0;
-            }
-        }
-
-        @keyframes drift-up {
-            0% {
-                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateX(30px) translateY(-100vh) scale(1.3) rotate(180deg);
-                opacity: 0;
-            }
-        }
-
-        @keyframes drift-down {
-            0% {
-                transform: translateX(0) translateY(0) scale(0.5) rotate(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateX(-50px) translateY(100vh) scale(0.8) rotate(-180deg);
-                opacity: 0;
-            }
-        }
-
-        .cloud-cover {
+        /* Canvas overlay for voxel cloud animation */
+        .cloud-canvas {
             position: fixed;
             top: 0;
             left: 0;
@@ -582,7 +440,12 @@
             height: 100%;
             z-index: 999;
             pointer-events: none;
-            overflow: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .cloud-canvas.active {
+            opacity: 1;
         }
 
 
@@ -1389,69 +1252,348 @@
     </div>
     
     <script>
-        // Cloud animation functionality
-        function createCloudCover() {
-            // Remove any existing cloud cover
-            const existingCover = document.querySelector('.cloud-cover');
-            if (existingCover) {
-                existingCover.remove();
+        // 3D Voxel Cloud Animation
+        class VoxelCloudSystem {
+            constructor() {
+                this.canvas = null;
+                this.ctx = null;
+                this.clouds = [];
+                this.wisps = [];
+                this.animationId = null;
+                this.isActive = false;
+                this.startTime = 0;
+                this.duration = 8000;
+                this.voxelSize = 40;
+                this.time = 0;
             }
-            
-            // Create cloud cover container
-            const cloudCover = document.createElement('div');
-            cloudCover.className = 'cloud-cover';
-            document.body.appendChild(cloudCover);
-            
-            // Just pure white clouds
-            const cloudTypes = ['☁️'];
-            
-            // Generate LOTS of clouds
-            const numClouds = 80 + Math.floor(Math.random() * 40); // 80-120 clouds
-            
-            for (let i = 0; i < numClouds; i++) {
-                setTimeout(() => {
-                    const cloud = document.createElement('div');
-                    cloud.className = 'flying-cloud';
-                    
-                    // Random cloud type
-                    cloud.textContent = cloudTypes[Math.floor(Math.random() * cloudTypes.length)];
-                    
-                    // Always start from left edge, random Y position across full height
-                    const startX = -200; // Start well off the left edge
-                    const startY = Math.random() * window.innerHeight; // Full height distribution
-                    
-                    cloud.style.left = startX + 'px';
-                    cloud.style.top = startY + 'px';
-                    
-                    // Always drift right
-                    cloud.classList.add('cloud-drift-right');
-                    
-                    // Slightly bigger, cozy cloud size (~100-180px range)
-                    const baseFontSize = 3.5 + Math.random() * 2; // 3.5 to 5.5rem
-                    cloud.style.fontSize = baseFontSize + 'rem'; // ~100px to 180px
-                    
-                    // Much faster animation delay and duration for variety
-                    cloud.style.animationDelay = Math.random() * 0.2 + 's';
-                    cloud.style.animationDuration = (6 + Math.random() * 3) + 's';
-                    
-                    cloudCover.appendChild(cloud);
-                    
-                    // Remove cloud after animation (longer timeout for longer animation)
-                    setTimeout(() => {
-                        if (cloud.parentNode) {
-                            cloud.remove();
+
+            init() {
+                const existing = document.querySelector('.cloud-canvas');
+                if (existing) existing.remove();
+
+                this.canvas = document.createElement('canvas');
+                this.canvas.className = 'cloud-canvas';
+                document.body.appendChild(this.canvas);
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                if (!this.canvas) return;
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            // Cloud shape templates (2D grid, height at each point) - pillowy bumps!
+            getCloudShape() {
+                const shapes = [
+                    // Bumpy cumulus - multiple rounded peaks
+                    {
+                        grid: [
+                            [0,0,1,2,1,0,0,1,2,1,0,0],
+                            [0,1,3,4,3,1,1,3,4,3,1,0],
+                            [1,2,4,5,4,2,2,4,5,4,2,1],
+                            [1,3,4,5,5,4,4,5,5,4,3,1],
+                            [0,2,3,4,4,3,3,4,4,3,2,0],
+                            [0,0,1,2,2,1,1,2,2,1,0,0],
+                        ]
+                    },
+                    // Triple puff - three distinct bumps
+                    {
+                        grid: [
+                            [0,1,2,1,0,0,1,3,1,0,0,1,2,1,0],
+                            [1,3,4,3,1,1,3,5,3,1,1,3,4,3,1],
+                            [2,4,5,4,2,2,4,5,4,2,2,4,5,4,2],
+                            [1,3,4,4,3,3,4,4,4,3,3,4,4,3,1],
+                            [0,1,2,3,2,2,3,3,3,2,2,3,2,1,0],
+                            [0,0,1,1,1,1,2,2,2,1,1,1,1,0,0],
+                        ]
+                    },
+                    // Round puff ball
+                    {
+                        grid: [
+                            [0,0,0,1,2,2,1,0,0,0],
+                            [0,0,2,3,4,4,3,2,0,0],
+                            [0,2,4,5,5,5,5,4,2,0],
+                            [1,3,5,6,6,6,6,5,3,1],
+                            [1,3,5,6,6,6,6,5,3,1],
+                            [0,2,4,5,5,5,5,4,2,0],
+                            [0,0,2,3,4,4,3,2,0,0],
+                            [0,0,0,1,2,2,1,0,0,0],
+                        ]
+                    },
+                    // Lumpy long cloud
+                    {
+                        grid: [
+                            [0,1,2,1,0,1,2,1,0,1,2,1,0],
+                            [1,3,4,3,2,3,4,3,2,3,4,3,1],
+                            [2,4,5,4,3,4,5,4,3,4,5,4,2],
+                            [1,3,4,4,3,4,4,4,3,4,4,3,1],
+                            [0,2,3,3,2,3,3,3,2,3,3,2,0],
+                            [0,0,1,1,1,1,2,1,1,1,1,0,0],
+                        ]
+                    },
+                    // Cottage cloud - big bump with small ones
+                    {
+                        grid: [
+                            [0,0,0,0,1,2,2,1,0,0,0,0],
+                            [0,0,0,2,4,5,5,4,2,0,0,0],
+                            [0,1,2,4,5,6,6,5,4,2,1,0],
+                            [1,3,4,5,6,6,6,6,5,4,3,1],
+                            [2,4,5,5,6,6,6,6,5,5,4,2],
+                            [1,3,4,4,5,5,5,5,4,4,3,1],
+                            [0,1,2,3,3,4,4,3,3,2,1,0],
+                            [0,0,1,1,2,2,2,2,1,1,0,0],
+                        ]
+                    },
+                ];
+                return shapes[Math.floor(Math.random() * shapes.length)];
+            }
+
+            createCloud(startX) {
+                const shape = this.getCloudShape();
+                const scale = 0.7 + Math.random() * 0.6;
+                const speed = 4 + Math.random() * 4;
+                const y = 30 + Math.random() * (this.canvas.height - 150);
+
+                return {
+                    x: startX !== undefined ? startX : -500,
+                    y: y,
+                    shape: shape,
+                    scale: scale,
+                    speed: speed,
+                    bob: Math.random() * Math.PI * 2,
+                    bobSpeed: 0.03 + Math.random() * 0.03,
+                    bobAmount: 4 + Math.random() * 6,
+                    // Breathing animation
+                    breath: Math.random() * Math.PI * 2,
+                    breathSpeed: 0.04 + Math.random() * 0.03,
+                    // Billowing - individual voxel offsets
+                    billow: Math.random() * Math.PI * 2,
+                    lastWispTime: 0
+                };
+            }
+
+            createWisp(x, y, fromCloud) {
+                return {
+                    x: x,
+                    y: y,
+                    vx: -0.5 - Math.random() * 1.5,
+                    vy: (Math.random() - 0.5) * 0.8,
+                    size: 0.3 + Math.random() * 0.4,
+                    height: 1 + Math.floor(Math.random() * 2),
+                    alpha: 0.8,
+                    decay: 0.015 + Math.random() * 0.01,
+                    wobble: Math.random() * Math.PI * 2,
+                    wobbleSpeed: 0.1 + Math.random() * 0.1
+                };
+            }
+
+            drawVoxel(x, y, size, height, alpha = 1, breathScale = 1) {
+                const h = height * size * 0.4 * breathScale;
+                const s = size * breathScale;
+
+                // Colors for 3D effect - soft sky blue palette
+                const topColor = `rgba(${200 + height * 15}, ${230 + height * 8}, 255, ${alpha})`;
+                const rightColor = `rgba(${140 + height * 10}, ${190 + height * 10}, ${230 + height * 5}, ${alpha})`;
+                const leftColor = `rgba(${170 + height * 12}, ${210 + height * 10}, ${245 + height * 3}, ${alpha})`;
+
+                // Top face
+                this.ctx.fillStyle = topColor;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y - h);
+                this.ctx.lineTo(x + s * 0.5, y - h - s * 0.25);
+                this.ctx.lineTo(x + s, y - h);
+                this.ctx.lineTo(x + s * 0.5, y - h + s * 0.25);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Right face
+                this.ctx.fillStyle = rightColor;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x + s, y - h);
+                this.ctx.lineTo(x + s * 0.5, y - h + s * 0.25);
+                this.ctx.lineTo(x + s * 0.5, y + s * 0.25);
+                this.ctx.lineTo(x + s, y);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Left face
+                this.ctx.fillStyle = leftColor;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y - h);
+                this.ctx.lineTo(x + s * 0.5, y - h + s * 0.25);
+                this.ctx.lineTo(x + s * 0.5, y + s * 0.25);
+                this.ctx.lineTo(x, y);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                // Subtle edge highlights
+                this.ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * alpha})`;
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y - h);
+                this.ctx.lineTo(x + s * 0.5, y - h - s * 0.25);
+                this.ctx.lineTo(x + s, y - h);
+                this.ctx.stroke();
+            }
+
+            drawCloud(cloud) {
+                const grid = cloud.shape.grid;
+                const size = this.voxelSize * cloud.scale;
+                const bobOffset = Math.sin(cloud.bob) * cloud.bobAmount;
+
+                // Breathing - gentle pulsing scale
+                const breathScale = 1 + Math.sin(cloud.breath) * 0.06;
+
+                // Track rightmost voxels for wisp spawning
+                let rightEdgeX = 0;
+                let rightEdgeY = cloud.y;
+
+                // Draw back to front, bottom to top for proper overlap
+                for (let row = 0; row < grid.length; row++) {
+                    for (let col = 0; col < grid[row].length; col++) {
+                        const height = grid[row][col];
+                        if (height > 0) {
+                            // Billowing - each voxel moves slightly independently
+                            const billowOffset = Math.sin(cloud.billow + row * 0.5 + col * 0.3) * 2;
+                            const verticalPuff = Math.sin(cloud.billow * 1.3 + col * 0.4) * height * 0.5;
+
+                            // Isometric positioning with billow
+                            const isoX = cloud.x + (col - row) * size * 0.5;
+                            const isoY = cloud.y + (col + row) * size * 0.25 + bobOffset + billowOffset;
+
+                            // Voxels at edges breathe more
+                            const edgeFactor = (row === 0 || row === grid.length - 1 || col === 0 || col === grid[row].length - 1) ? 1.08 : 1;
+                            const localBreath = 1 + (breathScale - 1) * edgeFactor + verticalPuff * 0.02;
+
+                            this.drawVoxel(isoX, isoY, size, height, 1, localBreath);
+
+                            // Track right edge for wisps
+                            if (isoX > rightEdgeX) {
+                                rightEdgeX = isoX;
+                                rightEdgeY = isoY;
+                            }
                         }
-                    }, 12000); // Increased timeout
-                }, i * 5); // Super fast stagger for immediate cloud appearance
-            }
-            
-            // Remove cloud cover after all animations (longer for bigger clouds)
-            setTimeout(() => {
-                if (cloudCover.parentNode) {
-                    cloudCover.remove();
+                    }
                 }
-            }, 15000);
+
+                // Spawn wisps from the trailing edge
+                if (this.time - cloud.lastWispTime > 3 && Math.random() < 0.4) {
+                    const wispX = cloud.x - size * 2;
+                    const wispY = cloud.y + bobOffset + (Math.random() - 0.5) * size * 4;
+                    this.wisps.push(this.createWisp(wispX, wispY, cloud));
+                    cloud.lastWispTime = this.time;
+                }
+            }
+
+            drawWisp(wisp) {
+                const size = this.voxelSize * wisp.size;
+                const wobbleX = Math.sin(wisp.wobble) * 2;
+                const wobbleY = Math.cos(wisp.wobble * 0.7) * 1.5;
+                this.drawVoxel(wisp.x + wobbleX, wisp.y + wobbleY, size, wisp.height, wisp.alpha, 0.8 + wisp.alpha * 0.2);
+            }
+
+            start() {
+                if (this.isActive) return;
+
+                this.init();
+                this.isActive = true;
+                this.startTime = Date.now();
+                this.time = 0;
+                this.clouds = [];
+                this.wisps = [];
+
+                // Create initial wave of clouds - lots of them staggered
+                for (let i = 0; i < 20; i++) {
+                    const cloud = this.createCloud(-100 - i * 150);
+                    this.clouds.push(cloud);
+                }
+
+                this.canvas.classList.add('active');
+                this.animate();
+            }
+
+            animate() {
+                if (!this.isActive) return;
+
+                this.time++;
+                const elapsed = Date.now() - this.startTime;
+                const progress = Math.min(elapsed / this.duration, 1);
+
+                // Clear canvas
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Fade in/out
+                let globalAlpha = 1;
+                if (progress < 0.1) {
+                    globalAlpha = progress / 0.1;
+                } else if (progress > 0.8) {
+                    globalAlpha = 1 - ((progress - 0.8) / 0.2);
+                }
+                this.ctx.globalAlpha = globalAlpha;
+
+                // Update and draw wisps first (behind clouds)
+                this.wisps = this.wisps.filter(wisp => {
+                    wisp.x += wisp.vx;
+                    wisp.y += wisp.vy;
+                    wisp.vy += 0.01; // slight float up
+                    wisp.alpha -= wisp.decay;
+                    wisp.wobble += wisp.wobbleSpeed;
+                    wisp.size *= 0.995; // slowly shrink
+
+                    if (wisp.alpha > 0) {
+                        this.drawWisp(wisp);
+                        return true;
+                    }
+                    return false;
+                });
+
+                // Sort clouds by Y for depth
+                this.clouds.sort((a, b) => a.y - b.y);
+
+                // Update and draw clouds
+                this.clouds.forEach(cloud => {
+                    cloud.x += cloud.speed;
+                    cloud.bob += cloud.bobSpeed;
+                    cloud.breath += cloud.breathSpeed;
+                    cloud.billow += 0.05;
+                    this.drawCloud(cloud);
+                });
+
+                // Remove off-screen clouds and add new ones
+                this.clouds = this.clouds.filter(c => c.x < this.canvas.width + 500);
+
+                if (progress < 0.6 && this.clouds.length < 25 && Math.random() < 0.08) {
+                    this.clouds.push(this.createCloud());
+                }
+
+                // Continue or end
+                if (progress < 1 || this.clouds.some(c => c.x < this.canvas.width + 300) || this.wisps.length > 0) {
+                    this.animationId = requestAnimationFrame(() => this.animate());
+                } else {
+                    this.stop();
+                }
+            }
+
+            stop() {
+                this.isActive = false;
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                }
+                if (this.canvas) {
+                    this.canvas.classList.remove('active');
+                    setTimeout(() => {
+                        if (this.canvas && this.canvas.parentNode) {
+                            this.canvas.remove();
+                        }
+                    }, 300);
+                }
+            }
         }
+
+        const cloudSystem = new VoxelCloudSystem();
         
         // MTA Subway Line Colors
         const mtaColors = [
@@ -1481,7 +1623,7 @@
             if (cloudText) {
                 cloudText.addEventListener('click', function(e) {
                     e.preventDefault();
-                    createCloudCover();
+                    cloudSystem.start();
                 });
             }
 
