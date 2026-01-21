@@ -11,7 +11,7 @@
     <aside class="blog-sidebar">
         <ul class="blog-post-list">
         {% for page in section.pages %}
-            <li class="blog-post-item{% if loop.first %} active{% endif %}" data-post-id="{{ loop.index }}">
+            <li class="blog-post-item{% if loop.first %} active{% endif %}" data-post-id="{{ page.slug }}">
                 <div class="blog-post-item-title">{{ page.title }}</div>
                 <div class="blog-post-item-date">{{ page.date | date(format="%B %d, %Y") }}</div>
             </li>
@@ -22,7 +22,7 @@
     <!-- Right content: full post -->
     <main class="blog-content">
         {% for page in section.pages %}
-        <article class="blog-content-post{% if loop.first %} active{% endif %}" data-post-id="{{ loop.index }}">
+        <article class="blog-content-post{% if loop.first %} active{% endif %}" data-post-id="{{ page.slug }}">
             <h1><a href="{{ page.permalink | safe }}">{{ page.title }}</a></h1>
             <div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>
             <div class="blog-post-body">
@@ -41,8 +41,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle URL hash on load
     function showPostFromHash() {
         const hash = window.location.hash;
-        if (hash && hash.startsWith('#post-')) {
-            const postId = hash.replace('#post-', '');
+        if (hash && hash.length > 1) {
+            const postId = hash.substring(1);
             selectPost(postId);
         }
     }
@@ -72,8 +72,10 @@ document.addEventListener('DOMContentLoaded', function() {
         item.addEventListener('click', function() {
             const postId = this.dataset.postId;
             selectPost(postId);
+            // Scroll to top of page
+            window.scrollTo(0, 0);
             // Update URL hash without scrolling
-            history.replaceState(null, null, '#post-' + postId);
+            history.replaceState(null, null, '#' + postId);
         });
     });
 
