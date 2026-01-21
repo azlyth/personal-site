@@ -516,7 +516,7 @@ const panelContent = {
     'botm': {
         title: 'Book of the Month',
         subtitle: 'Senior DevOps Engineer • 2023 - present',
-        description: '<div class="info-panel-site"><iframe src="https://bookofthemonth.com" loading="lazy"></iframe></div><ul><li>Lead platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Manage production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul><p class="info-panel-link"><a href="https://bookofthemonth.com" target="_blank">Visit website →</a></p>'
+        description: '<div class="info-panel-site"><a href="https://bookofthemonth.com" target="_blank"><img src="/timeline-items/botm.png" alt="Book of the Month" loading="lazy"></a></div><ul><li>Lead platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Manage production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul><p class="info-panel-link"><a href="https://bookofthemonth.com" target="_blank">Visit website →</a></p>'
     },
     'shipyard': {
         title: 'Shipyard',
@@ -531,7 +531,7 @@ const panelContent = {
     'propellr': {
         title: 'Propellr',
         subtitle: 'Lead Backend Engineer • 2014 - 2016',
-        description: '<div class="info-panel-site"><iframe src="https://www.crunchbase.com/organization/propellr" loading="lazy"></iframe></div><ul><li>Led engineering for fintech platform connecting real estate developers with investors</li><li>Built Python/Flask backends, Angular frontends, and AWS deployment pipelines</li><li>Introduced infrastructure automation via Ansible — company\'s first reproducible deployments</li><li>Worked directly with founders to translate business requirements into technical architecture</li></ul><p class="info-panel-link"><a href="https://www.crunchbase.com/organization/propellr" target="_blank">View on Crunchbase →</a></p>'
+        description: '<div class="info-panel-site"><a href="https://www.crunchbase.com/organization/propellr" target="_blank"><img src="/timeline-items/propellr.png" alt="Propellr" loading="lazy"></a></div><ul><li>Led engineering for fintech platform connecting real estate developers with investors</li><li>Built Python/Flask backends, Angular frontends, and AWS deployment pipelines</li><li>Introduced infrastructure automation via Ansible — company\'s first reproducible deployments</li><li>Worked directly with founders to translate business requirements into technical architecture</li></ul><p class="info-panel-link"><a href="https://www.crunchbase.com/organization/propellr" target="_blank">View on Crunchbase →</a></p>'
     },
     'happydogs': {
         title: 'Happy Dogs NYC',
@@ -546,7 +546,7 @@ const panelContent = {
     'morgan': {
         title: 'Morgan Stanley',
         subtitle: 'Software Engineering Intern • 2008',
-        description: '<div class="info-panel-site"><iframe src="https://morganstanley.com" loading="lazy"></iframe></div><ul><li>Summer internship in technology division</li><li>Built AJAX-powered dynamic content loading for internal web application</li><li>First exposure to professional development practices and enterprise-scale systems</li></ul><p class="info-panel-link"><a href="https://morganstanley.com" target="_blank">Visit website →</a></p>'
+        description: '<div class="info-panel-site"><a href="https://morganstanley.com" target="_blank"><img src="/timeline-items/morgan-stanley.png" alt="Morgan Stanley" loading="lazy"></a></div><ul><li>Summer internship in technology division</li><li>Built AJAX-powered dynamic content loading for internal web application</li><li>First exposure to professional development practices and enterprise-scale systems</li></ul><p class="info-panel-link"><a href="https://morganstanley.com" target="_blank">Visit website →</a></p>'
     },
     // Education
     'hunter-ba': {
@@ -557,7 +557,7 @@ const panelContent = {
     'stuy': {
         title: 'Stuyvesant High School',
         subtitle: 'CS Program • 2005 - 2009',
-        description: '<div class="info-panel-site"><iframe src="https://stuy.enschool.org" loading="lazy"></iframe></div><ul><li>One of NYC\'s nine specialized public high schools</li><li>Competitive entrance exam required</li><li>Participated in Computer Science program</li></ul><p class="info-panel-link"><a href="https://stuy.enschool.org" target="_blank">Visit website →</a></p>'
+        description: '<div class="info-panel-site"><a href="https://stuy.enschool.org" target="_blank"><img src="/timeline-items/stuy.png" alt="Stuyvesant High School" loading="lazy"></a></div><ul><li>One of NYC\'s nine specialized public high schools</li><li>Competitive entrance exam required</li><li>Participated in Computer Science program</li></ul><p class="info-panel-link"><a href="https://stuy.enschool.org" target="_blank">Visit website →</a></p>'
     },
     // Projects
     'dontdie': {
@@ -830,38 +830,6 @@ function setupInfoPanel() {
         });
     });
 
-    // Attach to bars
-    bars.forEach(bar => {
-        const id = bar.dataset.id;
-
-        bar.addEventListener('mouseenter', () => {
-            if (!isPinned) {
-                showPanel(bar, id);
-            }
-        });
-
-        bar.addEventListener('mouseleave', () => {
-            if (!isPinned) {
-                hidePanel();
-            }
-        });
-
-        // Click to pin
-        bar.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (isPinned && currentId === id) {
-                unpinPanel();
-            } else {
-                if (isPinned) {
-                    isPinned = false;
-                    panel.classList.remove('pinned');
-                }
-                showPanel(bar, id, true);
-            }
-        });
-    });
 }
 
 window.addEventListener('load', setupInfoPanel);
