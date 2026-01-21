@@ -38,6 +38,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const postItems = document.querySelectorAll('.blog-post-item');
     const postContents = document.querySelectorAll('.blog-content-post');
 
+    // Check if mobile (content is hidden)
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+
     // Handle URL hash on load
     function showPostFromHash() {
         const hash = window.location.hash;
@@ -71,6 +76,13 @@ document.addEventListener('DOMContentLoaded', function() {
     postItems.forEach(item => {
         item.addEventListener('click', function() {
             const postId = this.dataset.postId;
+
+            // On mobile, navigate to the post page
+            if (isMobile()) {
+                window.location.href = '/blog/' + postId + '/';
+                return;
+            }
+
             selectPost(postId);
             // Scroll to top of page
             window.scrollTo(0, 0);
@@ -79,8 +91,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Handle hash on load
-    showPostFromHash();
+    // Handle hash on load (only on desktop)
+    if (!isMobile()) {
+        showPostFromHash();
+    }
 
     // Handle hash changes
     window.addEventListener('hashchange', showPostFromHash);
