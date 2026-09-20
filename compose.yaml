@@ -4,14 +4,13 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "127.0.0.1:8802:80"
     environment:
       - NODE_ENV=production
-      
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -20,13 +19,14 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-      
+    restart: unless-stopped
+
   lab-backend:
     build:
       context: lab-backend
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - "127.0.0.1:8803:3001"
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -34,6 +34,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
 volumes:
-  redis_data: 
+  redis_data:

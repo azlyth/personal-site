@@ -282,6 +282,8 @@
             return 'http://localhost:3001';
         } else if (hostname === '192.168.1.191') {
             return 'http://192.168.1.191:3001';
+        } else if (hostname === 'cloudy.nyc' || hostname === 'www.cloudy.nyc') {
+            return 'https://lab.cloudy.nyc';
         } else {
             return 'https://peter-lab-backend.onrender.com';
         }

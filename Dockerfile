@@ -8,8 +8,9 @@ RUN apk add --no-cache zola
 COPY . /project
 WORKDIR /project
 
-# Build the static site
-RUN zola build
+# Build the static site (self-hosted deployment lives at cloudy.nyc; GitHub
+# Pages builds separately with --base-url https://peter.direct via CI)
+RUN zola build --base-url https://cloudy.nyc
 
 # Production stage - serve with nginx
 FROM nginx:alpine

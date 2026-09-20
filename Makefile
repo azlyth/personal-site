@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check open-local open-gh
+.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image
 
 # Colors for help output
 CYAN = \033[36m
@@ -27,7 +27,49 @@ help:
 	@echo "  $(GREEN)make build$(RESET)   - Build Docker image"
 	@echo "  $(GREEN)make clean$(RESET)   - Clean up containers and images"
 	@echo ""
+	@echo "$(CYAN)Self-hosted deploy (cloudy.nyc, via http-routing):$(RESET)"
+	@echo "  $(GREEN)make deploy-up$(RESET)      - Build + start the stack detached"
+	@echo "  $(GREEN)make deploy-restart$(RESET) - Force-recreate after a code/config change"
+	@echo "  $(GREEN)make deploy-down$(RESET)    - Stop the stack"
+	@echo "  $(GREEN)make deploy-ps$(RESET)      - Container status"
+	@echo "  $(GREEN)make install$(RESET)        - Install + enable the boot systemd unit (sudo)"
+	@echo "  $(GREEN)make uninstall$(RESET)      - Disable + remove the boot systemd unit (sudo)"
+	@echo ""
+	@echo "$(CYAN)Blog images (img.cloudy.nyc, public + Cloudflare-cached, not served from the Pi):$(RESET)"
+	@echo "  $(GREEN)make upload-image SLUG=<post-slug> NAME=<name> FILE=<path>$(RESET)"
+	@echo "      Strips EXIF, resizes, re-encodes as JPEG, uploads, prints the URL."
+	@echo ""
 	@echo "$(YELLOW)💡 Tip: Run 'make dev' to start both site and experiments!$(RESET)"
+
+# --- self-hosted deploy (cloudy.nyc) ---
+deploy-up:
+	docker compose up -d --build
+
+deploy-restart:
+	docker compose up -d --build --force-recreate
+
+deploy-down:
+	docker compose down
+
+deploy-ps:
+	docker compose ps
+
+SERVICE  := personal-site.service
+UNIT_SRC := systemd/$(SERVICE)
+UNIT_DST := /etc/systemd/system/$(SERVICE)
+
+install:
+	sudo cp $(UNIT_SRC) $(UNIT_DST)
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now $(SERVICE)
+
+uninstall:
+	-sudo systemctl disable --now $(SERVICE)
+	-sudo rm -f $(UNIT_DST)
+	sudo systemctl daemon-reload
+
+upload-image:
+	python3 scripts/upload-image.py "$(SLUG)" "$(NAME)" "$(FILE)"
 
 # Development mode - runs zola serve with live reloading + lab backend
 dev:

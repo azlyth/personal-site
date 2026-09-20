@@ -23,7 +23,9 @@ const corsOptions = {
     'http://0.0.0.0:3000',
     'http://192.168.1.191:3000',
     'https://peter.direct',
-    /\.peter\.direct$/
+    /\.peter\.direct$/,
+    'https://cloudy.nyc',
+    /\.cloudy\.nyc$/
   ],
   credentials: true
 };

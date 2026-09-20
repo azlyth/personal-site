@@ -133,9 +133,48 @@ The timeline page (`templates/timeline.html`) displays work history, projects, t
 - `templates/experiment-*.html` - Individual experiment pages
 
 ### Deployment
-- GitHub Pages via `.github/workflows/deploy.yml`
+- GitHub Pages via `.github/workflows/deploy.yml` — builds with
+  `--base-url https://peter.direct`, the original/primary deployment.
 - Zola v0.20.0 builds to `public/` directory
-- Lab backend deployed separately (see `render.yaml` for Render.com config)
+- Lab backend deployed separately on Render.com (`render.yaml`) for the GitHub
+  Pages deployment.
+- **Self-hosted on the Pi (berryfive) at `cloudy.nyc`**, added 2026-09-20 —
+  same repo, a second deployment via `compose.yaml` (nginx serving a Zola
+  build with `--base-url https://cloudy.nyc`, plus `lab-backend` + `redis`),
+  fronted by `http-routing`/Caddy per that project's usual flow. `make
+  deploy-up` / `make deploy-restart` / `make install` (boot systemd unit,
+  `systemd/personal-site.service`). Ports: `web` on loopback `:8802`,
+  `lab-backend` on loopback `:8803` (container-internal port stays 3001 —
+  ig-parser already owns `:3001` on the Pi, so only the host-side mapping
+  changed), `redis` has no host port at all. `lab.cloudy.nyc` is a separate
+  Caddy/tunnel host for the Socket.IO backend (`getBackendUrl()` in
+  `templates/lab.html` + the three `experiment-*.html` files, and CORS in
+  `lab-backend/server.js`, both special-case `cloudy.nyc`/`www.cloudy.nyc`
+  hostnames — same pattern as the existing `peter.direct` case, don't remove
+  it when touching that logic). `www.cloudy.nyc` 301s to the apex. Full routing
+  details: `~/projects/personal/http-routing/CLAUDE.md`.
+- **Blog post images live in S3, not this repo** (added 2026-09-20, first post:
+  `guerilla-gardening.md`) — public-read bucket (`personal-cloud-infra`
+  `modules/personal-site-images`), served at `img.cloudy.nyc` and edge-cached
+  by Cloudflare, so real traffic never touches the Pi (only a cache miss does).
+  To add images to a post: `make upload-image SLUG=<post-slug> NAME=<name>
+  FILE=<path>` (strips EXIF, resizes to 1600px longest edge, re-encodes JPEG,
+  uploads with a far-future `Cache-Control`, prints the `https://img.cloudy.nyc/...`
+  URL to paste into the post as a normal `![alt](url)`). Needs `.aws.env`
+  (gitignored) — `make sync-personal-site-images` in `personal-cloud-infra`
+  writes it. `templates/base.html`'s `.container img` rule makes embedded
+  images responsive (didn't exist before this post; no prior post had images).
+  **Several photos in a row in the source material (e.g. a litter-patrol
+  sequence, before/after pairs) render as a row, not stacked** — wrap them in
+  `<div class="img-row">...</div>` with raw `<img src="..." alt="...">` tags
+  (not markdown `![]()` — avoids ambiguity in how the markdown parser wraps
+  consecutive image lines in `<p>`s). `.img-row` is a CSS grid
+  (`repeat(auto-fit, minmax(140px, 1fr))` in `templates/base.html`) that lays
+  images out side by side and wraps gracefully on narrow screens. See
+  `guerilla-gardening.md` for two worked examples. A **standalone** image
+  (not in an `.img-row`) is centered (`.container img { margin: 1.5rem auto }`)
+  rather than flush-left, since most photos render narrower than the 700px
+  content column.
 
 ## Git Workflow
 - Use simple present tense commit messages (e.g., "Add dark mode toggle")
