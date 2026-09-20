@@ -132,6 +132,36 @@ The timeline page (`templates/timeline.html`) displays work history, projects, t
 - `templates/lab.html` - Lab index (embeds all experiments inline)
 - `templates/experiment-*.html` - Individual experiment pages
 
+### Responsive layout (reworked 2026-09-20)
+
+Two layouts here "break out" of the 700px `.container`, and both used to do it
+with hand-computed `calc()` math that only landed centered at one specific
+viewport width. Both now use the same correct idiom — **an outer element bled
+to `100vw` via `margin-left: calc(50% - 50vw)`, and an inner element that caps
+its width and `margin: 0 auto`s inside it**. One element can't do both jobs:
+mixing a container-relative `margin-left` with an own-width-relative
+`translateX` (the old approach) only cancels out at a single width, and visibly
+drifts off-center everywhere else.
+
+- **`/blog` (`section.html`)** is a desktop-only SPA: sidebar post list on the
+  left, full post on the right, switched client-side by slug hash. Below 768px
+  `.blog-content` is hidden entirely and the sidebar becomes a plain list whose
+  items navigate to the real `/blog/<slug>/` permalinks (`page.html`). The
+  two-column layout is a **CSS grid** (`260px minmax(0, 1fr)`) with a
+  `position: sticky` sidebar — it was `position: fixed` plus `calc()` offsets
+  hardcoded to a 900px container, so the post column could never grow past
+  630px no matter the screen. Container now scales to `min(1400px, 94vw)`,
+  post column caps at 900px, and post body text steps up at 1000px/1300px so a
+  wider column doesn't read thin. The sticky (not fixed) sidebar is also what
+  lets the footer clear it without the old margin hack.
+- **`/lab` (`lab.html`)** uses the same bleed pattern for the experiments grid.
+  The Go board and drawing canvas size up on `(min-width: 700px)` via JS, not
+  CSS: both compute geometry from a pixel size (the board's `boardSize`, the
+  canvas's `width`/`height` **attributes**), and pointer/touch coordinates come
+  from `getBoundingClientRect()`. Scaling the canvas with CSS instead would
+  leave the drawing buffer at the old resolution and put every stroke off from
+  the finger.
+
 ### Deployment
 - GitHub Pages via `.github/workflows/deploy.yml` — builds with
   `--base-url https://peter.direct`, the original/primary deployment.

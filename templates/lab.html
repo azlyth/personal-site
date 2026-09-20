@@ -180,21 +180,32 @@
     color: #fff;
 }
 
-/* Full width layout - break out of parent container */
-.experiments-grid {
-    width: 80vw;
-    max-width: 1200px;
-    margin-left: 50%;
-    transform: translateX(-50%);
+/* Break out of the 700px .container, then re-cap+center inside that full
+   width — two layers, because a single element can't both bleed to the
+   viewport AND self-center at a capped width using one set of margins (the
+   previous version tried, mixing a container-relative margin-left with an
+   own-width-relative translateX; those only cancel out at one specific
+   viewport width, so it visibly drifted off-center at others — reported on
+   tablet). calc(50% - 50vw) bleeds .experiments-bleed to the full viewport
+   regardless of width (50% is relative to .container, which is itself
+   centered; 50vw to the viewport; the difference is exactly .container's
+   own inset). .experiments-grid then just auto-centers inside that full-
+   width strip, the ordinary way, and 1200px caps it on wide screens. */
+.experiments-bleed {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
 }
 
-/* Responsive: stack experiments on narrow screens */
-@media (max-width: 950px) {
+.experiments-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Narrow phones: stack instead of relying on wrap alone, and don't let a
+   card's content (e.g. the drawing tool's canvas + palette row) overflow. */
+@media (max-width: 480px) {
     .experiments-grid {
-        width: 100%;
-        max-width: none;
-        margin-left: 0;
-        transform: none;
         flex-direction: column;
         align-items: center;
         padding: 0 1rem;
@@ -217,6 +228,7 @@
 </div>
 
 {% set sorted_pages = section.pages | sort(attribute="date") | reverse %}
+<div class="experiments-bleed">
 <div class="experiments-grid" style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; align-items: stretch;">
 {% for page in sorted_pages %}
 <div class="experiment-container" style="margin: 0; padding: 1.25rem; background: #f8f9fa; border-radius: 12px; border: 1px solid #e9ecef; display: flex; align-items: center; justify-content: center;">
@@ -270,6 +282,7 @@
     {% endif %}
 </div>
 {% endfor %}
+</div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -489,7 +502,10 @@
     }
 
     function createGoBoard(container) {
-        const boardSize = 260;
+        // Bigger board on tablet/desktop — the fixed 260px size left a lot
+        // of unused space once the container-centering bug (see CSS) was
+        // fixed and there was room to actually use.
+        const boardSize = window.matchMedia('(min-width: 700px)').matches ? 340 : 260;
         const cellSize = boardSize / (BOARD_SIZE + 1);
 
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -697,6 +713,15 @@
     }
 
     function setupDrawingCanvas(canvas) {
+        // Bigger canvas on tablet/desktop, same reasoning as the Go board.
+        // Setting canvas.width/height (not CSS) keeps the drawing-buffer
+        // resolution equal to the rendered size, which is what keeps
+        // startDrawing/draw's getBoundingClientRect()-based coordinates
+        // accurate — a CSS-only resize would leave pointer math off.
+        if (window.matchMedia('(min-width: 700px)').matches) {
+            canvas.width = 300;
+            canvas.height = 380;
+        }
         const ctx = canvas.getContext('2d');
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';

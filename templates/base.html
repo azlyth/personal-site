@@ -195,21 +195,25 @@
             letter-spacing: 0.05em;
         }
 
-        /* Two-column blog layout */
+        /* Two-column blog layout: sidebar (post list) + content (full post),
+           as a CSS grid so both sides flow and size naturally. The previous
+           version pinned the sidebar with `position: fixed` and hand-computed
+           calc() offsets tied to one specific 900px container width -- past
+           that width (tablet landscape, laptop, ...) the container simply
+           stopped growing, so the post column never got wider than 630px no
+           matter how much screen was available. */
         .blog-layout {
-            max-width: 630px;
-            margin: 0 auto;
-            margin-left: calc(50% - 350px + 270px);
+            display: grid;
+            grid-template-columns: 260px minmax(0, 1fr);
+            gap: 3rem;
+            align-items: start;
         }
 
         .blog-sidebar {
-            position: fixed;
+            position: sticky;
             top: 6rem;
-            left: calc(50% - 350px);
-            width: 240px;
             max-height: calc(100vh - 8rem);
             overflow-y: auto;
-            padding-right: 1.5rem;
         }
 
         .blog-sidebar-header {
@@ -274,9 +278,18 @@
             margin-bottom: 0.5rem;
         }
 
-        /* Expand container for blog page */
-        .container.blog-container {
+        .blog-content {
+            min-width: 0;
             max-width: 900px;
+        }
+
+        /* Expand container for blog page, scaling with the viewport up to a
+           cap (94vw keeps a sliver of edge padding on huge screens) instead
+           of a flat 900px, so tablet-landscape/laptop widths actually get to
+           use the wider grid below instead of sitting in a box that stopped
+           growing early. */
+        .container.blog-container {
+            max-width: min(1400px, 94vw);
         }
 
         /* Keep nav at normal width on blog page */
@@ -286,25 +299,33 @@
             margin-right: auto;
         }
 
-        /* Offset footer on blog page to not overlap fixed sidebar */
-        .container.blog-container footer {
-            margin-left: calc(50% - 350px + 270px);
-            max-width: 630px;
+        /* Wider column reads thin at the original font size -- scale post
+           body text up (not headings; rem-based, so they'd need their own
+           pass and read fine as-is) as the column has room to grow. */
+        @media (min-width: 1000px) {
+            .blog-post-body, .blog-post-body p, .blog-post-body li {
+                font-size: 1.0625rem;
+            }
+        }
+
+        @media (min-width: 1300px) {
+            .blog-post-body, .blog-post-body p, .blog-post-body li {
+                font-size: 1.125rem;
+            }
         }
 
         /* Mobile: stack vertically */
         @media (max-width: 768px) {
             .blog-layout {
-                padding-left: 0;
+                grid-template-columns: 1fr;
+                gap: 0;
             }
 
             .blog-sidebar {
                 position: static;
-                width: 100%;
                 max-height: none;
                 border-right: none;
                 border-bottom: 1px solid #eee;
-                padding-right: 0;
                 padding-bottom: 1rem;
                 margin-bottom: 1.5rem;
                 overflow-y: visible;
@@ -353,17 +374,6 @@
 
             .container.blog-container {
                 max-width: 700px;
-            }
-
-            /* Reset blog layout margins on mobile */
-            .blog-layout {
-                margin-left: auto;
-                margin-right: auto;
-            }
-
-            .container.blog-container footer {
-                margin-left: auto;
-                max-width: none;
             }
         }
 
