@@ -5,10 +5,13 @@ Two rules are load-bearing here:
 1. Only explicitly named paths are staged. This repo routinely has unrelated
    work in flight, and an editor that ran `git add -A` would quietly sweep it
    into a commit.
-2. Publishing goes through scripts/publish-site.sh, which builds, syncs to S3
-   and purges Cloudflare. cloudy.nyc is served by Cloudflare straight from S3,
-   so a local build alone changes nothing the public can see -- and because
-   pages live at stable URLs, skipping the purge would leave the old post up.
+2. Publishing goes through scripts/publish-site.sh, which builds and then purges
+   Cloudflare. cloudy.nyc is served from this Pi, but Cloudflare holds pages at
+   the edge for 30 days -- and because pages live at stable URLs that cache
+   cannot invalidate itself, so the purge IS the publish. A build alone updates
+   the origin and changes nothing a reader sees. That script exits non-zero if
+   the purge fails and this module runs it with check=True, so a half-published
+   state surfaces as an error rather than a success message.
 """
 from __future__ import annotations
 

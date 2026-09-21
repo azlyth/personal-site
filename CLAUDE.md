@@ -211,6 +211,22 @@ drifts off-center everywhere else.
   hostnames — same pattern as the existing `peter.direct` case, don't remove
   it when touching that logic). `www.cloudy.nyc` 301s to the apex. Full routing
   details: `~/projects/personal/http-routing/CLAUDE.md`.
+- **The Pi is the origin, Cloudflare is the cache** (settled 2026-09-21). Pages
+  are served by the `web` container and held at the Cloudflare edge for **30
+  days**, so the Pi sees almost no real traffic and a cached site keeps serving
+  while this machine is off. **`make publish-site` = build + purge**, and the
+  purge is the part that publishes: the build only updates the origin, which
+  nobody reads directly. `scripts/publish-site.sh` exits non-zero if the purge
+  fails, so a "published" message always means readers actually see the change.
+  ⚠ **The `web` container being up is now the whole site, not a convenience.**
+  It used to be a local preview while S3 served the public, so a stopped
+  container was invisible; it is now an outage. Uptime Kuma monitors 41-43 watch
+  the apex, images and lab backend.
+  For one day (2026-09-20 → 09-21) this was inverted — Cloudflare read the pages
+  straight out of an S3 website bucket and the Pi was out of the path entirely.
+  That bucket (`personal-cloud-infra modules/personal-site-pages`) still exists
+  but is **no longer written to, so its contents are stale**; don't treat it as a
+  live rollback without re-syncing `public/` first.
 - **Blog post images live in S3, not this repo** (added 2026-09-20, first post:
   `guerilla-gardening.md`) — public-read bucket (`personal-cloud-infra`
   `modules/personal-site-images`), served at `img.cloudy.nyc` and edge-cached
@@ -256,8 +272,7 @@ drifts off-center everywhere else.
 - **Editing from a tablet:** `edit.cloudy.nyc` (LAN-only) runs `blog-editor.service`
   from `editor/`. It edits `content/blog/*.md` in the working tree, uploads photos
   to S3, and on Publish commits only `content/blog/` paths, pushes, and rebuilds
-  the live site via `scripts/publish-site.sh` (build + S3 sync + Cloudflare
-  purge). Design: `docs/superpowers/specs/2026-09-20-blog-editor-design.md`.
+  the live site via `scripts/publish-site.sh` (build + Cloudflare purge). Design: `docs/superpowers/specs/2026-09-20-blog-editor-design.md`.
   ⚠ The service refuses to start if `edit.cloudy.nyc` is ever added to the
   cloudflared tunnel config — it must stay LAN-only.
 
