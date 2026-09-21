@@ -67,6 +67,13 @@ def parse_blocks(body: str) -> list[Block]:
         # item is part of that list's block, not a block of its own.
         if depth == 0 and token.type in _KIND_BY_TOKEN and token.map:
             start, end = token.map
+            # markdown-it's list tokens fold the blank separator line after
+            # the list into their own map (used to decide tight/loose), so
+            # end_line can overrun the list's actual content by one blank
+            # line. Trim trailing blank lines from the consumed range so it
+            # never eats a separator that belongs between blocks.
+            while end > start + 1 and not lines[end - 1].strip():
+                end -= 1
             source = "\n".join(lines[start:end]).rstrip()
             kind = _refine_kind(_KIND_BY_TOKEN[token.type], source)
             blocks.append(
@@ -106,7 +113,7 @@ def insert_block(body: str, index: int, new_source: str) -> str:
     blocks = parse_blocks(body)
     new_lines = new_source.split("\n")
 
-    if index >= len(blocks):
+    if index == len(blocks):
         trailing = "" if body.endswith("\n") else "\n"
         return body + trailing + "\n" + new_source + "\n"
 

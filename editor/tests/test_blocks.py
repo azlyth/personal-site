@@ -23,6 +23,39 @@ IMAGES = (
     "Outro.\n"
 )
 
+# Covers the four kinds IMAGES/SIMPLE never exercise: list, blockquote, code,
+# hr. The fence has a language tag and a blank line inside it -- the case
+# most likely to break line-range logic.
+MIXED_KINDS = (
+    "Intro para.\n"
+    "\n"
+    "- item one\n"
+    "- item two\n"
+    "- item three\n"
+    "\n"
+    "> A quoted line.\n"
+    "> Another quoted line.\n"
+    "\n"
+    "```python\n"
+    "def foo():\n"
+    "\n"
+    "    return 1\n"
+    "```\n"
+    "\n"
+    "---\n"
+    "\n"
+    "Outro para.\n"
+)
+
+# A fenced code block whose contents look like markdown -- must stay one
+# `code` block, not get split into a heading + paragraph.
+CODE_WITH_FAKE_HEADING = (
+    "```text\n"
+    "## This looks like a heading\n"
+    "but it's inside a fence\n"
+    "```\n"
+)
+
 
 def test_parse_splits_top_level_blocks():
     blocks = parse_blocks(SIMPLE)
@@ -42,9 +75,30 @@ def test_parse_classifies_image_and_img_row():
     assert kinds == ["paragraph", "image", "img_row", "paragraph"]
 
 
+def test_parse_classifies_list_blockquote_code_hr():
+    blocks = parse_blocks(MIXED_KINDS)
+    kinds = [b.kind for b in blocks]
+    assert kinds == [
+        "paragraph",
+        "list",
+        "blockquote",
+        "code",
+        "hr",
+        "paragraph",
+    ]
+
+
+def test_fenced_code_with_markdown_like_content_is_one_block():
+    blocks = parse_blocks(CODE_WITH_FAKE_HEADING)
+    assert len(blocks) == 1
+    assert blocks[0].kind == "code"
+    assert blocks[0].source == CODE_WITH_FAKE_HEADING.rstrip("\n")
+    assert "## This looks like a heading" in blocks[0].source
+
+
 def test_replace_with_identical_source_is_byte_identical():
     # The load-bearing property: a no-op edit must not perturb the file.
-    for body in (SIMPLE, IMAGES):
+    for body in (SIMPLE, IMAGES, MIXED_KINDS, CODE_WITH_FAKE_HEADING):
         for block in parse_blocks(body):
             assert replace_block(body, block.index, block.source) == body
 
@@ -84,3 +138,10 @@ def test_body_without_trailing_newline_round_trips():
 def test_index_out_of_range_raises():
     with pytest.raises(IndexError):
         replace_block(SIMPLE, 99, "nope")
+
+
+def test_insert_index_beyond_length_raises():
+    # index == len(blocks) appends; anything greater is a stale/bad index
+    # and must raise, not silently append in a plausible-but-wrong place.
+    with pytest.raises(IndexError):
+        insert_block(SIMPLE, 4, "nope")
