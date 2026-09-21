@@ -9,11 +9,34 @@ make dev          # Start development server (Zola + lab backend) - ports 1111 &
 make prod         # Build and serve production with nginx on port 8080
 make check        # Validate site structure
 make logs         # View container logs
-make stop         # Stop running containers
+make stop         # ⚠ STOPS PRODUCTION TOO - see below
 make clean        # Clean up containers and images
 make open-local   # Open http://localhost:1111
 make open-gh      # Open https://peter.direct
 ```
+
+⚠ **Stopping the dev server takes the live site down. Both ways.** This caused
+two outages on 2026-09-21.
+
+- `make stop` runs `docker compose down` on the **prod** compose first, then
+  the dev one. Since the Pi became the origin, removing `web` is an outage.
+- `docker compose -f compose.dev.yaml down` is **also unsafe** — both compose
+  files resolve to the same project name (`personal-site`), so `down` on the
+  dev file also removes the shared `redis` and `lab-backend`. It leaves `web`
+  alone, so `cloudy.nyc` keeps answering 200 and looks fine while
+  `lab.cloudy.nyc` 502s.
+
+**Safe dev teardown is one container:** `docker rm -f personal-site-zola-1`.
+Then `sudo systemctl restart personal-site` and check **`lab.cloudy.nyc`, not
+just the apex**. A hand-run `docker compose down` also leaves systemd
+reporting the unit `active` while the containers are gone, so the restart is
+what re-syncs it.
+
+`make dev` passes `HOST_UID`/`HOST_GID` so the dev container writes `public/`
+as you. Without it the dev server ran as root, and any file only it had
+produced (a newly added static asset) was left root-owned — which then failed
+the next publish, because the promote rsync runs as you and can't `chgrp` a
+destination it doesn't own.
 
 Lab backend (standalone):
 ```bash
@@ -160,6 +183,31 @@ The timeline page (`templates/timeline.html`) displays work history, projects, t
 - `templates/lab.html` - Lab index (embeds all experiments inline)
 - `templates/experiment-*.html` - Individual experiment pages
 
+### Typography (added 2026-09-21)
+
+Everything used to be the system font stack at every size, which is what made
+the site read as untouched. Two families now, set as `--font-text` and
+`--font-display` on `:root` in `templates/base.html`:
+
+- **Sentient** (serif, Fontshare) — `h1`–`h4` and post titles.
+- **Switzer** (grotesque, Fontshare) — running text, nav, UI, meta.
+- Code keeps the existing `Monaco/Menlo/Ubuntu Mono` stack.
+
+⚠ **Each family needs its own `<link>`. The Fontshare API honours only the
+first `f[]` parameter and silently drops the rest** — the obvious combined
+`?f[]=sentient…&f[]=switzer…` URL returns Sentient alone. The failure is quiet:
+text still renders in the fallback stack with *synthesised* weights, so it
+looks like a styling bug (the nav rendering too heavy) rather than a font that
+never loaded. Check `document.fonts` before believing a weight problem.
+
+**One type scale for the whole site**: `h1` 2rem, `h2` 1.5, `h3` 1.25, `h4`
+1.0625, all weight 500. `h1`/`h2` were previously 1.6/1.5rem — near enough to
+read as the same level.
+
+Changing font metrics is **not** cosmetic here: `/timeline` positions its cards
+absolutely with hand-tuned percentages, so re-check that page (desktop *and*
+mobile) for card overlap after any type change.
+
 ### Responsive layout (reworked 2026-09-20)
 
 Two layouts here "break out" of the 700px `.container`, and both used to do it
@@ -171,17 +219,38 @@ mixing a container-relative `margin-left` with an own-width-relative
 `translateX` (the old approach) only cancels out at a single width, and visibly
 drifts off-center everywhere else.
 
-- **`/blog` (`section.html`)** is a desktop-only SPA: sidebar post list on the
-  left, full post on the right, switched client-side by slug hash. Below 768px
-  `.blog-content` is hidden entirely and the sidebar becomes a plain list whose
-  items navigate to the real `/blog/<slug>/` permalinks (`page.html`). The
-  two-column layout is a **CSS grid** (`260px minmax(0, 1fr)`) with a
-  `position: sticky` sidebar — it was `position: fixed` plus `calc()` offsets
-  hardcoded to a 900px container, so the post column could never grow past
-  630px no matter the screen. Container now scales to `min(1400px, 94vw)`,
-  post column caps at 900px, and post body text steps up at 1000px/1300px so a
-  wider column doesn't read thin. The sticky (not fixed) sidebar is also what
-  lets the footer clear it without the old margin hack.
+- **`/blog` (`section.html`)** is a plain index — **no JavaScript at all**, and
+  no longer a single-page app (reworked 2026-09-21). It used to inline every
+  post and switch between them client-side, which cost 184KB of HTML
+  referencing 7MB of media on a page where you read one post; posts are real
+  pages now and the index is 70KB. The list is **continuous, not grouped by
+  year**: posting here is irregular, so year blocks carved the page into
+  lopsided chunks and made the quiet years read as holes. The year marks the
+  margin only where it changes (`set_global shown_year` in the Tera loop).
+  Rows align on `align-items: baseline` at the grid level with the padding on
+  the row rather than the link, which is what puts the year marker and date on
+  the title's baseline.
+- **Post pages (`page.html`) read at `min(900px, 94vw)`**, not the site's 700px
+  default — that is the width the `.img-row`/`.video-row` size presets were
+  tuned against. `.container.post-container > nav:not(.post-nav)` is deliberate:
+  the prev/next block is itself a `<nav>` and belongs at the post's full width,
+  not the site nav's 700px.
+- **Prev/next on posts is written but inert.** Zola hands this template no
+  `page.earlier`/`page.later` (nor `lighter`/`heavier`) for these pages, so the
+  block is wrapped in `{% if page.later or page.earlier %}` — unguarded it
+  rendered as a bare rule and empty space under every post. Left in place
+  because the markup is right; it starts working if the neighbours ever resolve.
+- **`/blog/#<slug>` hash links no longer resolve** — they were how the SPA
+  selected a post. Deliberately not shimmed.
+- **`/` (`index.html`)** widens to `min(1080px, 92vw)` at ≥1000px and flows its
+  sections into two columns via **`column-count`, not a grid** — the browser
+  balances them, so adding a section later doesn't need the split re-hardcoded.
+  `.home-intro` is a `flow-root`: without it the floated photo escapes the
+  intro and the multi-column box shrinks sideways to avoid the float instead of
+  using the full width. The "Author of" list links **live sites, not repos**,
+  and only things that are actually publicly reachable — check
+  `http-routing/cloudflared/config.yml` for that, not a curl from the Pi, since
+  LAN-only hosts answer 200 from here and would be dead links for visitors.
 - **`/lab` (`lab.html`)** uses the same bleed pattern for the experiments grid.
   The Go board and drawing canvas size up on `(min-width: 700px)` via JS, not
   CSS: both compute geometry from a pixel size (the board's `boardSize`, the
@@ -242,10 +311,15 @@ drifts off-center everywhere else.
   sequence, before/after pairs) render as a row, not stacked** — wrap them in
   `<div class="img-row">...</div>` with raw `<img src="..." alt="...">` tags
   (not markdown `![]()` — avoids ambiguity in how the markdown parser wraps
-  consecutive image lines in `<p>`s). `.img-row` is a CSS grid
-  (`repeat(auto-fit, minmax(140px, 1fr))` in `templates/base.html`) that lays
-  images out side by side and wraps gracefully on narrow screens. See
-  `guerilla-gardening.md` for two worked examples. A **standalone** image
+  consecutive image lines in `<p>`s). `.img-row` and `.video-row` are **flex,
+  not grid** (changed 2026-09-21): a row of three wrapping to two-plus-one left
+  the leftover in grid column 1 with dead space beside it, and grid has no way
+  to centre a partial last row. Items are capped at `calc(50% - 0.375rem)` so
+  that leftover keeps its siblings' size rather than growing to fill its line —
+  50% is the tightest cap that still allows two side by side. **A row holding a
+  single item opts out of the cap** (`:only-child`); those rows are sizing
+  wrappers, not rows, and must still fill the width their size class allows.
+  See `guerilla-gardening.md` for two worked examples. A **standalone** image
   (not in an `.img-row`) is centered (`.container img { margin: 1.5rem auto }`)
   rather than flush-left, since most photos render narrower than the 700px
   content column.
