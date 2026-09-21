@@ -261,6 +261,60 @@ drifts off-center everywhere else.
   ⚠ The service refuses to start if `edit.cloudy.nyc` is ever added to the
   cloudflared tunnel config — it must stay LAN-only.
 
+### How the editor edits (the rules that keep it from eating posts)
+
+`editor/` is a FastAPI service; `docs/superpowers/specs/2026-09-20-blog-editor-design.md`
+is the design. Three properties are load-bearing — each exists because its
+absence caused a real bug here.
+
+- **Every edit is a line splice into the markdown source.** `editor/blocks.py`
+  indexes a post body into top-level blocks carrying their source line ranges;
+  editing replaces those lines. The editor NEVER reconstructs markdown from
+  rendered HTML, so bytes outside the edited range are untouched by
+  construction. `move_block` and the merge route are splice-out + splice-in on
+  the same primitives — don't add an edit path that re-serialises the document.
+- **Structured editors are offered only when parsing is provably lossless.**
+  `images.parse_images` / `videos.parse_videos` regenerate markup from what
+  they parsed and compare it **byte-for-byte** against the original block
+  source, returning `None` on any mismatch; the API then omits `images`/
+  `videos` and the client falls back to a raw textarea. Gate the UI on that
+  key being present, never on `block.kind`. An early version matched only one
+  exact `<img>` shape, silently dropped tags it didn't recognise, and
+  regenerated the block without them — deleting photos from a live post. A
+  merge refuses if EITHER side parses lossily, for the same reason.
+- **Post writes go through `_write_body` → `_atomic_write_text`.** That gives
+  the staleness hash check (409 rather than clobbering an edit made from a
+  terminal), a temp-file + `os.replace` write (a crash can't truncate a post),
+  and **preservation of the file mode** — an earlier atomic-write fix dropped
+  posts to 0600 via `mkstemp`, which breaks the containerised Zola build since
+  it runs as a different UID.
+
+Block kinds and their editors: `image` (standalone markdown), `img_row` and
+`video` (side-by-side grids) get thumbnail strips with add/remove/reorder,
+alt text, and Small/Medium/Full size presets; everything else gets a markdown
+textarea. Any block can be moved (pick it up, tap a gap) or merged with an
+adjacent same-family block.
+
+- **Sizing a standalone image is opt-in by design.** Markdown has nowhere to
+  hang a class, so a lone photo at default size stays `![alt](url)`; choosing a
+  non-default size converts it to `<div class="img-row size-small">`, and
+  setting it back returns it to markdown. This is what keeps existing posts
+  from being rewritten — an unsized legacy row parses as default and
+  regenerates **unsized**, so an unrelated edit can't stamp `size-full` onto it.
+- **The size widths are duplicated by hand** in `templates/base.html` (the
+  published site) and `editor/web/editor.css` (the editor). A test asserts they
+  match; without it a one-sided edit looks right while editing and wrong once
+  published. If you add a size, change both.
+- **Block controls live in a sibling node to the content** (`.block-content`),
+  because opening an editor used to `innerHTML = ''` the whole block and take
+  the controls with it. Cancel restores by calling `renderBlocks()`, not by
+  patching HTML — the old patch raced the block's own click listener and
+  silently reopened the editor. Control actions call `flushPendingEdit()` first:
+  the `mousedown preventDefault()` that keeps the toolbar clickable also
+  suppresses the blur that would have saved an open textarea, so without the
+  flush a tap would discard typing with no warning.
+
+
 ## Git Workflow
 - Use simple present tense commit messages (e.g., "Add dark mode toggle")
 - Do not include Claude Code footer in commits
