@@ -135,3 +135,64 @@ def test_delete_block(temp_post):
     # untouched, not just present.
     assert out["blocks"][0]["source"] == data["blocks"][0]["source"]
     assert out["blocks"][1]["source"] == data["blocks"][2]["source"]
+
+
+def test_move_block_persists_to_disk(temp_post):
+    data = _get()
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks/0/move",
+        json={"to_index": 3, "hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    out = res.json()
+    assert [b["source"] for b in out["blocks"]] == [
+        data["blocks"][1]["source"],
+        data["blocks"][2]["source"],
+        data["blocks"][0]["source"],
+    ]
+    on_disk = temp_post.read_text(encoding="utf-8")
+    assert on_disk.index("First para.") > on_disk.index("Second para.")
+
+
+def test_move_block_to_same_position_is_a_noop(temp_post):
+    data = _get()
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks/1/move",
+        json={"to_index": 1, "hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    on_disk = temp_post.read_text(encoding="utf-8")
+    assert on_disk == POST
+
+
+def test_move_block_stale_hash_is_refused(temp_post):
+    data = _get()
+    temp_post.write_text(POST.replace("First para.", "Changed elsewhere."), encoding="utf-8")
+
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks/0/move",
+        json={"to_index": 2, "hash": data["hash"]},
+    )
+
+    assert res.status_code == 409
+    assert "Changed elsewhere." in temp_post.read_text(encoding="utf-8")
+
+
+def test_move_block_stale_from_index_returns_409_not_500(temp_post):
+    data = _get()
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks/99/move",
+        json={"to_index": 0, "hash": data["hash"]},
+    )
+    assert res.status_code == 409
+    assert temp_post.read_text(encoding="utf-8") == POST
+
+
+def test_move_block_out_of_range_to_index_returns_409_not_500(temp_post):
+    data = _get()
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks/0/move",
+        json={"to_index": 99, "hash": data["hash"]},
+    )
+    assert res.status_code == 409
+    assert temp_post.read_text(encoding="utf-8") == POST

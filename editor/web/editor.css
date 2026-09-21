@@ -128,3 +128,49 @@ a { color: #0066cc; }
 .image-cancel {
     border: 1px solid #ddd; background: #fff; color: #333;
 }
+
+/* Move mode. Drop targets are the whole mechanic, so they get the biggest,
+   loudest touch target on the page -- taller than the 44px floor used
+   elsewhere -- and the banner makes "you are in move mode" unmissable
+   rather than relying on a subtle state change. */
+.move-banner {
+    position: sticky; top: 0; z-index: 8;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin: 0 -0.5rem 0.75rem;
+    background: #fff4d6; border: 1px solid #f0c96b; border-radius: 6px;
+    font-weight: 600; color: #6b4e00;
+}
+
+.move-cancel {
+    padding: 0.6rem 1.1rem; font: inherit; font-size: 0.95rem; font-weight: 600;
+    border: 1px solid #cc3333; border-radius: 6px;
+    background: #fff; color: #cc3333; cursor: pointer;
+}
+
+.move-target {
+    display: block; width: 100%; box-sizing: border-box;
+    min-height: 52px;
+    margin: 0.4rem 0;
+    padding: 0.6rem;
+    border: 2px dashed #0066cc; border-radius: 6px;
+    background: #eaf3ff; color: #0066cc;
+    font: inherit; font-size: 0.95rem; font-weight: 700;
+    cursor: pointer;
+}
+.move-target:hover, .move-target:active { background: #d5e6f7; }
+
+.move-preview { cursor: default; }
+.move-preview:hover { border-color: transparent; background: transparent; }
+
+.move-source {
+    opacity: 0.45;
+    position: relative;
+}
+.move-source::after {
+    content: 'moving this';
+    position: absolute; top: 0.25rem; right: 0.25rem;
+    font-size: 0.75rem; font-weight: 700; color: #6b4e00;
+    background: #fff4d6; padding: 0.15rem 0.45rem; border-radius: 4px;
+}

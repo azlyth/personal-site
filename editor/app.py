@@ -21,7 +21,7 @@ from PIL import UnidentifiedImageError
 import tomlkit
 
 from editor import config
-from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
+from editor.blocks import delete_block, insert_block, move_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
 from editor.images import image_key, markdown_for, parse_images, process_image, upload
@@ -334,6 +334,20 @@ def add_block(slug: str, edit: BlockInsert):
 @app.delete("/api/posts/{slug}/blocks/{index}")
 def remove_block(slug: str, index: int, edit: BlockDelete):
     return _write_body(slug, edit.hash, lambda body: delete_block(body, index))
+
+
+class BlockMove(BaseModel):
+    to_index: int
+    hash: str
+
+
+@app.post("/api/posts/{slug}/blocks/{index}/move")
+def move_block_route(slug: str, index: int, edit: BlockMove):
+    # Both `index` (stale if another tab deleted/moved something first) and
+    # `edit.to_index` (a gap that no longer exists) raise IndexError from
+    # move_block -- _write_body already turns that into the same 409 as
+    # every other block edit route, not an unhandled 500.
+    return _write_body(slug, edit.hash, lambda body: move_block(body, index, edit.to_index))
 
 
 class ImageItem(BaseModel):

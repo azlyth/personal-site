@@ -1,6 +1,11 @@
 // Editor front end. Blocks render as HTML; tapping one swaps in its raw
 // markdown, so the source is always what gets edited and saved.
-const state = { slug: null, hash: null, blocks: [] };
+//
+// `moveIndex` is null outside move mode, or the index (as the client
+// currently sees the block list) of the block picked up by the Move
+// control. While set, renderBlocks() renders drop targets instead of the
+// normal editable blocks -- see renderMoveTargets().
+const state = { slug: null, hash: null, blocks: [], moveIndex: null };
 
 const els = {
   picker: document.getElementById('post-picker'),
@@ -169,6 +174,12 @@ async function renameSlug() {
 
 function renderBlocks() {
   els.blocks.innerHTML = '';
+
+  if (state.moveIndex !== null) {
+    renderMoveTargets();
+    return;
+  }
+
   state.blocks.forEach((block) => {
     const el = document.createElement('div');
     el.className = 'block';
@@ -223,8 +234,82 @@ function blockControls(block) {
     e.stopPropagation();
     pickImages(block.index);
   });
-  bar.append(add, photo, del);
+
+  const move = document.createElement('button');
+  move.textContent = '⇅';
+  move.title = 'Move this block';
+  move.addEventListener('click', (e) => {
+    e.stopPropagation();
+    enterMoveMode(block.index);
+  });
+
+  bar.append(add, photo, move, del);
   return bar;
+}
+
+// Move mode: every block, plus a target above the first and below the
+// last (N+1 targets for N blocks), gets a big tappable "place here" drop
+// zone. `state.moveIndex` names the block the client is moving -- gap `i`
+// in this render is exactly `to_index` in the move route, the same "gap
+// in the block list as the client currently sees it" convention
+// move_block() uses server-side, so no translation happens on the way in.
+function enterMoveMode(index) {
+  state.moveIndex = index;
+  renderBlocks();
+}
+
+function cancelMove() {
+  state.moveIndex = null;
+  renderBlocks();
+}
+
+function renderMoveTargets() {
+  const banner = document.createElement('div');
+  banner.className = 'move-banner';
+  const label = document.createElement('span');
+  label.textContent = 'Moving a block — tap where it should land';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'move-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.title = 'Leave move mode without moving anything';
+  cancel.addEventListener('click', cancelMove);
+  banner.append(label, cancel);
+  els.blocks.appendChild(banner);
+
+  const dropTarget = (gapIndex) => {
+    const target = document.createElement('button');
+    target.type = 'button';
+    target.className = 'move-target';
+    target.textContent = 'Place here';
+    target.addEventListener('click', () => submitMove(state.moveIndex, gapIndex));
+    els.blocks.appendChild(target);
+  };
+
+  state.blocks.forEach((block, i) => {
+    dropTarget(i);
+
+    const el = document.createElement('div');
+    el.className = 'block move-preview' + (i === state.moveIndex ? ' move-source' : '');
+    el.innerHTML = block.html;
+    els.blocks.appendChild(el);
+  });
+  dropTarget(state.blocks.length);
+}
+
+async function submitMove(fromIndex, toIndex) {
+  setStatus('saving…');
+  const res = await fetch(`/api/posts/${state.slug}/blocks/${fromIndex}/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to_index: toIndex, hash: state.hash }),
+  });
+  // Only leave move mode on success. applyWrite already leaves `state` and
+  // the DOM untouched on a 409 or any other failure -- `moveIndex` gets
+  // exactly the same treatment, so a failed move doesn't silently drop the
+  // user back into normal view with nothing actually moved.
+  if (res.ok) state.moveIndex = null;
+  await applyWrite(res);
 }
 
 function pickImages(index) {

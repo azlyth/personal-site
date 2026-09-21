@@ -6,6 +6,7 @@ from editor.blocks import (
     replace_block,
     insert_block,
     delete_block,
+    move_block,
 )
 
 SIMPLE = "First para.\n\n## A heading\n\nSecond para.\n"
@@ -159,3 +160,82 @@ def test_image_with_escaped_bracket_alt_still_classifies_as_image():
     source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a photo of a]bracket"])
     blocks = parse_blocks(source)
     assert [b.kind for b in blocks] == ["image"]
+
+
+# -- move_block --------------------------------------------------------
+#
+# `to_index` names a gap in the block list as the client currently sees it
+# (before the move): gap 0 is above the first block, gap N is below the
+# last, for N blocks. move_block is implemented as delete-then-insert, the
+# same splice primitives as everything else here -- never a re-serialisation
+# of the document.
+
+
+def test_move_forward_to_end():
+    out = move_block(SIMPLE, 0, 3)
+    assert out == "## A heading\n\nSecond para.\n\nFirst para.\n"
+
+
+def test_move_backward_to_start():
+    out = move_block(SIMPLE, 2, 0)
+    assert out == "Second para.\n\nFirst para.\n\n## A heading\n"
+
+
+def test_move_to_own_position_is_byte_identical_noop():
+    # The load-bearing property, per block: BOTH gaps that bracket a block's
+    # current position (immediately above it and immediately below it) are
+    # "where it already is" and must not perturb the file at all -- not even
+    # whitespace.
+    for body in (SIMPLE, IMAGES, MIXED_KINDS, CODE_WITH_FAKE_HEADING):
+        for block in parse_blocks(body):
+            assert move_block(body, block.index, block.index) == body
+            assert move_block(body, block.index, block.index + 1) == body
+
+
+def test_move_does_not_reflow_untouched_blocks():
+    # Same guarantee insert/delete already prove: blocks that weren't
+    # touched come through with their exact source, not just the right
+    # count/order.
+    data = parse_blocks(SIMPLE)
+    out = move_block(SIMPLE, 2, 0)
+    out_blocks = parse_blocks(out)
+    assert [b.source for b in out_blocks] == [
+        data[2].source,
+        data[0].source,
+        data[1].source,
+    ]
+
+
+def test_move_preserves_separators_across_mixed_kinds():
+    # A move that drops or duplicates a blank-line separator would silently
+    # reflow the rest of the post -- move the first block (a plain
+    # paragraph) to the very end and check every remaining block's source
+    # is untouched, not just reordered.
+    data = parse_blocks(MIXED_KINDS)
+    out = move_block(MIXED_KINDS, 0, len(data))
+    out_blocks = parse_blocks(out)
+    assert [b.kind for b in out_blocks] == [
+        "list",
+        "blockquote",
+        "code",
+        "hr",
+        "paragraph",
+        "paragraph",
+    ]
+    assert [b.source for b in out_blocks] == [b.source for b in data[1:]] + [data[0].source]
+
+
+def test_move_from_index_out_of_range_raises():
+    with pytest.raises(IndexError):
+        move_block(SIMPLE, 99, 0)
+
+
+def test_move_to_index_out_of_range_raises():
+    # 3 blocks -> gaps 0..3 are valid; 4 is not.
+    with pytest.raises(IndexError):
+        move_block(SIMPLE, 0, 4)
+
+
+def test_move_to_index_negative_raises():
+    with pytest.raises(IndexError):
+        move_block(SIMPLE, 0, -1)

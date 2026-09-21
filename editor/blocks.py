@@ -127,6 +127,45 @@ def insert_block(body: str, index: int, new_source: str) -> str:
     return _splice(body, block.start_line, block.start_line, new_lines + [""])
 
 
+def move_block(body: str, from_index: int, to_index: int) -> str:
+    """Move block `from_index` to gap `to_index`.
+
+    `to_index` names a position in the block list the way the CLIENT sees
+    it before the move -- gap 0 is above the first block, gap N (for N
+    blocks) is below the last, same convention as `insert_block`'s index.
+
+    Implemented as a splice-out (the same absorb-the-trailing-separator
+    logic as `delete_block`) followed by a splice-in of the exact source
+    text at the equivalent gap in the shortened list (the same
+    push-the-target-down logic as `insert_block`) -- never a
+    re-serialisation of the document. Moving a block to either gap that
+    already brackets it (immediately above or immediately below its current
+    position) is a no-op and is returned untouched: both gaps collapse to
+    the same insertion point once the block is provisionally removed, so
+    routing them through delete+insert would be a correct but pointless
+    round trip -- except for a single-block body, where deleting the only
+    block empties it and `insert_block`'s append path (reasonably) assumes
+    there's already content to separate from, adding a spurious blank
+    line. Short-circuiting here sidesteps that instead of teaching
+    `insert_block` about a body an in-range move can never actually leave
+    behind.
+    """
+    blocks = parse_blocks(body)
+    block = _require(blocks, from_index)
+    n = len(blocks)
+    if to_index < 0 or to_index > n:
+        raise IndexError(f"no gap at index {to_index}")
+
+    if to_index == from_index or to_index == from_index + 1:
+        return body
+
+    without = delete_block(body, from_index)
+    # Removing the block shifts every later gap index down by one; gaps at
+    # or before the removed block are unaffected.
+    effective_to = to_index if to_index <= from_index else to_index - 1
+    return insert_block(without, effective_to, block.source)
+
+
 def delete_block(body: str, index: int) -> str:
     """Remove block `index` along with the blank line that separated it."""
     blocks = parse_blocks(body)
