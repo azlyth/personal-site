@@ -4,9 +4,9 @@ date = 2026-09-20
 draft = false
 +++
 
-This summer, my hobby has been cleaning and beautifying my small corner of Astoria.
+This summer, my hobby has been cleaning and beautifying my corner in Astoria.
 
-It all began with a mourning dove nest under my AC.
+It began with a mourning dove nest under my AC.
 
 ![A cat looking out the window at a mourning dove nest tucked under an AC unit](https://img.cloudy.nyc/guerilla-gardening/dove-nest-and-cat.jpg)
 
@@ -36,7 +36,9 @@ I also started doing little litter patrols in the neighborhood.
 
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass. So I swept it all up.
 
-![A bare, patchy tree bed on the sidewalk before any cleanup](https://img.cloudy.nyc/guerilla-gardening/tree-bed-before.jpg)
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-1-loop.mp4" type="video/mp4">
+</video>
 
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
 
@@ -62,6 +64,14 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 4 bags of organic compost per tree bed. I used my new cultivator, and mixed the compost into the tree beds. It's amazing how even just fresh, rich dirt alone made the tree beds look better. Healthier.
 
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt.mp4" type="video/mp4">
+</video>
+
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed.mp4" type="video/mp4">
+</video>
+
 ![Bags of organic humus and manure compost loaded on a cart](https://img.cloudy.nyc/guerilla-gardening/compost-bags.jpg)
 
 ## Make it pretty, with flowers
@@ -83,6 +93,14 @@ After another Saturday afternoon of manual labor, with the help of my friend Dav
 <img src="https://img.cloudy.nyc/guerilla-gardening/planted-tree-bed-2.jpg" alt="A wider view of the finished, planted tree bed from above">
 </div>
 
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1.mp4" type="video/mp4">
+</video>
+
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2.mp4" type="video/mp4">
+</video>
+
 ## Why
 
 We deserve beautiful spaces, joyful streets. These tree beds are public gardens waiting to be tended to.
@@ -94,6 +112,10 @@ But that's a lot to ask. There's too much street and soil for the city to watch 
 If we're willing to accept that responsibility, we can have nice things: beautiful gardens, clean streets, and third places for people to gather.
 
 I'm really happy with how the tree beds turned out, and I'm glad to report that neighbors have told me they're happy with them too.
+
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night.mp4" type="video/mp4">
+</video>
 
 One guy told me: "They're beautiful, I've never seen anything like that in front of the building in the 30 years I've been here." I really thought that was beautiful.
 
