@@ -287,7 +287,15 @@ function mergeControl(index) {
   // without this, that tap's own mousedown-triggered blur can destroy this
   // button mid-click via renderBlocks().
   btn.addEventListener('mousedown', (e) => e.preventDefault());
-  btn.addEventListener('click', () => mergeBlock(index));
+  btn.addEventListener('click', async () => {
+    // Neither merge candidate is ever a plain-textarea block (mergeFamily()
+    // only fires for photo/video pairs), but some *other*, unrelated block
+    // on the page can still have unsaved text open -- and mousedown above
+    // suppressed the blur that would have saved it. Flush before merging,
+    // same as every blockControls() action.
+    if (!(await flushPendingEdit())) return;
+    mergeBlock(index);
+  });
   return btn;
 }
 
@@ -307,6 +315,29 @@ async function mergeBlock(index) {
   await applyWrite(res);
 }
 
+// If a plain-paragraph block's textarea is open with unsaved changes, save
+// it the way blurring it normally would -- and report whether that actually
+// landed. Every control-bar action below calls this first: those buttons'
+// mousedown now has preventDefault() on it (see the comment on `bar`
+// below), which stops the browser's default blur, which is what used to
+// trigger startEditing()'s save-on-blur. Without an explicit flush here,
+// tapping a control -- even one that only inserts/moves/deletes some *other*
+// block -- would silently sail past unsaved text and then wipe it out from
+// under the user the moment the action's own renderBlocks() call rebuilds
+// the page from `state`, which never saw the edit. Only a plain textarea
+// needs this: the photo/video thumbnail editors have no field that
+// autosaves-on-blur (their local `images`/`clips` working copy only ever
+// gets written on an explicit Done), so there's nothing to flush there.
+async function flushPendingEdit() {
+  const textarea = document.querySelector('.block.editing textarea');
+  if (!textarea) return true;
+  const el = textarea.closest('.block');
+  const index = Number(el.dataset.index);
+  const block = state.blocks[index];
+  if (!block || textarea.value === block.source) return true;
+  return await saveBlock(index, textarea.value);
+}
+
 function blockControls(block) {
   const bar = document.createElement('div');
   bar.className = 'block-controls';
@@ -323,37 +354,46 @@ function blockControls(block) {
   // (how toolbar buttons coexist with a focused text field): it suppresses
   // the browser's default "blur the focused element" behavior without
   // suppressing the click that follows.
+  //
+  // That trade requires flushPendingEdit() below: suppressing the blur
+  // also suppresses the save startEditing()'s blur handler used to trigger,
+  // so every handler here does that save itself, explicitly, before acting.
   bar.addEventListener('mousedown', (e) => e.preventDefault());
 
   const add = document.createElement('button');
   add.textContent = '+';
   add.title = 'Insert a paragraph here';
-  add.addEventListener('click', (e) => {
+  add.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if (!(await flushPendingEdit())) return;
     insertBlock(block.index);
   });
 
   const del = document.createElement('button');
   del.textContent = '×';
   del.title = 'Delete this block';
-  del.addEventListener('click', (e) => {
+  del.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (confirm('Delete this block?')) removeBlock(block.index);
+    if (!confirm('Delete this block?')) return;
+    if (!(await flushPendingEdit())) return;
+    removeBlock(block.index);
   });
 
   const photo = document.createElement('button');
   photo.textContent = '🖼';
   photo.title = 'Add photos here';
-  photo.addEventListener('click', (e) => {
+  photo.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if (!(await flushPendingEdit())) return;
     pickImages(block.index);
   });
 
   const move = document.createElement('button');
   move.textContent = '⇅';
   move.title = 'Move this block';
-  move.addEventListener('click', (e) => {
+  move.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if (!(await flushPendingEdit())) return;
     enterMoveMode(block.index);
   });
 
@@ -511,14 +551,14 @@ async function removeBlock(index) {
 async function applyWrite(res) {
   if (res.status === 409) {
     setStatus('changed on disk — reload');
-    return;
+    return false;
   }
   if (!res.ok) {
     // As in saveMeta: don't touch `state` or call renderBlocks() -- that
     // would wipe out whatever's still sitting in an open textarea with an
     // error body's `undefined` fields. Leave the editing UI exactly as is.
     setStatus(`save failed — ${await errorDetail(res)}`);
-    return;
+    return false;
   }
   const data = await res.json();
   state.hash = data.hash;
@@ -526,6 +566,10 @@ async function applyWrite(res) {
   renderBlocks();
   setStatus('saved');
   await refreshStatus();
+  // Callers that need to know whether the write actually landed --
+  // flushPendingEdit() is the one that matters here -- get an honest
+  // answer instead of having to re-derive it from side effects.
+  return true;
 }
 
 async function refreshStatus() {
@@ -622,9 +666,9 @@ async function saveBlock(index, source) {
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);
-    return;
+    return false;
   }
-  await applyWrite(res);
+  return await applyWrite(res);
 }
 
 // Thumbnail editor for an `image`/`img_row` block. All markup generation
