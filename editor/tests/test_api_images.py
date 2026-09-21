@@ -215,6 +215,37 @@ def test_too_many_files_is_rejected(temp_post):
     assert temp_post.read_text() == POST
 
 
+def test_cross_site_upload_is_rejected(temp_post):
+    # The JSON routes are protected by CORS preflight; multipart POSTs
+    # aren't, so a page the tablet happens to have open could try this
+    # route directly. Browsers set Sec-Fetch-Site and it can't be forged
+    # by page JS, so a non-same-origin value must be rejected outright,
+    # before the upload is ever processed.
+    data = client.get(f"/api/posts/{SLUG}").json()
+    res = client.post(
+        f"/api/posts/{SLUG}/images",
+        files=[("files", ("a.png", _png(), "image/png"))],
+        data={"alts": '["x"]', "index": "1", "hash": data["hash"]},
+        headers={"Sec-Fetch-Site": "cross-site"},
+    )
+
+    assert res.status_code == 403
+    assert not app.state.s3.calls
+    assert temp_post.read_text() == POST
+
+
+def test_same_origin_upload_is_allowed(temp_post):
+    data = client.get(f"/api/posts/{SLUG}").json()
+    res = client.post(
+        f"/api/posts/{SLUG}/images",
+        files=[("files", ("a.png", _png(), "image/png"))],
+        data={"alts": '["x"]', "index": "1", "hash": data["hash"]},
+        headers={"Sec-Fetch-Site": "same-origin"},
+    )
+
+    assert res.status_code == 200
+
+
 def test_fewer_alts_than_files_pads_with_empty_string(temp_post):
     data = client.get(f"/api/posts/{SLUG}").json()
     res = client.post(

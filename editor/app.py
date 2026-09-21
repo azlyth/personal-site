@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 import boto3
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -359,12 +359,30 @@ def _too_large(position: int, total: int, filename: str | None, size_bytes: floa
 
 @app.post("/api/posts/{slug}/images")
 async def add_images(
+    request: Request,
     slug: str,
     index: int = Form(...),
     hash: str = Form(...),
     alts: str = Form("[]"),
     files: list[UploadFile] = File(...),
 ):
+    # The JSON routes are implicitly guarded by CORS preflight (a
+    # cross-origin fetch with a JSON body triggers one, and the browser
+    # never sends the real request if it fails), but a multipart
+    # POST -- what this route takes -- is a browser "simple request" that
+    # never asks first. A page the tablet happens to have open could POST
+    # here; it would need this post's exact sha256 (the `hash` check
+    # below) to pass, which is computable from the public GitHub repo, so
+    # this isn't purely theoretical. Sec-Fetch-Site is sent by every
+    # browser this LAN app needs to support and can't be forged by page
+    # JS, so reject anything explicitly marked as not same-origin. Absent
+    # entirely (curl, very old browsers) it's let through -- this route is
+    # LAN-only already, and those clients don't carry a stolen browser
+    # session to begin with.
+    sec_fetch_site = request.headers.get("sec-fetch-site")
+    if sec_fetch_site is not None and sec_fetch_site != "same-origin":
+        raise HTTPException(status_code=403, detail="cross-site requests are not allowed")
+
     _, raw, _, _ = _read_post(slug)
     if hashlib.sha256(raw).hexdigest() != hash:
         raise HTTPException(
