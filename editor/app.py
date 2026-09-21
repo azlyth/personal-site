@@ -16,7 +16,7 @@ from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, split_post
 from editor.guard import assert_not_publicly_routed
-from editor.publish import publish
+from editor.publish import _has_unpushed_commits, publish
 
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
 
@@ -30,24 +30,43 @@ class PublishRequest(BaseModel):
 
 
 def _dirty_paths() -> list[str]:
-    """Paths git reports as dirty.
+    """Paths git reports as dirty, via the NUL-separated porcelain format.
 
-    Renames matter: `git mv` (the slug-change route) makes git report
-    `R  old.md -> new.md` on ONE line. Handing that whole string to `git add`
-    as a single path fails, so both sides are split out -- the pre-image needs
-    staging for the deletion, the new path for the addition.
+    Plain `git status --porcelain` C-quotes paths with non-ASCII characters,
+    quotes, or backslashes (e.g. `"content/blog/caf\\303\\251-post.md"`), so
+    a `startswith("content/blog/")` check silently fails and the post is
+    dropped with no error. `-z` emits raw, unquoted, NUL-separated paths
+    instead, which avoids that.
+
+    Renames matter too: `git mv` (the slug-change route) makes git report a
+    rename as TWO consecutive NUL-terminated fields -- `XY <new>\\0<orig>\\0`
+    -- the NEW path first, then the ORIGINAL, not joined by `" -> "` the way
+    the human-readable format does it. Both paths still need staging: the new
+    path for the addition, the original for the deletion.
     """
     out = subprocess.run(
-        ["git", "status", "--porcelain"],
+        ["git", "status", "--porcelain", "-z"],
         cwd=config.REPO, check=True, capture_output=True, text=True,
     ).stdout
 
+    fields = out.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+
     paths: list[str] = []
-    for line in out.splitlines():
-        if not line.strip():
+    i = 0
+    while i < len(fields):
+        entry = fields[i]
+        i += 1
+        if not entry:
             continue
-        entry = line[3:].strip()
-        paths.extend(part.strip() for part in entry.split(" -> "))
+        code, path = entry[:2], entry[3:]
+        paths.append(path)
+        if "R" in code or "C" in code:
+            # Rename/copy: the next field is the original path.
+            if i < len(fields):
+                paths.append(fields[i])
+                i += 1
     return paths
 
 
@@ -58,17 +77,22 @@ def _blog_paths() -> list[str]:
 @app.get("/api/status")
 def status():
     dirty = _blog_paths()
-    return {"dirty": dirty, "clean": not dirty}
+    unpushed = _has_unpushed_commits(config.REPO)
+    outstanding = bool(dirty) or unpushed
+    return {"dirty": dirty, "unpushed": unpushed, "clean": not outstanding}
 
 
 @app.post("/api/publish")
 def do_publish(request: PublishRequest):
     paths = _blog_paths()
-    if not paths:
-        return {"committed": False, "sha": None, "pushed": False,
-                "published": False, "message": "nothing to publish"}
-
-    message = request.message or f"Update {len(paths)} post(s) from the editor"
+    # Don't short-circuit on empty paths: a clean tree with an unpushed
+    # commit is exactly the state a prior publish() left behind after a
+    # failed push or S3 publish, and publish() already knows how to finish
+    # that -- returning "nothing to publish" here would strand it.
+    message = request.message or (
+        f"Update {len(paths)} post(s) from the editor" if paths
+        else "Publish from the editor"
+    )
     result = publish(config.REPO, paths, message)
     return result.__dict__
 

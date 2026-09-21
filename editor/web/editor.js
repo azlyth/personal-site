@@ -124,9 +124,16 @@ async function applyWrite(res) {
 async function refreshStatus() {
   const data = await (await fetch('/api/status')).json();
   els.publish.disabled = data.clean;
-  els.publish.textContent = data.clean
-    ? 'Published'
-    : `Publish (${data.dirty.length})`;
+  if (data.clean) {
+    els.publish.textContent = 'Published';
+  } else if (data.dirty.length > 0) {
+    els.publish.textContent = `Publish (${data.dirty.length})`;
+  } else {
+    // Tree is clean but a prior commit never made it live (push or the S3
+    // publish failed) -- leave the button live so there's a way to retry
+    // without needing to make a throwaway edit first.
+    els.publish.textContent = 'Retry publish';
+  }
 }
 
 els.publish.addEventListener('click', async () => {
