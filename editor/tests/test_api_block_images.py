@@ -76,6 +76,15 @@ def test_get_post_includes_images_for_img_row_block(temp_post):
     ]
 
 
+def test_get_post_includes_default_size_for_photo_blocks(temp_post):
+    # Neither block in POST has ever had a size chosen -- both should read
+    # back as the default preset, same as a video row always has *a* size
+    # but these start out at the one that needs no class at all.
+    data = _get()
+    assert data["blocks"][1]["size"] == "full"
+    assert data["blocks"][2]["size"] == "full"
+
+
 def test_get_post_omits_images_for_non_photo_blocks(temp_post):
     data = _get()
     assert "images" not in data["blocks"][0]  # "Intro." paragraph
@@ -151,6 +160,106 @@ def test_replace_block_images_rewrites_standalone_to_img_row(temp_post):
     on_disk = temp_post.read_text(encoding="utf-8")
     assert '<div class="img-row">' in on_disk
     assert "https://img.cloudy.nyc/p/new.jpg" in on_disk
+
+
+def test_replace_block_images_with_size_wraps_standalone_image(temp_post):
+    # Picking a non-default size for the lone standalone image (block 1)
+    # must promote it to a wrapped, sized `.img-row` -- that's the only way
+    # a single photo can carry a size class.
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/images",
+        json={
+            "images": [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "alt one"}],
+            "size": "small",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    out = res.json()
+    block = out["blocks"][1]
+    assert block["kind"] == "img_row"
+    assert block["size"] == "small"
+    assert block["images"] == [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "alt one"}]
+
+    on_disk = temp_post.read_text(encoding="utf-8")
+    assert '<div class="img-row size-small">' in on_disk
+    assert "![alt one]" not in on_disk
+
+
+def test_replace_block_images_back_to_default_size_returns_to_plain_markdown(temp_post):
+    # First size it, then set it back to the default -- the block must
+    # collapse back to plain markdown, not stay a `size-full` div. Proves
+    # the opt-in property survives a round trip through the sized shape.
+    data = _get()
+    sized = client.put(
+        f"/api/posts/{SLUG}/blocks/1/images",
+        json={
+            "images": [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "alt one"}],
+            "size": "medium",
+            "hash": data["hash"],
+        },
+    ).json()
+
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/images",
+        json={
+            "images": [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "alt one"}],
+            "size": "full",
+            "hash": sized["hash"],
+        },
+    )
+    assert res.status_code == 200
+    out = res.json()
+    block = out["blocks"][1]
+    assert block["kind"] == "image"
+    assert block["size"] == "full"
+
+    on_disk = temp_post.read_text(encoding="utf-8")
+    assert on_disk.count("img-row") == 1  # only the original block 2 img_row remains
+    assert "![alt one](https://img.cloudy.nyc/p/one.jpg)" in on_disk
+
+
+def test_replace_block_images_with_size_on_img_row(temp_post):
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/2/images",
+        json={
+            "images": [
+                {"url": "https://img.cloudy.nyc/p/two.jpg", "alt": "two"},
+                {"url": "https://img.cloudy.nyc/p/three.jpg", "alt": "three"},
+            ],
+            "size": "medium",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    block = res.json()["blocks"][2]
+    assert block["size"] == "medium"
+
+    on_disk = temp_post.read_text(encoding="utf-8")
+    assert '<div class="img-row size-medium">' in on_disk
+
+
+def test_replace_block_images_without_size_field_defaults_to_full(temp_post):
+    # Existing clients/tests that don't send `size` at all must keep
+    # working exactly as before this feature -- same as an unsized img-row.
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/2/images",
+        json={
+            "images": [
+                {"url": "https://img.cloudy.nyc/p/three.jpg", "alt": "three"},
+                {"url": "https://img.cloudy.nyc/p/two.jpg", "alt": "two"},
+            ],
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    block = res.json()["blocks"][2]
+    assert block["size"] == "full"
+    on_disk = temp_post.read_text(encoding="utf-8")
+    assert '<div class="img-row">' in on_disk
 
 
 def test_replace_block_images_reorders(temp_post):

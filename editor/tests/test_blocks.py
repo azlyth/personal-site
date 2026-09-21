@@ -88,6 +88,25 @@ def test_parse_classifies_image_and_img_row():
     assert kinds == ["paragraph", "image", "img_row", "paragraph"]
 
 
+def test_parse_classifies_sized_single_image_as_img_row():
+    # A single photo at a non-default size is promoted (by images.py's
+    # markdown_for) to a wrapped `<div class="img-row size-...">` -- it
+    # must classify as img_row (which gets the thumbnail editor with size
+    # buttons), not fall through to plain paragraph/image.
+    body = (
+        'Intro.\n'
+        '\n'
+        '<div class="img-row size-small">\n'
+        '<img src="https://img.cloudy.nyc/p/one.jpg" alt="one">\n'
+        '</div>\n'
+        '\n'
+        'Outro.\n'
+    )
+    blocks = parse_blocks(body)
+    kinds = [b.kind for b in blocks]
+    assert kinds == ["paragraph", "img_row", "paragraph"]
+
+
 def test_parse_classifies_video_row():
     blocks = parse_blocks(VIDEOS)
     kinds = [b.kind for b in blocks]

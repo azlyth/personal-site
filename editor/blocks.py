@@ -27,7 +27,10 @@ _KIND_BY_TOKEN = {
     "hr": "hr",
 }
 
-_IMG_ROW_RE = re.compile(r'<div\s+class="img-row"', re.I)
+# No trailing `"` -- must also match a sized row (`class="img-row size-small"`),
+# not just the unsized `class="img-row"` shape. Mirrors _VIDEO_ROW_RE below,
+# which never had this bug since every video row always carries a size class.
+_IMG_ROW_RE = re.compile(r'<div\s+class="img-row', re.I)
 _VIDEO_ROW_RE = re.compile(r'<div\s+class="video-row', re.I)
 # The alt group allows an escaped `\]` (or `\[`, or any other `\x`) as well
 # as any plain non-bracket character, so a standalone image whose alt text

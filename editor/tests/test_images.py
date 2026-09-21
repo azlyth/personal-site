@@ -55,6 +55,24 @@ def test_single_image_renders_standalone():
     assert out == "![a cat](https://img.cloudy.nyc/p/a.jpg)"
 
 
+def test_single_image_default_size_stays_plain_markdown():
+    # Sizing is opt-in: a lone photo at the default preset never becomes a
+    # wrapped div, so untouched posts round-trip byte-for-byte.
+    out = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "full")
+    assert out == "![a cat](https://img.cloudy.nyc/p/a.jpg)"
+
+
+def test_single_image_non_default_size_wraps_in_img_row():
+    # Only a non-default choice promotes a standalone image to the div shape
+    # -- that's the only way it can carry a size class at all.
+    out = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "small")
+    assert out == (
+        '<div class="img-row size-small">\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg" alt="a cat">\n'
+        "</div>"
+    )
+
+
 def test_multiple_images_render_as_img_row():
     out = markdown_for(
         ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
@@ -63,6 +81,30 @@ def test_multiple_images_render_as_img_row():
     assert out.startswith('<div class="img-row">')
     assert out.rstrip().endswith("</div>")
     assert out.count("<img ") == 2
+
+
+def test_multiple_images_default_size_has_no_size_class():
+    out = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ["a", "b"],
+        "full",
+    )
+    assert out.startswith('<div class="img-row">')
+    assert "size-" not in out.splitlines()[0]
+
+
+def test_multiple_images_non_default_size_includes_class():
+    out = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ["a", "b"],
+        "medium",
+    )
+    assert out.startswith('<div class="img-row size-medium">')
+
+
+def test_markdown_for_rejects_unknown_size():
+    with pytest.raises(ValueError):
+        markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a"], "huge")
 
 
 def test_single_image_alt_with_bracket_does_not_break_the_link():
@@ -119,7 +161,10 @@ def test_markdown_for_raises_on_length_mismatch():
 
 def test_parse_images_single_markdown_image():
     out = parse_images("image", "![a cat](https://img.cloudy.nyc/p/a.jpg)")
-    assert out == [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}]
+    assert out == {
+        "size": "full",
+        "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}],
+    }
 
 
 def test_parse_images_img_row_multiple():
@@ -128,11 +173,14 @@ def test_parse_images_img_row_multiple():
         ["a", "b", "c"],
     )
     out = parse_images("img_row", source)
-    assert out == [
-        {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
-        {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
-        {"url": "https://img.cloudy.nyc/p/c.jpg", "alt": "c"},
-    ]
+    assert out == {
+        "size": "full",
+        "images": [
+            {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
+            {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
+            {"url": "https://img.cloudy.nyc/p/c.jpg", "alt": "c"},
+        ],
+    }
 
 
 def test_parse_images_round_trips_escaped_markdown_alt():
@@ -140,7 +188,10 @@ def test_parse_images_round_trips_escaped_markdown_alt():
     # it back out must undo that, not leave the backslashes in.
     source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a photo of [me]"])
     out = parse_images("image", source)
-    assert out == [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a photo of [me]"}]
+    assert out == {
+        "size": "full",
+        "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a photo of [me]"}],
+    }
 
 
 def test_parse_images_img_row_round_trips_html_escaped_alt():
@@ -149,8 +200,55 @@ def test_parse_images_img_row_round_trips_html_escaped_alt():
         ['the 30" monitor & more <thing>', "b"],
     )
     out = parse_images("img_row", source)
-    assert out[0] == {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": 'the 30" monitor & more <thing>'}
-    assert out[1] == {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"}
+    assert out["images"][0] == {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": 'the 30" monitor & more <thing>'}
+    assert out["images"][1] == {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"}
+
+
+def test_parse_images_img_row_parses_size_class():
+    source = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ["a", "b"],
+        "small",
+    )
+    out = parse_images("img_row", source)
+    assert out["size"] == "small"
+    assert out["images"] == [
+        {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
+        {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
+    ]
+
+
+def test_parse_images_img_row_without_size_class_defaults_to_full():
+    # Existing published posts have plain `<div class="img-row">` with no
+    # size class at all -- this must still parse (and round-trip) rather
+    # than falling back to raw-source editing just because it predates the
+    # size feature.
+    source = (
+        '<div class="img-row">\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg" alt="a">\n'
+        '<img src="https://img.cloudy.nyc/p/b.jpg" alt="b">\n'
+        "</div>"
+    )
+    out = parse_images("img_row", source)
+    assert out == {
+        "size": "full",
+        "images": [
+            {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
+            {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
+        ],
+    }
+
+
+def test_parse_images_single_sized_image_round_trips_as_img_row():
+    # The wrinkle: picking a non-default size for a lone photo promotes it
+    # to the wrapped div shape (blocks.py then classifies it img_row, not
+    # image) -- parse_images has to round-trip that shape too.
+    source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "small")
+    out = parse_images("img_row", source)
+    assert out == {
+        "size": "small",
+        "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}],
+    }
 
 
 def test_parse_images_malformed_or_unparseable_block_returns_none():

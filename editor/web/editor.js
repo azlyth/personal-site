@@ -683,6 +683,7 @@ function startEditingImages(el, content, block) {
 
   // A local working copy -- nothing here touches `state` until Done saves.
   const images = block.images.map((img) => ({ ...img }));
+  let size = block.size;
 
   const strip = document.createElement('div');
   strip.className = 'image-strip';
@@ -808,6 +809,31 @@ function startEditingImages(el, content, block) {
     input.click();
   }
 
+  // Same Small/Medium/Full control as the video row editor -- server-side,
+  // choosing a non-default size on a lone photo is what promotes it from
+  // plain markdown to a wrapped, sized `.img-row` (see images.py's
+  // markdown_for); the button UI itself doesn't need to know that.
+  const sizes = document.createElement('div');
+  sizes.className = 'video-size-buttons';
+  [
+    ['small', 'Small'],
+    ['medium', 'Medium'],
+    ['full', 'Full'],
+  ].forEach(([value, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    if (value === size) btn.classList.add('active');
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      size = value;
+      sizes.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    sizes.appendChild(btn);
+  });
+  content.appendChild(sizes);
+
   const actions = document.createElement('div');
   actions.className = 'image-editor-actions';
 
@@ -824,7 +850,7 @@ function startEditingImages(el, content, block) {
     // lose the block's placement and alt text (the photo itself is still
     // in S3, but nothing here points at it anymore). Confirm first.
     if (images.length === 0 && !confirm('Remove this photo block?')) return;
-    saveBlockImages(block.index, images);
+    saveBlockImages(block.index, images, size);
   });
 
   const cancel = document.createElement('button');
@@ -847,14 +873,14 @@ function startEditingImages(el, content, block) {
   renderThumbs();
 }
 
-async function saveBlockImages(index, images) {
+async function saveBlockImages(index, images, size) {
   setStatus('saving…');
   let res;
   try {
     res = await fetch(`/api/posts/${state.slug}/blocks/${index}/images`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images, hash: state.hash }),
+      body: JSON.stringify({ images, size, hash: state.hash }),
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);

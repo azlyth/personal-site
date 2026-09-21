@@ -67,7 +67,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 0.75rem;
-            margin: 1.5rem 0;
+            margin: 1.5rem auto;
         }
 
         .img-row img {
@@ -76,6 +76,17 @@
             height: 100%;
             object-fit: cover;
         }
+
+        /* Same three presets as .video-row below, and the same reason a
+           single photo still gets wrapped in a sized row: without a wrapper
+           there's nowhere to put the size class. Unlike .video-row, the
+           default preset (`full`) is never written as an explicit class --
+           see editor/images.py's markdown_for -- so a plain, unsized
+           `.img-row` (every row written before this feature existed) is the
+           same as `.img-row.size-full` here. */
+        .img-row.size-small { max-width: 240px; }
+        .img-row.size-medium { max-width: 420px; }
+        .img-row.size-full { max-width: 100%; }
 
         .container video {
             max-width: 100%;

@@ -273,9 +273,10 @@ def _block_json(block) -> dict:
         # `[]`, both of which the client (or any other consumer) could
         # mistake for "this photo block is empty" instead of "this block
         # isn't safely editable as a photo list; fall back to raw source."
-        images = parse_images(block.kind, block.source)
-        if images is not None:
-            out["images"] = images
+        parsed = parse_images(block.kind, block.source)
+        if parsed is not None:
+            out["images"] = parsed["images"]
+            out["size"] = parsed["size"]
     elif block.kind == "video":
         # Same discipline as parse_images -- see videos.parse_videos.
         parsed = videos.parse_videos(block.kind, block.source)
@@ -382,12 +383,17 @@ def _merge_source(upper, lower) -> str | None:
     there.
     """
     if upper.kind in _PHOTO_KINDS and lower.kind in _PHOTO_KINDS:
-        upper_images = parse_images(upper.kind, upper.source)
-        lower_images = parse_images(lower.kind, lower.source)
-        if upper_images is None or lower_images is None:
+        upper_parsed = parse_images(upper.kind, upper.source)
+        lower_parsed = parse_images(lower.kind, lower.source)
+        if upper_parsed is None or lower_parsed is None:
             return None
-        combined = upper_images + lower_images
-        return markdown_for([img["url"] for img in combined], [img["alt"] for img in combined])
+        combined = upper_parsed["images"] + lower_parsed["images"]
+        # Keep the UPPER row's size preset, not the lower's -- same rule as
+        # the video merge below, for the same reason (the owner is acting
+        # from the upper block).
+        return markdown_for(
+            [img["url"] for img in combined], [img["alt"] for img in combined], upper_parsed["size"]
+        )
 
     if upper.kind == "video" and lower.kind == "video":
         upper_parsed = videos.parse_videos(upper.kind, upper.source)
@@ -441,6 +447,10 @@ class ImageItem(BaseModel):
 
 class BlockImagesEdit(BaseModel):
     images: list[ImageItem]
+    # Same three presets as a video row's size. Defaults to the no-class
+    # preset so callers that predate this feature (and existing tests) that
+    # never send `size` at all keep behaving exactly as before.
+    size: str = "full"
     hash: str
 
 
@@ -449,9 +459,10 @@ def edit_block_images(slug: str, index: int, edit: BlockImagesEdit):
     """Rewrite an `image`/`img_row` block from a thumbnail-editor's list.
 
     All markup generation stays server-side (`markdown_for` already owns the
-    escaping); the client only ever sends back the URLs/alts it's editing.
-    An empty list deletes the block rather than writing out a `<div
-    class="img-row"></div>` with nothing in it.
+    escaping and the standalone-vs-.img-row decision); the client only ever
+    sends back the URLs/alts/size it's editing. An empty list deletes the
+    block rather than writing out a `<div class="img-row"></div>` with
+    nothing in it.
     """
 
     def transform(body: str) -> str:
@@ -459,7 +470,11 @@ def edit_block_images(slug: str, index: int, edit: BlockImagesEdit):
             return delete_block(body, index)
         urls = [image.url for image in edit.images]
         alts = [image.alt for image in edit.images]
-        return replace_block(body, index, markdown_for(urls, alts))
+        try:
+            new_source = markdown_for(urls, alts, edit.size)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return replace_block(body, index, new_source)
 
     return _write_body(slug, edit.hash, transform)
 

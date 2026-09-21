@@ -50,10 +50,14 @@ def image_key(post_slug: str, alt_text: str, data: bytes) -> str:
 
 _MD_IMAGE_RE = re.compile(r"^!\[(?P<alt>.*)\]\((?P<url>[^)]*)\)$", re.S)
 _IMG_TAG_RE = re.compile(r'<img\s+src="(?P<url>[^"]*)"\s+alt="(?P<alt>[^"]*)"\s*/?>')
+_IMG_ROW_OPEN_RE = re.compile(r'^<div class="img-row(?: size-(?P<size>[a-z]+))?">')
+
+DEFAULT_SIZE = "full"
+_VALID_SIZES = {"small", "medium", "full"}
 
 
-def parse_images(kind: str, source: str) -> list[dict] | None:
-    """The inverse of `markdown_for`: pull `{url, alt}` pairs back out of an
+def parse_images(kind: str, source: str) -> dict | None:
+    """The inverse of `markdown_for`: pull `{size, images}` back out of an
     `image` or `img_row` block's markdown source, undoing the escaping
     `markdown_for` applied on the way in.
 
@@ -69,12 +73,18 @@ def parse_images(kind: str, source: str) -> list[dict] | None:
     shapes nobody's thought of yet -- returns `None`, and the caller must
     fall back to editing the block as raw source.
 
-    Returns `None`, not `[]`, when the block isn't safely representable.
-    That distinction matters: an `img_row` block whose `<img>` tags all
-    fail to match still has *some* photos in it, and `[]` would read to a
-    caller as "an intentionally empty row" rather than "couldn't parse
-    this" -- indistinguishable from a state that's supposed to delete the
-    block.
+    An `.img-row` with no `size-*` class at all (every row written before
+    this feature existed) defaults to `DEFAULT_SIZE` -- same discipline as
+    the missing-alt case above: absence of a size class must still parse,
+    or every already-published photo row would silently lose its thumbnail
+    editor the moment this shipped.
+
+    Returns `None`, not `{"size": ..., "images": []}`, when the block isn't
+    safely representable. That distinction matters: an `img_row` block
+    whose `<img>` tags all fail to match still has *some* photos in it, and
+    an empty list would read to a caller as "an intentionally empty row"
+    rather than "couldn't parse this" -- indistinguishable from a state
+    that's supposed to delete the block.
     """
     if kind == "image":
         match = _MD_IMAGE_RE.match(source.strip())
@@ -82,27 +92,44 @@ def parse_images(kind: str, source: str) -> list[dict] | None:
             return None
         alt = match.group("alt").replace("\\]", "]").replace("\\[", "[")
         images = [{"url": match.group("url"), "alt": alt}]
+        size = DEFAULT_SIZE
     elif kind == "img_row":
+        stripped = source.strip()
+        open_match = _IMG_ROW_OPEN_RE.match(stripped)
+        if not open_match:
+            return None
+        size = open_match.group("size") or DEFAULT_SIZE
         images = [
             {"url": match.group("url"), "alt": html.unescape(match.group("alt"))}
-            for match in _IMG_TAG_RE.finditer(source)
+            for match in _IMG_TAG_RE.finditer(stripped)
         ]
     else:
         return None
 
     try:
-        regenerated = markdown_for([img["url"] for img in images], [img["alt"] for img in images])
+        regenerated = markdown_for(
+            [img["url"] for img in images], [img["alt"] for img in images], size
+        )
     except ValueError:
-        # Unreachable in practice -- urls/alts come from the same list
-        # comprehension above and are always equal length -- but stay
-        # defensive rather than let a future refactor turn this into a 500.
+        # size isn't one of the three real presets, or urls/alts somehow
+        # ended up mismatched -- either way this block isn't safely
+        # representable.
         return None
 
-    return images if regenerated == source.strip() else None
+    return {"size": size, "images": images} if regenerated == source.strip() else None
 
 
-def markdown_for(urls: list[str], alts: list[str]) -> str:
-    """One image is a standalone; several become an .img-row.
+def markdown_for(urls: list[str], alts: list[str], size: str = DEFAULT_SIZE) -> str:
+    """One image at the default size is a standalone markdown link; anything
+    else -- several images, or a single image at a non-default size -- is a
+    `.img-row` div.
+
+    Sizing is opt-in for a lone photo: only picking a non-default size
+    promotes it to the div shape, so a post nobody has resized stays plain
+    markdown byte-for-byte. An `.img-row` at the default size still omits
+    the size class entirely (not `size-full`) for the same reason on the
+    multi-photo side -- every row written before this feature existed has
+    no class at all, and this keeps those byte-identical too.
 
     Alt text is free-form input typed by a person, so it's escaped for
     whichever context it lands in: `]`/`[` (and a collapsed newline) for the
@@ -112,12 +139,15 @@ def markdown_for(urls: list[str], alts: list[str]) -> str:
         raise ValueError(
             f"urls and alts must be the same length (got {len(urls)} urls, {len(alts)} alts)"
         )
+    if size not in _VALID_SIZES:
+        raise ValueError(f"unknown image row size {size!r} (must be one of {sorted(_VALID_SIZES)})")
 
-    if len(urls) == 1:
+    if len(urls) == 1 and size == DEFAULT_SIZE:
         alt = alts[0].replace("\n", " ").replace("[", "\\[").replace("]", "\\]")
         return f"![{alt}]({urls[0]})"
 
-    lines = ['<div class="img-row">']
+    class_attr = "img-row" if size == DEFAULT_SIZE else f"img-row size-{size}"
+    lines = [f'<div class="{class_attr}">']
     for url, alt in zip(urls, alts):
         safe_alt = html.escape(alt.replace("\n", " "), quote=True)
         lines.append(f'<img src="{url}" alt="{safe_alt}">')

@@ -56,8 +56,15 @@ a { color: #0066cc; }
 }
 
 .block img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 1rem auto; }
-.img-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.img-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem auto; }
 .img-row img { margin: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* See templates/base.html for the size-preset widths -- kept in sync with
+   those (and with .video-row's, below), and asserted so by
+   test_video_size_presets.py. */
+.img-row.size-small { max-width: 240px; }
+.img-row.size-medium { max-width: 420px; }
+.img-row.size-full { max-width: 100%; }
 
 /* Mirrors .img-row -- see templates/base.html for the size-preset widths,
    kept in sync with those. */
