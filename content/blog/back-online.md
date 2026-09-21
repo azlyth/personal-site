@@ -16,3 +16,5 @@ So today, simple beginnings:
 
 - A blog at [ptrvldz.me](https://ptrvldz.me)
 - A git repo at [git.ptrvldz.me](https://git.ptrvldz.me) 
+
+Task 11 end-to-end publish check (2026-09-20) — safe to ignore, will be reverted.
