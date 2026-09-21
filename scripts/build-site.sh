@@ -33,6 +33,13 @@ docker run --rm \
   personal-site-zola \
   zola build --base-url "$BASE_URL" --output-dir "/project/$TMP_REL" --force
 
+# Refuse to promote a build that produced nothing -- rsync --delete against an
+# empty or bogus scratch dir would wipe the live public/ instead of updating it.
+if [ ! -s "$TMP_ABS/index.html" ]; then
+  echo "build produced no index.html in $TMP_REL -- refusing to sync" >&2
+  exit 1
+fi
+
 # Promote: sync the new build's contents into the stable public/ dir.
 mkdir -p "$REPO/public"
 rsync -a --delete "$TMP_ABS/" "$REPO/public/"
