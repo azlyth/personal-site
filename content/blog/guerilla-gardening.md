@@ -8,7 +8,9 @@ This summer, my hobby has been cleaning and beautifying my corner in Astoria.
 
 It began with a mourning dove nest under my AC.
 
-![A cat looking out the window at a mourning dove nest tucked under an AC unit](https://img.cloudy.nyc/guerilla-gardening/dove-nest-and-cat.jpg)
+<div class="img-row size-medium">
+<img src="https://img.cloudy.nyc/guerilla-gardening/cat-and-chicks-a623affb.jpg" alt="Cat and chicks">
+</div>
 
 ## Dove nest, bird mites
 
@@ -54,7 +56,14 @@ I took a walk around the neighborhood for some inspiration, looked at a few diff
 
 Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work later, we had a pretty red brick border on the two tree beds framing my apartment courtyard entrance.
 
-![A tree bed freshly bordered with red bricks, freshly turned dirt inside](https://img.cloudy.nyc/guerilla-gardening/brick-border.jpg)
+<div class="video-row size-full">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop.mp4" type="video/mp4">
+</video>
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop.mp4" type="video/mp4">
+</video>
+</div>
 
 ## Make it pretty, with dirt
 
@@ -65,15 +74,6 @@ But first, the dirt needed some love.
 So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some organic compost. From Home Depot, it turns out. The trick was to order pickup so they'd fetch it from ✨the back✨.
 
 4 bags of organic compost per tree bed. I used my new cultivator, and mixed the compost into the tree beds. It's amazing how even just fresh, rich dirt alone made the tree beds look better. Healthier.
-
-<div class="video-row size-medium">
-<video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop.mp4" type="video/mp4">
-</video>
-<video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop.mp4" type="video/mp4">
-</video>
-</div>
 
 <div class="video-row size-medium">
 <video autoplay loop muted playsinline data-sync-loop="4">
@@ -95,20 +95,15 @@ Bought twelve lilyturf, four orange aster, four light purple aster. To be split 
 
 After another Saturday afternoon of manual labor, with the help of my friend David, the plants were planted.
 
-<div class="img-row">
-<img src="https://img.cloudy.nyc/guerilla-gardening/planted-tree-bed-1.jpg" alt="A finished tree bed with a brick border, orange and purple flowers, and lilyturf planted around the tree">
-<img src="https://img.cloudy.nyc/guerilla-gardening/planted-tree-bed-2.jpg" alt="A wider view of the finished, planted tree bed from above">
-</div>
-
-<div class="video-row size-medium">
+<div class="video-row size-full">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1-loop.mp4" type="video/mp4">
 </video>
-</div>
-
-<div class="video-row size-medium">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2-loop.mp4" type="video/mp4">
+</video>
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night-loop.mp4" type="video/mp4">
 </video>
 </div>
 
@@ -124,14 +119,10 @@ If we're willing to accept that responsibility, we can have nice things: beautif
 
 I'm really happy with how the tree beds turned out, and I'm glad to report that neighbors have told me they're happy with them too.
 
-<div class="video-row size-medium">
-<video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night-loop.mp4" type="video/mp4">
-</video>
-</div>
-
 One guy told me: "They're beautiful, I've never seen anything like that in front of the building in the 30 years I've been here." I really thought that was beautiful.
 
 A few days later, another neighbor told me they came out very pretty, and that she hasn't seen anything like that in front of the building in the 50 (!!) years that she's been here. Now that's wild.
 
 We're really out here changing the city.
+
+![Tree bed with flowers and painted stones](https://img.cloudy.nyc/guerilla-gardening/tree-bed-with-flowers-and-painted-stones-f5c8b319.jpg)
