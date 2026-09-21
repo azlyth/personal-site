@@ -26,8 +26,16 @@ body {
 }
 .publish:disabled { opacity: 0.5; cursor: default; }
 
-.title { font-size: 1.6rem; font-weight: 600; }
-.post-meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; }
+.title { font-size: 1.6rem; font-weight: 600; cursor: text; }
+.title-input { font: inherit; font-weight: inherit; width: 100%; border: none; outline: none; }
+.post-meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; align-items: center; }
+.post-meta input[type="date"] { font: inherit; font-size: 0.9rem; }
+.rename-slug {
+    font: inherit; font-size: 0.85rem; color: #888;
+    border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    padding: 0.2rem 0.5rem; cursor: pointer;
+}
+.rename-slug:hover { border-color: #0066cc; color: #0066cc; }
 
 a { color: #0066cc; }
 

@@ -1,8 +1,10 @@
 """The blog editor service. LAN-only; see editor/guard.py."""
 from __future__ import annotations
 
+import datetime
 import hashlib
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -14,7 +16,7 @@ from pydantic import BaseModel
 
 from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
-from editor.frontmatter import join_post, read_meta, split_post
+from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
 from editor.publish import _has_unpushed_commits, publish
 
@@ -271,6 +273,70 @@ def add_block(slug: str, edit: BlockInsert):
 @app.delete("/api/posts/{slug}/blocks/{index}")
 def remove_block(slug: str, index: int, edit: BlockDelete):
     return _write_body(slug, edit.hash, lambda body: delete_block(body, index))
+
+
+class MetaEdit(BaseModel):
+    hash: str
+    title: str | None = None
+    date: str | None = None
+    draft: bool | None = None
+
+
+class Rename(BaseModel):
+    new_slug: str
+    hash: str
+
+
+@app.put("/api/posts/{slug}/meta")
+def edit_meta(slug: str, edit: MetaEdit):
+    path, raw, frontmatter, body = _read_post(slug)
+
+    # `raw` is bytes (see _read_post) -- the hash guard has to match it
+    # exactly, the same way _write_body hashes it, not a str.encode() of a
+    # decode-then-re-encode round trip.
+    if hashlib.sha256(raw).hexdigest() != edit.hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before saving",
+        )
+
+    updates = edit.model_dump(exclude={"hash"}, exclude_none=True)
+    for key, value in updates.items():
+        if key == "date":
+            value = datetime.date.fromisoformat(value)
+        frontmatter = set_meta(frontmatter, key, value)
+
+    _atomic_write_text(path, join_post(frontmatter, body))
+    return get_post(slug)
+
+
+@app.post("/api/posts/{slug}/rename")
+def rename_post(slug: str, rename: Rename):
+    path, raw, _, _ = _read_post(slug)
+
+    if hashlib.sha256(raw).hexdigest() != rename.hash:
+        raise HTTPException(status_code=409, detail="post changed on disk; reload")
+
+    new_slug = re.sub(r"[^a-z0-9-]+", "-", rename.new_slug.lower()).strip("-")
+    if not new_slug:
+        raise HTTPException(status_code=400, detail="slug is empty after sanitising")
+
+    target = config.BLOG_DIR / f"{new_slug}.md"
+    if target.exists():
+        raise HTTPException(status_code=409, detail=f"{new_slug} already exists")
+
+    # git mv keeps the file's history attached to the new name, and stages
+    # the rename -- _dirty_paths already knows how to parse that (an "R  "
+    # porcelain entry) when the post is next published.
+    subprocess.run(
+        ["git", "mv", str(path.relative_to(config.REPO)), str(target.relative_to(config.REPO))],
+        cwd=config.REPO, check=True, capture_output=True, text=True,
+    )
+
+    return {
+        "slug": new_slug,
+        "warning": f"/blog/{slug}/ will 404 — any existing links to it will break.",
+    }
 
 
 @app.get("/")

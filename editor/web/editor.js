@@ -46,9 +46,108 @@ async function loadPost(slug) {
   state.blocks = data.blocks;
 
   els.title.textContent = data.meta.title;
-  els.meta.textContent = data.meta.date + (data.meta.draft ? ' · draft' : '');
+  renderMeta(data.meta);
   renderBlocks();
   setStatus('');
+}
+
+function startEditingTitle() {
+  if (els.title.dataset.editing) return;
+  els.title.dataset.editing = '1';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = els.title.textContent;
+  input.className = 'title-input';
+  els.title.textContent = '';
+  els.title.appendChild(input);
+  input.focus();
+
+  input.addEventListener('blur', async () => {
+    delete els.title.dataset.editing;
+    await saveMeta({ title: input.value });
+  });
+}
+
+async function saveMeta(fields) {
+  setStatus('saving…');
+  const res = await fetch(`/api/posts/${state.slug}/meta`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...fields, hash: state.hash }),
+  });
+
+  if (res.status === 409) {
+    setStatus('changed on disk — reload');
+    return;
+  }
+
+  const data = await res.json();
+  state.hash = data.hash;
+  els.title.textContent = data.meta.title;
+  renderMeta(data.meta);
+  setStatus('saved');
+  await refreshStatus();
+}
+
+function renderMeta(meta) {
+  els.meta.innerHTML = '';
+
+  const date = document.createElement('input');
+  date.type = 'date';
+  date.value = meta.date;
+  date.addEventListener('change', () => saveMeta({ date: date.value }));
+
+  const draftLabel = document.createElement('label');
+  const draft = document.createElement('input');
+  draft.type = 'checkbox';
+  draft.checked = meta.draft;
+  draft.addEventListener('change', () => saveMeta({ draft: draft.checked }));
+  draftLabel.append(draft, document.createTextNode(' draft'));
+
+  // The slug isn't part of MetaEdit -- renaming a post's file is a separate
+  // route (POST .../rename) because it moves the file via `git mv` instead
+  // of just rewriting frontmatter, and it breaks the post's existing URL.
+  // Surface that as a deliberate, separate action rather than folding it
+  // into the date/draft row, and always show the warning it returns -- that
+  // warning is the whole point of the confirm step, not decoration.
+  const renameBtn = document.createElement('button');
+  renameBtn.type = 'button';
+  renameBtn.className = 'rename-slug';
+  renameBtn.textContent = `/blog/${state.slug}/`;
+  renameBtn.title = 'Change the URL slug';
+  renameBtn.addEventListener('click', renameSlug);
+
+  els.meta.append(date, draftLabel, renameBtn);
+}
+
+async function renameSlug() {
+  const current = state.slug;
+  const next = prompt('New URL slug:', current);
+  if (!next || next === current) return;
+
+  setStatus('renaming…');
+  const res = await fetch(`/api/posts/${current}/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_slug: next, hash: state.hash }),
+  });
+
+  if (res.status === 409) {
+    setStatus('changed on disk — reload');
+    return;
+  }
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))).detail || res.statusText;
+    setStatus(`rename failed — ${detail}`);
+    return;
+  }
+
+  const data = await res.json();
+  alert(data.warning);
+  await loadPostList();
+  els.picker.value = data.slug;
+  await loadPost(data.slug);
 }
 
 function renderBlocks() {
@@ -186,6 +285,7 @@ async function saveBlock(index, source) {
 }
 
 els.picker.addEventListener('change', () => loadPost(els.picker.value));
+els.title.addEventListener('click', startEditingTitle);
 
 (async function main() {
   try {
