@@ -11,14 +11,45 @@ literal layout (`hostname: <bare-value>` alone on its own line) is trivially
 evaded by anything else that is still legal, tunnel-ready YAML: a quoted
 value, a trailing comment, or a flow-style mapping. All three parse to the
 exact same structure that `yaml.safe_load` would hand back for the plain
-form, so matching on the parsed structure is safe by construction instead of
-by coincidence of formatting.
+form, so matching on the parsed structure removes that whole class of
+formatting-based bypass.
+
+Structural parsing alone is not sufficient, though: DNS/cloudflared routing
+is case-insensitive and treats a trailing dot as equivalent to the bare form,
+and a wildcard ingress entry (`*.suffix`) covers our host without ever
+string-matching it. So each configured hostname is also lowercased and
+stripped of a trailing dot before comparison, and a `*.suffix` entry is
+treated as a match whenever our (normalized) hostname ends with `.suffix`.
+That wildcard handling is intentionally narrow — literal `*.` prefix only,
+no general glob support — because a broader matcher is itself a new source of
+bugs in a security control.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
 import yaml
+
+
+def _normalize(host: str) -> str:
+    return host.strip().lower().rstrip(".")
+
+
+def _covers(configured_hostname: str, hostname: str) -> bool:
+    """True if an ingress entry's hostname would route `hostname`.
+
+    Handles exact matches after normalizing case and a trailing dot, plus the
+    narrow `*.suffix` wildcard form cloudflared supports.
+    """
+    configured = _normalize(configured_hostname)
+    target = _normalize(hostname)
+    if configured == target:
+        return True
+    if configured.startswith("*."):
+        suffix = configured[1:]  # e.g. "*.cloudy.nyc" -> ".cloudy.nyc"
+        if target.endswith(suffix):
+            return True
+    return False
 
 
 def assert_not_publicly_routed(hostname: str, cloudflared_config: Path) -> None:
@@ -49,9 +80,20 @@ def assert_not_publicly_routed(hostname: str, cloudflared_config: Path) -> None:
             "rather than treat an unparseable tunnel config as safe."
         ) from exc
 
+    if data is not None and not isinstance(data, dict):
+        raise RuntimeError(
+            f"Cannot verify {hostname} is not publicly routed: "
+            f"{cloudflared_config} does not contain a YAML mapping at its top "
+            "level. Refusing to start rather than treat an unexpected config "
+            "shape as safe."
+        )
+
     ingress = (data or {}).get("ingress") or []
     for entry in ingress:
-        if isinstance(entry, dict) and entry.get("hostname") == hostname:
+        if not isinstance(entry, dict):
+            continue
+        configured_hostname = entry.get("hostname")
+        if isinstance(configured_hostname, str) and _covers(configured_hostname, hostname):
             raise RuntimeError(
                 f"{hostname} is publicly routed via {cloudflared_config}. "
                 "The editor can write to git and S3 and must stay LAN-only. "

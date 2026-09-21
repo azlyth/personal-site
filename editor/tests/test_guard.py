@@ -105,3 +105,40 @@ def test_malformed_yaml_raises(tmp_path):
     cfg.write_text("ingress: [unclosed\n  - hostname: edit.cloudy.nyc\n")
     with pytest.raises(RuntimeError):
         assert_not_publicly_routed("edit.cloudy.nyc", cfg)
+
+
+def test_case_insensitive_hostname_still_matches(tmp_path):
+    # DNS and cloudflared routing are case-insensitive; a differently-cased
+    # ingress entry genuinely publishes the host.
+    cfg = _http_routing_dir(tmp_path)
+    cfg.write_text("ingress:\n  - hostname: Edit.Cloudy.NYC\n    service: https://x\n")
+    with pytest.raises(RuntimeError, match="publicly routed"):
+        assert_not_publicly_routed("edit.cloudy.nyc", cfg)
+
+
+def test_trailing_dot_hostname_still_matches(tmp_path):
+    # The fully-qualified form (trailing dot) routes identically to the
+    # bare form.
+    cfg = _http_routing_dir(tmp_path)
+    cfg.write_text("ingress:\n  - hostname: edit.cloudy.nyc.\n    service: https://x\n")
+    with pytest.raises(RuntimeError, match="publicly routed"):
+        assert_not_publicly_routed("edit.cloudy.nyc", cfg)
+
+
+def test_wildcard_hostname_covers_our_host(tmp_path):
+    # A wildcard ingress entry would route edit.cloudy.nyc even though it
+    # never string-matches it literally.
+    cfg = _http_routing_dir(tmp_path)
+    cfg.write_text('ingress:\n  - hostname: "*.cloudy.nyc"\n    service: https://x\n')
+    with pytest.raises(RuntimeError, match="publicly routed"):
+        assert_not_publicly_routed("edit.cloudy.nyc", cfg)
+
+
+def test_top_level_list_document_raises_cleanly(tmp_path):
+    # A config whose top-level YAML document is a list (not a mapping) must
+    # raise a clear RuntimeError, not an uncaught AttributeError from
+    # data.get(...).
+    cfg = _http_routing_dir(tmp_path)
+    cfg.write_text("- hostname: edit.cloudy.nyc\n- service: http_status:404\n")
+    with pytest.raises(RuntimeError):
+        assert_not_publicly_routed("edit.cloudy.nyc", cfg)
