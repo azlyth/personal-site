@@ -55,7 +55,14 @@ def process(src_path, out_path, loop_seconds=None):
     vf = f"scale={WIDTH}:-2"
     if loop_seconds:
         vf += f",fps={FPS}"
-    cmd += ["-vf", vf, "-an", "-c:v", "libx264", "-crf", str(CRF), "-preset", "medium",
+    # -map_metadata -1 drops container/global metadata (phone clips carry
+    # GPS as TAG:location/location-eng plus TAG:com.android.model/
+    # manufacturer at the format level -- ffmpeg copies it across a
+    # re-encode by default, which is how the owner's home coordinates ended
+    # up on img.cloudy.nyc). Verified empirically with ffprobe: on real
+    # Pixel clips these tags live only in format_tags, never stream_tags, so
+    # -map_metadata -1 alone is sufficient -- no -map_metadata:s needed.
+    cmd += ["-map_metadata", "-1", "-vf", vf, "-an", "-c:v", "libx264", "-crf", str(CRF), "-preset", "medium",
             "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
     if loop_seconds:
         cmd += ["-t", str(loop_seconds), "-frames:v", str(round(loop_seconds * FPS))]

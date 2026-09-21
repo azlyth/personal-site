@@ -36,6 +36,15 @@ def process_video(data: bytes) -> bytes:
             [
                 "ffmpeg", "-y", "-v", "error",
                 "-i", str(src),
+                # -map_metadata -1 drops container/global metadata. Phone
+                # clips carry GPS (TAG:location/location-eng) and device
+                # info (TAG:com.android.model/manufacturer) at the format
+                # level, and ffmpeg copies it across a re-encode by
+                # default -- this is the video equivalent of images.py's
+                # EXIF strip. Verified empirically with ffprobe: on real
+                # Pixel clips these tags live only in format_tags, never
+                # stream_tags, so -map_metadata -1 alone is sufficient.
+                "-map_metadata", "-1",
                 "-vf", f"scale={WIDTH}:-2",
                 "-an", "-c:v", "libx264", "-crf", str(CRF),
                 "-preset", "medium", "-profile:v", "high",

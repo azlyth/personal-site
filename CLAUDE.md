@@ -233,6 +233,26 @@ drifts off-center everywhere else.
   (not in an `.img-row`) is centered (`.container img { margin: 1.5rem auto }`)
   rather than flush-left, since most photos render narrower than the 700px
   content column.
+- **Stripping location/device metadata on upload is load-bearing privacy
+  protection, not incidental.** `editor/images.py::process_image`'s PIL
+  re-encode drops EXIF (and with it GPS) by construction — Pillow never
+  carries EXIF forward unless you pass `exif=` explicitly. **Video needs the
+  explicit equivalent**: `editor/videos.py::process_video` and
+  `scripts/upload-video.py::process` both pass `-map_metadata -1` to ffmpeg.
+  Without it, ffmpeg preserves container/global metadata across a re-encode
+  by default — a real 2026-09-20 incident published the owner's home GPS
+  coordinates (`TAG:location`/`location-eng`) and phone model
+  (`TAG:com.android.model`/`manufacturer`) on 14 live clips at
+  `img.cloudy.nyc` before this was caught and fixed. Verified empirically
+  with `ffprobe` on real phone clips (`format_tags` vs `stream_tags`) that
+  these tags live at the container level only, so `-map_metadata -1` alone
+  is sufficient — no per-stream `-map_metadata:s:v -1` needed, but don't
+  assume that holds for a future source format without re-checking with
+  `ffprobe`. **Any new media type added to this pipeline (audio? a GIF
+  path?) needs the same audit before its first upload**, not after a leak:
+  re-encode-only is not automatically metadata-stripping — check what the
+  encoder actually drops with `ffprobe -show_entries format_tags:stream_tags`
+  on a real source file, don't assume.
 - **Editing from a tablet:** `edit.cloudy.nyc` (LAN-only) runs `blog-editor.service`
   from `editor/`. It edits `content/blog/*.md` in the working tree, uploads photos
   to S3, and on Publish commits only `content/blog/` paths, pushes, and rebuilds
