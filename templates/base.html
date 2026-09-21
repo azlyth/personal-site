@@ -356,6 +356,55 @@
             margin-right: auto;
         }
 
+        /* Home: the project lists are short-line content that just leaves the
+           right half of a wide screen empty. Widen the page and let them run
+           in two columns once there is actually room for two. */
+        .container.home-container nav,
+        .container.home-container footer {
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Contains the floated photo. Without this the float escapes the
+           intro, and the multi-column box below shrinks sideways to avoid it
+           instead of using the full width. */
+        .home-intro {
+            display: flow-root;
+        }
+
+        @media (min-width: 1000px) {
+            .container.home-container {
+                max-width: min(1080px, 92vw);
+            }
+
+            /* Intro spans the full width so its left edge lines up with the
+               columns below and the photo can sit at the far right, but the
+               prose itself stays at a readable measure. */
+            .home-intro p {
+                max-width: 640px;
+            }
+
+            /* column-count rather than a grid: the browser balances the
+               sections itself, so adding one later doesn't need the split
+               re-hardcoded. break-inside keeps a section whole. */
+            .about-columns {
+                column-count: 2;
+                column-gap: 3rem;
+            }
+
+            .about-columns .about-section {
+                break-inside: avoid;
+                -webkit-column-break-inside: avoid;
+            }
+
+            /* Without this the first section's top margin is applied inside
+               the column box and the two columns start at different heights. */
+            .about-columns .about-section:first-child {
+                margin-top: 0;
+            }
+        }
+
         /* Wider column reads thin at the original font size -- scale post
            body text up (not headings; rem-based, so they'd need their own
            pass and read fine as-is) as the column has room to grow. */
@@ -675,6 +724,11 @@
         @media (max-width: 600px) {
             .home-image {
                 position: relative;
+                /* float must be cleared for the auto margins below to centre
+                   it -- horizontal auto margins compute to 0 on a float, so
+                   without this the "display:block; margin:auto" never applied
+                   and the photo just sat pinned to the right edge. */
+                float: none;
                 width: 140px;
                 height: 140px;
                 margin: 1rem auto;
