@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
@@ -44,7 +47,7 @@ def list_posts():
     for path in sorted(config.BLOG_DIR.glob("*.md")):
         if path.name == "_index.md":
             continue
-        frontmatter, _ = split_post(path.read_text())
+        frontmatter, _ = split_post(path.read_text(encoding="utf-8"))
         meta = read_meta(frontmatter)
         posts.append(
             {
@@ -68,9 +71,33 @@ def _post_path(slug: str):
 def _read_post(slug: str):
     path = _post_path(slug)
     raw_bytes = path.read_bytes()
-    raw = raw_bytes.decode()
+    raw = raw_bytes.decode("utf-8")
     frontmatter, body = split_post(raw)
     return path, raw_bytes, frontmatter, body
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write `text` to `path` atomically.
+
+    Writing in place (`path.write_text`) truncates the file immediately and
+    then streams the new content, so a process kill mid-write -- and this
+    machine has a documented history of that happening -- can leave a post
+    empty or half-written with no way back. Instead write to a temp file in
+    the same directory (so the later rename can't cross filesystems) and
+    `os.replace` it onto the target; that rename is atomic, so any reader or
+    crash sees either the old file or the new one, never a partial one.
+    """
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except FileNotFoundError:
+            pass
+        raise
 
 
 @app.get("/api/posts/{slug}")
@@ -122,7 +149,19 @@ def _write_body(slug: str, expected_hash: str, transform):
             detail="post changed on disk since it was loaded; reload before saving",
         )
 
-    path.write_text(join_post(frontmatter, transform(body)))
+    try:
+        new_body = transform(body)
+    except IndexError:
+        # The block index no longer exists -- e.g. another tab deleted it
+        # after this client's view was loaded. Same recovery as a stale
+        # hash: the client's view is stale, so surface the same 409 rather
+        # than an unhandled 500.
+        raise HTTPException(
+            status_code=409,
+            detail="block index no longer exists; reload before saving",
+        )
+
+    _atomic_write_text(path, join_post(frontmatter, new_body))
     return get_post(slug)
 
 
