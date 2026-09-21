@@ -18,7 +18,12 @@ make open-gh      # Open https://peter.direct
 Lab backend (standalone):
 ```bash
 cd lab-backend && npm start   # Run backend on port 3001
+cd lab-backend && npm test    # Unit + Redis-backed integration tests (needs Docker)
 ```
+
+After changing lab backend or template code, redeploy the Pi with
+`./scripts/build-site.sh` (static site) and `docker compose up -d --build
+lab-backend` (socket server); `make deploy-restart` does both plus nginx.
 
 ## Architecture
 
