@@ -117,6 +117,41 @@ def test_merge_preserves_neighbouring_blocks(temp_post):
     assert out["blocks"][5]["source"] == data["blocks"][6]["source"]
 
 
+def test_merge_two_photo_blocks_keeps_upper_size(temp_post):
+    # Same rule as the video-row merge below: give the two standalone
+    # images (indices 1 and 2) different non-default sizes and confirm the
+    # merged img_row keeps the UPPER block's size, not the lower's -- the
+    # existing photo-merge tests all use default-size blocks and never
+    # exercise this priority.
+    sized = POST.replace(
+        "![alt one](https://img.cloudy.nyc/p/one.jpg)",
+        '<div class="img-row size-medium">\n'
+        '<img src="https://img.cloudy.nyc/p/one.jpg" alt="alt one">\n'
+        "</div>",
+    ).replace(
+        "![alt solo](https://img.cloudy.nyc/p/solo.jpg)",
+        '<div class="img-row size-small">\n'
+        '<img src="https://img.cloudy.nyc/p/solo.jpg" alt="alt solo">\n'
+        "</div>",
+    )
+    assert sized != POST
+    temp_post.write_text(sized, encoding="utf-8")
+
+    data = _get()
+    assert data["blocks"][1]["size"] == "medium"
+    assert data["blocks"][2]["size"] == "small"
+
+    res = _merge(1, data["hash"])
+    assert res.status_code == 200
+    merged = res.json()["blocks"][1]
+    assert merged["kind"] == "img_row"
+    assert merged["size"] == "medium"
+    assert merged["images"] == [
+        {"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "alt one"},
+        {"url": "https://img.cloudy.nyc/p/solo.jpg", "alt": "alt solo"},
+    ]
+
+
 def test_merge_two_video_rows_keeps_upper_size_and_order(temp_post):
     data = _get()
     res = _merge(4, data["hash"])

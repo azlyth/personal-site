@@ -107,6 +107,37 @@ def test_parse_classifies_sized_single_image_as_img_row():
     assert kinds == ["paragraph", "img_row", "paragraph"]
 
 
+def test_parse_does_not_classify_lookalike_class_names_as_img_row():
+    # `_IMG_ROW_RE` used to be unanchored on its right edge after dropping
+    # the trailing `"` to support sized rows -- it would match any class
+    # merely *starting with* "img-row", like a hypothetical
+    # "img-row-caption" wrapper. Pin both edges: a real (unsized or sized)
+    # img-row still classifies, a same-prefix lookalike does not.
+    lookalike = (
+        'Intro.\n'
+        '\n'
+        '<div class="img-row-caption">\n'
+        '<img src="https://img.cloudy.nyc/p/one.jpg" alt="one">\n'
+        '</div>\n'
+        '\n'
+        'Outro.\n'
+    )
+    kinds = [b.kind for b in parse_blocks(lookalike)]
+    assert kinds == ["paragraph", "html", "paragraph"]
+
+    not_img_row = (
+        'Intro.\n'
+        '\n'
+        '<div class="not-img-row">\n'
+        '<img src="https://img.cloudy.nyc/p/one.jpg" alt="one">\n'
+        '</div>\n'
+        '\n'
+        'Outro.\n'
+    )
+    kinds = [b.kind for b in parse_blocks(not_img_row)]
+    assert kinds == ["paragraph", "html", "paragraph"]
+
+
 def test_parse_classifies_video_row():
     blocks = parse_blocks(VIDEOS)
     kinds = [b.kind for b in blocks]

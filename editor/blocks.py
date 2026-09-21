@@ -28,9 +28,13 @@ _KIND_BY_TOKEN = {
 }
 
 # No trailing `"` -- must also match a sized row (`class="img-row size-small"`),
-# not just the unsized `class="img-row"` shape. Mirrors _VIDEO_ROW_RE below,
-# which never had this bug since every video row always carries a size class.
-_IMG_ROW_RE = re.compile(r'<div\s+class="img-row', re.I)
+# not just the unsized `class="img-row"` shape. But the boundary can't be
+# left open either: an unanchored `img-row` prefix would also match
+# `class="img-row-caption"` or any other class starting with those letters.
+# The lookahead pins the right edge to "img-row" followed by either the
+# closing quote (unsized) or a space (sized), same two shapes markdown_for
+# ever actually emits.
+_IMG_ROW_RE = re.compile(r'<div\s+class="img-row(?=["\s])', re.I)
 _VIDEO_ROW_RE = re.compile(r'<div\s+class="video-row', re.I)
 # The alt group allows an escaped `\]` (or `\[`, or any other `\x`) as well
 # as any plain non-bracket character, so a standalone image whose alt text

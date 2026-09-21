@@ -814,7 +814,7 @@ function startEditingImages(el, content, block) {
   // plain markdown to a wrapped, sized `.img-row` (see images.py's
   // markdown_for); the button UI itself doesn't need to know that.
   const sizes = document.createElement('div');
-  sizes.className = 'video-size-buttons';
+  sizes.className = 'size-buttons';
   [
     ['small', 'Small'],
     ['medium', 'Medium'],
@@ -1018,7 +1018,7 @@ function startEditingVideos(el, content, block) {
   }
 
   const sizes = document.createElement('div');
-  sizes.className = 'video-size-buttons';
+  sizes.className = 'size-buttons';
   [
     ['small', 'Small'],
     ['medium', 'Medium'],
