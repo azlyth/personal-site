@@ -177,8 +177,15 @@ function renderBlocks() {
     el.addEventListener('click', () => {
       // A photo block (a standalone image or an .img-row) gets a thumbnail
       // strip -- add/remove/reorder/alt-text -- instead of raw markup in a
-      // textarea. Everything else still edits its markdown source directly.
-      if (block.kind === 'image' || block.kind === 'img_row') {
+      // textarea. Gate on `images` actually being present, not just
+      // `kind`: the server omits it whenever the block's markup can't be
+      // losslessly reproduced from a parsed list (a missing alt, an extra
+      // element, hand-edited HTML the parser doesn't recognize, ...). For
+      // those, falling into the thumbnail editor would show a wrong or
+      // empty photo list, and Done would happily write that reduced list
+      // back -- silently dropping whatever didn't parse. Raw source
+      // editing is always safe, so that's the fallback.
+      if (block.images) {
         startEditingImages(el, block);
       } else {
         startEditing(el, block);
@@ -486,7 +493,16 @@ function startEditingImages(el, block) {
   done.type = 'button';
   done.className = 'image-done';
   done.textContent = 'Done';
-  done.addEventListener('click', () => saveBlockImages(block.index, images));
+  done.addEventListener('click', () => {
+    // Removing the last thumbnail and hitting Done deletes the whole block
+    // (PUT .../images with an empty list -- see the server route). That's
+    // a legitimate action, but unlike deleting a paragraph it's easy to
+    // reach by just clearing thumbnails one at a time without meaning to
+    // lose the block's placement and alt text (the photo itself is still
+    // in S3, but nothing here points at it anymore). Confirm first.
+    if (images.length === 0 && !confirm('Remove this photo block?')) return;
+    saveBlockImages(block.index, images);
+  });
 
   const cancel = document.createElement('button');
   cancel.type = 'button';
