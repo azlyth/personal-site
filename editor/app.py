@@ -303,7 +303,17 @@ def edit_meta(slug: str, edit: MetaEdit):
     updates = edit.model_dump(exclude={"hash"}, exclude_none=True)
     for key, value in updates.items():
         if key == "date":
-            value = datetime.date.fromisoformat(value)
+            try:
+                value = datetime.date.fromisoformat(value)
+            except ValueError:
+                # Same pattern as _write_body's stale-index catch: a bad
+                # value from a direct API call (or a future UI change) is a
+                # client error, not a crash -- surface a clean 400 instead
+                # of letting fromisoformat's ValueError 500 out.
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"date must be in YYYY-MM-DD format, got {value!r}",
+                )
         frontmatter = set_meta(frontmatter, key, value)
 
     _atomic_write_text(path, join_post(frontmatter, body))
