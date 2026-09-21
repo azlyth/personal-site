@@ -1412,87 +1412,90 @@
 
             /* Mobile card positions - align with corresponding bars */
 
-            /* Employment cards - aligned with blue bars */
-            .gantt-employment .gantt-card[data-id="botm"] {
+            /* Left column: Education + Employment cards share one stack, so
+               every entry (whichever column it's in) needs a unique slot
+               with enough gap to clear a 3-line card at this font size -
+               8% steps of the 1100px timeline (~88px) comfortably fits that. */
+            .gantt-employment .gantt-card[data-id="zocdoc"] {
                 top: 0% !important;
             }
+            .gantt-employment .gantt-card[data-id="botm"] {
+                top: 8% !important;
+            }
             .gantt-employment .gantt-card[data-id="shipyard"] {
-                top: 11% !important;
+                top: 16% !important;
             }
-            .gantt-employment .gantt-card[data-id="lucky13"] {
-                top: 25% !important;
-            }
-            .gantt-employment .gantt-card[data-id="propellr"] {
-                top: 46% !important;
-            }
-            .gantt-employment .gantt-card[data-id="happydogs"] {
-                top: 56% !important;
-            }
-            .gantt-employment .gantt-card[data-id="hunter-sa"] {
-                top: 66% !important;
-            }
-            .gantt-employment .gantt-card[data-id="morgan"] {
-                top: 85% !important;
-            }
-
-            /* Education cards - aligned with purple bars */
-            .gantt-education .gantt-card[data-id="hunter-ba"] {
-                top: 55% !important;
-            }
-            .gantt-education .gantt-card[data-id="stuy"] {
-                top: 81% !important;
-            }
-
-            /* Talks on left side - position near related items */
             .gantt-education .gantt-card[data-id="devops-seattle"] {
-                top: 15% !important;
+                top: 24% !important;
             }
             .gantt-education .gantt-card[data-id="devops-raleigh"] {
-                top: 21% !important;
+                top: 32% !important;
+            }
+            .gantt-employment .gantt-card[data-id="lucky13"] {
+                top: 40% !important;
+            }
+            .gantt-education .gantt-card[data-id="hunter-ba"] {
+                top: 48% !important;
+            }
+            .gantt-employment .gantt-card[data-id="propellr"] {
+                top: 56% !important;
+            }
+            .gantt-employment .gantt-card[data-id="happydogs"] {
+                top: 64% !important;
+            }
+            .gantt-employment .gantt-card[data-id="hunter-sa"] {
+                top: 72% !important;
+            }
+            .gantt-education .gantt-card[data-id="stuy"] {
+                top: 80% !important;
+            }
+            .gantt-employment .gantt-card[data-id="morgan"] {
+                top: 88% !important;
             }
 
-            /* Civic cards - aligned with green bars */
+            /* Right column: Projects + Civic + Talks share one stack, same
+               reasoning - 9% steps across 11 entries. */
             .gantt-civic .gantt-card[data-id="astoria"] {
                 top: 0% !important;
             }
-            .gantt-civic .gantt-card[data-id="nycmesh"] {
-                top: 51% !important;
-            }
-
-            /* HOPE X - right under NYC Mesh on mobile (they're connected) */
-            .gantt-talks-right .gantt-card[data-id="hope-2014"] {
-                top: 57% !important;
-            }
-
-            /* Project cards - aligned with orange bars */
             .gantt-projects .gantt-card[data-id="dontdie"] {
-                top: 10% !important;
+                top: 9% !important;
             }
             .gantt-projects .gantt-card[data-id="lowkey"] {
                 top: 18% !important;
             }
             .gantt-projects .gantt-card[data-id="turtle"] {
-                top: 26% !important;
+                top: 27% !important;
             }
             .gantt-projects .gantt-card[data-id="snorlax"] {
-                top: 34% !important;
+                top: 36% !important;
             }
             .gantt-projects .gantt-card[data-id="redub"] {
-                top: 40% !important;
-            }
-            .gantt-projects .gantt-card[data-id="hooks"] {
                 top: 45% !important;
             }
+            .gantt-projects .gantt-card[data-id="hooks"] {
+                top: 54% !important;
+            }
             .gantt-projects .gantt-card[data-id="rnssh"] {
-                top: 50% !important;
+                top: 63% !important;
+            }
+            .gantt-civic .gantt-card[data-id="nycmesh"] {
+                top: 72% !important;
+            }
+            .gantt-talks-right .gantt-card[data-id="hope-2014"] {
+                top: 81% !important;
             }
             .gantt-projects .gantt-card[data-id="thegrid"] {
-                top: 70% !important;
+                top: 90% !important;
             }
 
-            /* Smaller bars */
+            /* Smaller bars. flex-shrink is off here and on .bars-spine because
+               the bar group is wider than the 70px centre column - letting flex
+               squeeze it would close the spine gap and put the year labels on
+               top of the bars. It overflows into the side columns' padding instead. */
             .bar-col {
                 width: 12px;
+                flex-shrink: 0;
             }
 
             .bars-left, .bars-right {
@@ -1503,16 +1506,21 @@
                 gap: 4px;
             }
 
+            /* The year labels sit centered on the spine with an opaque
+               background, so this gap has to be wider than the widest label
+               or they clip the bars on either side. */
             .bars-spine {
-                width: 20px;
+                width: 28px;
+                flex-shrink: 0;
             }
 
             .gantt-spine {
-                width: 20px;
+                width: 28px;
             }
 
             .year-marker {
                 font-size: 0.45rem;
+                padding: 0 2px;
             }
         }
 
@@ -1523,7 +1531,7 @@
         <nav>
             <div class="nav-links">
                 <a href="{{ get_url(path='/') }}"{% if current_path == "/" %} class="active"{% endif %}>Home</a>
-                <a href="{{ get_url(path='/timeline/') }}"{% if current_path is starting_with("/timeline") %} class="active"{% endif %}>What I've Been Up To</a>
+                <a href="{{ get_url(path='/timeline/') }}"{% if current_path is starting_with("/timeline") %} class="active"{% endif %}>Timeline</a>
                 <a href="{{ get_url(path='/blog/') }}"{% if current_path is starting_with("/blog") %} class="active"{% endif %}>Blog</a>
                 <a href="{{ get_url(path='/lab/') }}"{% if current_path is starting_with("/lab") %} class="active"{% endif %}>Lab</a>
             </div>

@@ -43,15 +43,23 @@
 
     <!-- Column 2: Employment cards -->
     <div class="gantt-employment" data-mobile-title="Employment">
-        <div class="gantt-card" data-cat="employment" data-id="botm" style="top: 0%">
+        <div class="gantt-card" data-cat="employment" data-id="zocdoc" style="top: 0%">
             <div class="gantt-card-content">
-                <h3><a href="https://bookofthemonth.com" target="_blank">Book of the Month</a></h3>
-                <span class="role">Staff Platform Engineer</span>
-                <span class="years">2023 - present</span>
+                <h3><a href="https://www.zocdoc.com" target="_blank">Zocdoc</a></h3>
+                <span class="role">Staff SRE</span>
+                <span class="years">2026 - present</span>
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="employment" data-id="shipyard" style="top: 20%">
+        <div class="gantt-card" data-cat="employment" data-id="botm" style="top: 11%">
+            <div class="gantt-card-content">
+                <h3><a href="https://bookofthemonth.com" target="_blank">Book of the Month</a></h3>
+                <span class="role">Staff Platform Engineer</span>
+                <span class="years">2023 - 2026</span>
+            </div>
+        </div>
+
+        <div class="gantt-card" data-cat="employment" data-id="shipyard" style="top: 26%">
             <div class="gantt-card-content">
                 <h3><a href="https://shipyard.build" target="_blank">Shipyard</a></h3>
                 <span class="role">Cofounder & CTO</span>
@@ -59,7 +67,7 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="employment" data-id="lucky13" style="top: 35%">
+        <div class="gantt-card" data-cat="employment" data-id="lucky13" style="top: 40%">
             <div class="gantt-card-content">
                 <h3>Lucky Number 13</h3>
                 <span class="role">DevOps Consultant</span>
@@ -67,7 +75,7 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="employment" data-id="propellr" style="top: 46%">
+        <div class="gantt-card" data-cat="employment" data-id="propellr" style="top: 51%">
             <div class="gantt-card-content">
                 <h3><a href="https://www.crunchbase.com/organization/propellr" target="_blank">Propellr</a></h3>
                 <span class="role">Lead Backend Engineer</span>
@@ -75,7 +83,7 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="employment" data-id="happydogs" style="top: 56%">
+        <div class="gantt-card" data-cat="employment" data-id="happydogs" style="top: 61%">
             <div class="gantt-card-content">
                 <h3><a href="https://happydogsnyc.com" target="_blank">Happy Dogs NYC</a></h3>
                 <span class="role">Software Engineer</span>
@@ -83,7 +91,7 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="employment" data-id="hunter-sa" style="top: 69%">
+        <div class="gantt-card" data-cat="employment" data-id="hunter-sa" style="top: 72%">
             <div class="gantt-card-content">
                 <h3><a href="https://hunter.cuny.edu" target="_blank">Hunter College</a></h3>
                 <span class="role">System Administrator</span>
@@ -91,7 +99,7 @@
             </div>
         </div>
 
-        <div class="gantt-card" data-cat="employment" data-id="morgan" style="top: 85%">
+        <div class="gantt-card" data-cat="employment" data-id="morgan" style="top: 87%">
             <div class="gantt-card-content">
                 <h3><a href="https://morganstanley.com" target="_blank">Morgan Stanley</a></h3>
                 <span class="role">Intern</span>
@@ -102,10 +110,15 @@
 
     <!-- Column 3: Timeline center with bars -->
     <div class="gantt-center">
-        <!-- Black spine line with year markers -->
+        <!-- Black spine line with year markers.
+             The top of the line is *now*, not a year boundary - each marker sits
+             at the START of its year, so the stretch above the 2026 marker is
+             2026-so-far. Scale: 4%/yr from now back to 2025, 3.6%/yr to 2020,
+             then 5%/yr down to 2005. -->
         <div class="gantt-spine">
             <div class="spine-line"></div>
-            <span class="year-marker" style="top: 0%">2026</span>
+            <span class="year-marker" style="top: 3%">2026</span>
+            <span class="year-marker" style="top: 7%">2025</span>
             <span class="year-marker" style="top: 25%">2020</span>
             <span class="year-marker" style="top: 50%">2015</span>
             <span class="year-marker" style="top: 75%">2010</span>
@@ -128,10 +141,12 @@
 
                 <!-- Employment Primary column - Blue -->
                 <div class="bar-col employment">
-                    <!-- Book of Month: 2023-2025 -->
-                    <div class="bar" data-id="botm" style="top: 0%; height: 9%"></div>
+                    <!-- Zocdoc: May 2026 - present (above the 2026 marker) -->
+                    <div class="bar" data-id="zocdoc" style="top: 0%; height: 2%"></div>
+                    <!-- Book of Month: 2023 - April 2026 -->
+                    <div class="bar" data-id="botm" style="top: 2.5%; height: 11.5%"></div>
                     <!-- Shipyard: 2018-2023 -->
-                    <div class="bar" data-id="shipyard" style="top: 11%; height: 24%"></div>
+                    <div class="bar" data-id="shipyard" style="top: 14%; height: 21%"></div>
                     <!-- Propellr: 2014-2016 -->
                     <div class="bar" data-id="propellr" style="top: 46%; height: 9%"></div>
                     <!-- Happy Dogs: 2012-2014 -->
@@ -159,13 +174,13 @@
                 <!-- Projects column - Orange -->
                 <div class="bar-col projects">
                     <!-- Don't Die: 2025 -->
-                    <div class="bar" data-id="dontdie" style="top: 0%; height: 4%"></div>
+                    <div class="bar" data-id="dontdie" style="top: 4%; height: 4%"></div>
                     <!-- Lowkey: 2025 -->
-                    <div class="bar" data-id="lowkey" style="top: 5%; height: 4%"></div>
-                    <!-- Turtle: 2024 -->
-                    <div class="bar" data-id="turtle" style="top: 10%; height: 4%"></div>
+                    <div class="bar" data-id="lowkey" style="top: 9%; height: 4%"></div>
+                    <!-- Turtle: 2025 -->
+                    <div class="bar" data-id="turtle" style="top: 14%; height: 4%"></div>
                     <!-- Snorlax: 2024 -->
-                    <div class="bar" data-id="snorlax" style="top: 15%; height: 4%"></div>
+                    <div class="bar" data-id="snorlax" style="top: 19%; height: 4%"></div>
                     <!-- Redub: 2017 -->
                     <div class="bar" data-id="redub" style="top: 40%; height: 4%"></div>
                     <!-- Hooks: 2016 -->
@@ -512,10 +527,15 @@ window.addEventListener('load', setupHoverHighlighting);
 // Info Panel content data
 const panelContent = {
     // Employment
+    'zocdoc': {
+        title: 'Zocdoc',
+        subtitle: 'Staff Site Reliability Engineer • 2026 - present',
+        description: '<ul><li>Leading site reliability and infrastructure initiatives for Zocdoc\'s healthcare marketplace platform</li><li>Own production reliability practices: incident response, on-call rotations, and postmortems</li><li>Building observability and infrastructure-as-code tooling across the platform</li><li>Partnering with engineering teams to improve uptime and reduce operational toil</li></ul><p class="info-panel-link"><a href="https://www.zocdoc.com" target="_blank">Visit website →</a></p>'
+    },
     'botm': {
         title: 'Book of the Month',
         subtitle: 'Staff Platform Engineer • 2023 - 2026',
-        description: '<div class="info-panel-site"><a href="https://bookofthemonth.com" target="_blank"><img src="/timeline-items/botm.png" alt="Book of the Month" loading="lazy"></a></div><ul><li>Lead platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Manage production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul><p class="info-panel-link"><a href="https://bookofthemonth.com" target="_blank">Visit website →</a></p>'
+        description: '<div class="info-panel-site"><a href="https://bookofthemonth.com" target="_blank"><img src="/timeline-items/botm.png" alt="Book of the Month" loading="lazy"></a></div><ul><li>Led platform, infrastructure, and SRE initiatives supporting consumer-facing e-commerce systems with 500M+ monthly requests</li><li>Built Kubernetes developer platform using ArgoCD and Crossplane for self-service infrastructure provisioning</li><li>Implemented ephemeral preview environments with 4-minute build times</li><li>Introduced GitOps workflows and infrastructure-as-code practices across the engineering organization</li><li>Managed production infrastructure on AWS with focus on reliability, observability, and cost optimization</li></ul><p class="info-panel-link"><a href="https://bookofthemonth.com" target="_blank">Visit website →</a></p>'
     },
     'shipyard': {
         title: 'Shipyard',
