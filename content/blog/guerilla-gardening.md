@@ -93,7 +93,7 @@ Bought twelve lilyturf, four orange aster, four light purple aster. To be split 
 
 ![The trunk of a rented SUV packed with potted purple and orange flowers and lilyturf](https://img.cloudy.nyc/guerilla-gardening/flowers-in-trunk.jpg)
 
-After another Saturday afternoon of manual labor, with the help of my friend David, the plants were planted.
+After another Saturday afternoon of manual labor, with the help of my lovely girlfriend Anne and my friend David, the plants were planted.
 
 <div class="video-row size-full">
 <video autoplay loop muted playsinline data-sync-loop="4">
