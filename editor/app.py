@@ -86,9 +86,26 @@ def _atomic_write_text(path: Path, text: str) -> None:
     the same directory (so the later rename can't cross filesystems) and
     `os.replace` it onto the target; that rename is atomic, so any reader or
     crash sees either the old file or the new one, never a partial one.
+
+    `tempfile.mkstemp` creates its file at mode 0600 regardless of umask,
+    and `os.replace` swaps the directory entry rather than copying content
+    into the existing inode -- so without an explicit chmod, the destination
+    ends up being the temp file and silently inherits 0600, turning every
+    edited post owner-only. `zola build` runs as a different UID in a
+    container, so a 0600 post fails the build with no obvious link back to
+    the edit that caused it. Carry the target's existing mode over (or a
+    sensible default for a not-yet-existing post) onto the temp file
+    *before* the replace, so there's no window where the file exists at the
+    wrong mode.
     """
+    try:
+        mode = path.stat().st_mode & 0o777
+    except FileNotFoundError:
+        mode = 0o644  # new post (Task 12); matches every existing post's mode
+
     fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
+        os.chmod(tmp_path, mode)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
         os.replace(tmp_path, path)

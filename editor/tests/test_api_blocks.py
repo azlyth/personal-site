@@ -1,3 +1,4 @@
+import os
 import shutil
 
 import pytest
@@ -82,6 +83,24 @@ def test_stale_index_returns_409_not_500(temp_post):
     assert res.status_code == 409
     # And the file on disk is untouched -- the bad index never reached a write.
     assert temp_post.read_text(encoding="utf-8") == POST
+
+
+def test_edit_preserves_file_mode(temp_post):
+    """tempfile.mkstemp creates its file at 0600 regardless of umask, and
+    os.replace swaps the directory entry rather than copying into the
+    existing inode -- so an atomic write that doesn't explicitly carry the
+    mode over silently turns every edited post owner-only. That matters
+    because zola build runs as a different UID in a container; a 0600 post
+    would fail to build with an error that points at Zola, not the editor
+    that caused it."""
+    os.chmod(temp_post, 0o644)
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/0",
+        json={"source": "Rewritten.", "hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    assert temp_post.stat().st_mode & 0o777 == 0o644
 
 
 def test_insert_block(temp_post):
