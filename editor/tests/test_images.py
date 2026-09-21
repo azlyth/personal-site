@@ -153,15 +153,73 @@ def test_parse_images_img_row_round_trips_html_escaped_alt():
     assert out[1] == {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"}
 
 
-def test_parse_images_malformed_or_unparseable_block_returns_empty_list():
-    assert parse_images("image", "not an image at all") == []
-    assert parse_images("image", "") == []
-    assert parse_images("img_row", '<div class="img-row">nothing here</div>') == []
-    assert parse_images("img_row", "") == []
+def test_parse_images_malformed_or_unparseable_block_returns_none():
+    # None, not [] -- an img_row block that fails to round-trip must not be
+    # mistaken for a photo list with zero photos (see the img-row-with-no-
+    # matching-tags test below for why that distinction is load-bearing).
+    assert parse_images("image", "not an image at all") is None
+    assert parse_images("image", "") is None
+    assert parse_images("img_row", '<div class="img-row">nothing here</div>') is None
+    assert parse_images("img_row", "") is None
 
 
-def test_parse_images_unknown_kind_returns_empty_list():
-    assert parse_images("paragraph", "Some text.") == []
+def test_parse_images_unknown_kind_returns_none():
+    assert parse_images("paragraph", "Some text.") is None
+
+
+# --- Losslessness: parse_images must refuse anything it can't reproduce
+# byte-for-byte via markdown_for, rather than silently returning a reduced
+# list. A regex extension can never enumerate every hand-editable shape, so
+# the check has to be generic: regenerate and compare, not pattern-match
+# harder. Each case below is something the naive tag regex used to accept
+# a *subset* of matches for -- which is worse than rejecting outright,
+# because the client would show a photo editor with the wrong photos and
+# Done would happily delete the ones that didn't parse.
+
+
+def test_parse_images_img_without_alt_is_not_lossless():
+    source = (
+        '<div class="img-row">\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg">\n'
+        '<img src="https://img.cloudy.nyc/p/b.jpg" alt="b">\n'
+        "</div>"
+    )
+    assert parse_images("img_row", source) is None
+
+
+def test_parse_images_single_quoted_attrs_is_not_lossless():
+    source = (
+        '<div class="img-row">\n'
+        "<img src='https://img.cloudy.nyc/p/a.jpg' alt='a'>\n"
+        '<img src="https://img.cloudy.nyc/p/b.jpg" alt="b">\n'
+        "</div>"
+    )
+    assert parse_images("img_row", source) is None
+
+
+def test_parse_images_extra_wrapper_inside_img_row_is_not_lossless():
+    # Both <img> tags parse fine on their own, but there's a third element
+    # in the row (e.g. a caption) that a regenerated .img-row wouldn't
+    # reproduce -- the mismatch has to catch this even though every <img>
+    # tag matched individually.
+    source = (
+        '<div class="img-row">\n'
+        '<div class="caption">Some caption</div>\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg" alt="a">\n'
+        '<img src="https://img.cloudy.nyc/p/b.jpg" alt="b">\n'
+        "</div>"
+    )
+    assert parse_images("img_row", source) is None
+
+
+def test_parse_images_img_row_with_no_matching_tags_returns_none_not_empty_list():
+    # The critical case: every <img> in the row fails to match (e.g. a
+    # `data-src` typo), so the naive parser found zero images -- but the
+    # block is still classified img_row. Returning [] here would make an
+    # already-populated photo row look like an intentionally empty one, and
+    # the client's Done button deletes an "empty" block outright.
+    source = '<div class="img-row">\n<img data-src="https://img.cloudy.nyc/p/a.jpg" alt="a">\n</div>'
+    assert parse_images("img_row", source) is None
 
 
 class FakeS3:

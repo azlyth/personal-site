@@ -52,30 +52,53 @@ _MD_IMAGE_RE = re.compile(r"^!\[(?P<alt>.*)\]\((?P<url>[^)]*)\)$", re.S)
 _IMG_TAG_RE = re.compile(r'<img\s+src="(?P<url>[^"]*)"\s+alt="(?P<alt>[^"]*)"\s*/?>')
 
 
-def parse_images(kind: str, source: str) -> list[dict]:
+def parse_images(kind: str, source: str) -> list[dict] | None:
     """The inverse of `markdown_for`: pull `{url, alt}` pairs back out of an
     `image` or `img_row` block's markdown source, undoing the escaping
     `markdown_for` applied on the way in.
 
-    Best-effort -- a block that doesn't look like what `markdown_for`
-    produces (hand-edited markup, a future format this parser doesn't know)
-    returns an empty list rather than raising. The caller falls back to raw
-    source editing for it.
+    Enumerating every shape hand-written (or otherwise non-canonical) markup
+    can take -- a missing `alt`, single-quoted attributes, an extra element
+    inside an `.img-row`, a future format this parser doesn't know -- is a
+    losing game, and getting it wrong is dangerous: the caller feeds
+    whatever this returns straight into the thumbnail editor, and an image
+    this parser silently dropped is gone the moment the user hits Done.
+    Instead of trying to match harder, verify losslessness generically:
+    regenerate markup from the parsed pairs via `markdown_for` and require
+    it to reproduce `source` exactly. Anything that doesn't -- including
+    shapes nobody's thought of yet -- returns `None`, and the caller must
+    fall back to editing the block as raw source.
+
+    Returns `None`, not `[]`, when the block isn't safely representable.
+    That distinction matters: an `img_row` block whose `<img>` tags all
+    fail to match still has *some* photos in it, and `[]` would read to a
+    caller as "an intentionally empty row" rather than "couldn't parse
+    this" -- indistinguishable from a state that's supposed to delete the
+    block.
     """
     if kind == "image":
         match = _MD_IMAGE_RE.match(source.strip())
         if not match:
-            return []
+            return None
         alt = match.group("alt").replace("\\]", "]").replace("\\[", "[")
-        return [{"url": match.group("url"), "alt": alt}]
-
-    if kind == "img_row":
-        return [
+        images = [{"url": match.group("url"), "alt": alt}]
+    elif kind == "img_row":
+        images = [
             {"url": match.group("url"), "alt": html.unescape(match.group("alt"))}
             for match in _IMG_TAG_RE.finditer(source)
         ]
+    else:
+        return None
 
-    return []
+    try:
+        regenerated = markdown_for([img["url"] for img in images], [img["alt"] for img in images])
+    except ValueError:
+        # Unreachable in practice -- urls/alts come from the same list
+        # comprehension above and are always equal length -- but stay
+        # defensive rather than let a future refactor turn this into a 500.
+        return None
+
+    return images if regenerated == source.strip() else None
 
 
 def markdown_for(urls: list[str], alts: list[str]) -> str:

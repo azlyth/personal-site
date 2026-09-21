@@ -81,6 +81,49 @@ def test_get_post_omits_images_for_non_photo_blocks(temp_post):
     assert "images" not in data["blocks"][0]  # "Intro." paragraph
 
 
+MALFORMED_SLUG = "image-block-malformed-post"
+
+# One <img> is missing its alt attribute, so the naive tag regex only
+# matches the second one -- the case that used to silently drop a photo
+# (Fix 1). The block still classifies as img_row (the wrapping div is
+# well-formed); it's only the photo *list* that isn't safely derivable.
+MALFORMED_POST = """+++
+title = "Malformed Image Block Test"
+date = 2026-01-01
+draft = true
++++
+
+Intro.
+
+<div class="img-row">
+<img src="https://img.cloudy.nyc/p/two.jpg">
+<img src="https://img.cloudy.nyc/p/three.jpg" alt="three">
+</div>
+
+Outro.
+"""
+
+
+@pytest.fixture
+def malformed_post():
+    path = config.BLOG_DIR / f"{MALFORMED_SLUG}.md"
+    path.write_text(MALFORMED_POST, encoding="utf-8")
+    yield path
+    path.unlink(missing_ok=True)
+
+
+def test_get_post_omits_images_key_for_unparseable_img_row(malformed_post):
+    # The key must be *absent*, not present-and-null and not present-and-[]
+    # -- the client gates the thumbnail editor on whether `images` exists at
+    # all, so an unrepresentable block has to look exactly like a block that
+    # was never a candidate for it, keeping the raw-source textarea as the
+    # only way to edit it.
+    data = client.get(f"/api/posts/{MALFORMED_SLUG}").json()
+    block = data["blocks"][1]
+    assert block["kind"] == "img_row"
+    assert "images" not in block
+
+
 # --- PUT .../blocks/{index}/images -----------------------------------------
 
 
@@ -265,3 +308,32 @@ def test_upload_only_rejects_non_image_file(temp_post):
     )
     assert res.status_code == 400
     assert not app.state.s3.calls
+
+
+# --- Fix 4: a bracket in alt text must not demote the block on reload -----
+
+
+def test_bracket_alt_text_survives_save_and_reload_as_image(temp_post):
+    # markdown_for escapes `]` in a standalone image's alt as `\]`; the
+    # block classifier's own regex has to tolerate that escape or the next
+    # load reclassifies the block as a plain paragraph and the thumbnail
+    # editor silently disappears for it.
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/images",
+        json={
+            "images": [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "a photo of a]bracket"}],
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    saved_block = res.json()["blocks"][1]
+    assert saved_block["kind"] == "image"
+    assert saved_block["images"] == [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "a photo of a]bracket"}]
+
+    # Reload independently (a fresh GET, not just the PUT's own response) --
+    # the classifier has to agree with itself on the bytes now sitting on
+    # disk, not just in the write response.
+    reloaded = _get()["blocks"][1]
+    assert reloaded["kind"] == "image"
+    assert reloaded["images"] == [{"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "a photo of a]bracket"}]

@@ -28,7 +28,13 @@ _KIND_BY_TOKEN = {
 }
 
 _IMG_ROW_RE = re.compile(r'<div\s+class="img-row"', re.I)
-_ONLY_IMAGE_RE = re.compile(r"^!\[[^\]]*\]\([^)]*\)$")
+# The alt group allows an escaped `\]` (or `\[`, or any other `\x`) as well
+# as any plain non-bracket character, so a standalone image whose alt text
+# contains a literal `]` -- which `images.markdown_for` renders as `\]` --
+# still classifies as `image` rather than falling through to `paragraph`.
+# `[^\]]*` (matching zero or more non-`]` characters) would stop at that
+# escaped bracket's `]` and never reach the real `](url)` closer.
+_ONLY_IMAGE_RE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\([^)]*\)$")
 
 
 @dataclass

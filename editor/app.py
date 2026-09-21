@@ -268,7 +268,14 @@ def get_post(slug: str):
 def _block_json(block) -> dict:
     out = {"index": block.index, "kind": block.kind, "source": block.source, "html": block.html}
     if block.kind in ("image", "img_row"):
-        out["images"] = parse_images(block.kind, block.source)
+        # parse_images returns None for anything it can't losslessly
+        # reproduce -- omit the key entirely rather than sending `null` or
+        # `[]`, both of which the client (or any other consumer) could
+        # mistake for "this photo block is empty" instead of "this block
+        # isn't safely editable as a photo list; fall back to raw source."
+        images = parse_images(block.kind, block.source)
+        if images is not None:
+            out["images"] = images
     return out
 
 

@@ -145,3 +145,17 @@ def test_insert_index_beyond_length_raises():
     # and must raise, not silently append in a plausible-but-wrong place.
     with pytest.raises(IndexError):
         insert_block(SIMPLE, 4, "nope")
+
+
+def test_image_with_escaped_bracket_alt_still_classifies_as_image():
+    # markdown_for() escapes a literal `]` in a standalone image's alt as
+    # `\]`. The classifier's _ONLY_IMAGE_RE must tolerate that escape --
+    # otherwise saving a photo with ordinary bracket punctuation in its alt
+    # text reclassifies the block from `image` to `paragraph` on the very
+    # next parse, and the thumbnail editor silently stops being offered for
+    # it.
+    from editor.images import markdown_for
+
+    source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a photo of a]bracket"])
+    blocks = parse_blocks(source)
+    assert [b.kind for b in blocks] == ["image"]
