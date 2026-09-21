@@ -4,12 +4,17 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const PersistenceLayer = require('./persistence');
+const DrawingStore = require('./drawing-store');
 
 const app = express();
 const server = http.createServer(app);
 
 // Initialize persistence layer
 const persistence = new PersistenceLayer();
+
+// The drawing canvas keeps its state in memory and writes through to Redis on a
+// timer -- see drawing-store.js for why it can't read-modify-write per packet.
+const drawingStore = new DrawingStore(persistence);
 
 // Configure CORS
 const corsOptions = {
@@ -39,13 +44,21 @@ const io = socketIo(server, {
 // In-memory session storage (fallback when Redis is unavailable)
 const sessions = new Map();
 const goSessions = new Map();
-const drawingSessions = new Map();
 
 // Global Go session ID
 const GLOBAL_GO_SESSION = 'global-go-game';
 
 // Global Drawing session ID
 const GLOBAL_DRAWING_SESSION = 'global-drawing-canvas';
+
+const MAX_SEGMENTS_PER_PACKET = 256;
+
+function isDrawableSegment(segment) {
+  return segment
+    && ['fromX', 'fromY', 'toX', 'toY'].every((key) => Number.isFinite(segment[key]))
+    && typeof segment.color === 'string'
+    && Number.isFinite(segment.lineWidth);
+}
 
 // Go game helper functions
 function getNeighbors(row, col) {
@@ -144,25 +157,6 @@ async function saveGoSession(sessionId, gameState) {
   await persistence.saveGoSession(sessionId, gameState);
 }
 
-async function getDrawingSession(sessionId) {
-  const session = await persistence.loadDrawingSession(sessionId);
-  if (session) {
-    // Ensure players is a Map
-    if (session.players && !(session.players instanceof Map)) {
-      session.players = new Map(session.players);
-    }
-    return session;
-  }
-  return drawingSessions.get(sessionId);
-}
-
-async function saveDrawingSession(sessionId, drawingState) {
-  drawingSessions.set(sessionId, drawingState); // Keep in memory as fallback
-  // Serialize Map to array for Redis storage
-  const serializedState = persistence.serializeDrawingState(drawingState);
-  await persistence.saveDrawingSession(sessionId, serializedState);
-}
-
 async function updateGlobalCounter(newValue) {
   globalCounter = newValue;
   await persistence.saveGlobalCounter(globalCounter);
@@ -195,12 +189,9 @@ async function initializeServer() {
     }
     console.log(`Loaded ${persistedGoSessions.size} Go sessions`);
     
-    // Load all Drawing sessions
-    const persistedDrawingSessions = await persistence.getAllDrawingSessions();
-    for (const [sessionId, drawingState] of persistedDrawingSessions) {
-      drawingSessions.set(sessionId, drawingState);
-    }
-    console.log(`Loaded ${persistedDrawingSessions.size} Drawing sessions`);
+    // Warm the shared drawing canvas; other drawing sessions load on demand
+    const drawingState = await drawingStore.load(GLOBAL_DRAWING_SESSION);
+    console.log(`Loaded drawing canvas with ${drawingState.strokes.length} strokes`);
   } else {
     console.warn('Redis connection failed, using in-memory storage only');
   }
@@ -235,11 +226,12 @@ setInterval(async () => {
     }
   }
   
-  for (const [sessionId, drawingState] of drawingSessions.entries()) {
+  for (const sessionId of drawingStore.sessionIds()) {
+    if (sessionId === GLOBAL_DRAWING_SESSION) continue; // the shared canvas persists
+    const drawingState = drawingStore.getState(sessionId);
     if (now - new Date(drawingState.lastActivity).getTime() > maxAge) {
       console.log(`Cleaning up old Drawing session: ${sessionId}`);
-      drawingSessions.delete(sessionId);
-      await persistence.deleteDrawingSession(sessionId);
+      await drawingStore.delete(sessionId);
     }
   }
 }, 60 * 60 * 1000); // Check every hour
@@ -557,19 +549,7 @@ io.on('connection', (socket) => {
   
   // Create new Drawing session (use global session)
   socket.on('create-drawing-session', async () => {
-    let drawingState = await getDrawingSession(GLOBAL_DRAWING_SESSION);
-    
-    // Create global session if it doesn't exist
-    if (!drawingState) {
-      drawingState = {
-        strokes: [],
-        players: new Map(),
-        createdAt: new Date(),
-        lastActivity: new Date()
-      };
-      await saveDrawingSession(GLOBAL_DRAWING_SESSION, drawingState);
-      console.log(`Global Drawing session created: ${GLOBAL_DRAWING_SESSION}`);
-    }
+    const drawingState = await drawingStore.load(GLOBAL_DRAWING_SESSION);
     
     socket.join(GLOBAL_DRAWING_SESSION);
     
@@ -582,93 +562,75 @@ io.on('connection', (socket) => {
   
   // Join Drawing session
   socket.on('join-drawing-session', async ({ sessionId }) => {
-    const drawingState = await getDrawingSession(sessionId);
-    
-    if (!drawingState) {
+    // The shared canvas is always available; any other id must already exist.
+    if (sessionId !== GLOBAL_DRAWING_SESSION && !(await persistence.loadDrawingSession(sessionId))) {
       socket.emit('drawing-session-not-found');
       return;
     }
     
+    const drawingState = await drawingStore.load(sessionId);
+    
     socket.join(sessionId);
     socket.drawingSessionId = sessionId;
     
-    // Add player to session
-    drawingState.players.set(socket.id, {
-      id: socket.id,
-      joinedAt: new Date()
-    });
-    drawingState.lastActivity = new Date();
-    
-    await saveDrawingSession(sessionId, drawingState);
+    const playerCount = drawingStore.addPlayer(sessionId, socket.id);
     
     console.log(`Player joined Drawing session ${sessionId}`);
     
     socket.emit('drawing-session-joined', { 
       sessionId, 
       drawingState: drawingState.strokes,
-      playerCount: drawingState.players.size
+      playerCount
     });
     
     // Notify all clients in session about new player
-    io.to(sessionId).emit('drawing-player-joined', {
-      playerCount: drawingState.players.size
-    });
+    io.to(sessionId).emit('drawing-player-joined', { playerCount });
   });
   
-  // Handle drawing data
-  socket.on('drawing-data', async ({ sessionId, fromX, fromY, toX, toY, color, lineWidth }) => {
-    const drawingState = await getDrawingSession(sessionId);
+  // Handle drawing data. Clients batch a stroke's points into `segments`, but a
+  // single `{fromX, ...}` segment is still accepted so older tabs keep drawing.
+  socket.on('drawing-data', async ({ sessionId, segments, fromX, fromY, toX, toY, color, lineWidth }) => {
+    const batch = Array.isArray(segments)
+      ? segments.map((segment) => ({ color, lineWidth, ...segment }))
+      : [{ fromX, fromY, toX, toY, color, lineWidth }];
     
-    if (!drawingState) {
-      socket.emit('drawing-session-not-found');
-      return;
+    const valid = batch.slice(0, MAX_SEGMENTS_PER_PACKET).filter(isDrawableSegment);
+    if (valid.length === 0) return;
+    
+    if (!drawingStore.getState(sessionId)) {
+      if (sessionId !== GLOBAL_DRAWING_SESSION && !(await persistence.loadDrawingSession(sessionId))) {
+        socket.emit('drawing-session-not-found');
+        return;
+      }
+      await drawingStore.load(sessionId);
     }
     
-    // Add stroke to drawing state
-    const stroke = {
-      fromX,
-      fromY,
-      toX,
-      toY,
-      color,
-      lineWidth,
-      timestamp: Date.now()
-    };
+    // Synchronous from here: nothing can interleave between read and write, so
+    // no stroke in a burst of packets can be lost.
+    const strokes = drawingStore.appendSegments(sessionId, valid);
     
-    drawingState.strokes.push(stroke);
-    drawingState.lastActivity = new Date();
-    
-    await saveDrawingSession(sessionId, drawingState);
-    
-    // Broadcast drawing update to all clients in session
-    socket.to(sessionId).emit('drawing-update', { 
-      drawingState: drawingState.strokes 
-    });
-    
-    console.log(`Drawing stroke added to session ${sessionId}: ${color} from (${fromX},${fromY}) to (${toX},${toY})`);
+    // Send only what is new; clients already hold the rest of the canvas.
+    socket.to(sessionId).emit('drawing-append', { strokes });
   });
   
   // Handle canvas clear
   socket.on('clear-drawing-canvas', async ({ sessionId }) => {
     console.log(`Received clear-drawing-canvas: ${sessionId} from ${socket.id}`);
-    const drawingState = await getDrawingSession(sessionId);
-    
-    if (!drawingState) {
-      console.log(`Drawing session not found for clear: ${sessionId}`);
-      socket.emit('drawing-session-not-found');
-      return;
+    if (!drawingStore.getState(sessionId)) {
+      if (sessionId !== GLOBAL_DRAWING_SESSION && !(await persistence.loadDrawingSession(sessionId))) {
+        console.log(`Drawing session not found for clear: ${sessionId}`);
+        socket.emit('drawing-session-not-found');
+        return;
+      }
+      await drawingStore.load(sessionId);
     }
     
-    // Clear all strokes
-    drawingState.strokes = [];
-    drawingState.lastActivity = new Date();
-    
-    await saveDrawingSession(sessionId, drawingState);
+    drawingStore.clear(sessionId);
     
     console.log(`Canvas cleared in session ${sessionId}`);
     
     // Broadcast clear to all clients in session
-    io.to(sessionId).emit('drawing-cleared', { drawingState: drawingState.strokes });
+    io.to(sessionId).emit('drawing-cleared', { drawingState: drawingStore.getStrokes(sessionId) });
   });
   
   // Handle disconnection
@@ -727,27 +689,16 @@ io.on('connection', (socket) => {
     }
     
     // Handle Drawing session disconnection
-    if (socket.drawingSessionId) {
-      const drawingState = await getDrawingSession(socket.drawingSessionId);
+    if (socket.drawingSessionId && drawingStore.getState(socket.drawingSessionId)) {
+      const playerCount = drawingStore.removePlayer(socket.drawingSessionId, socket.id);
       
-      if (drawingState) {
-        // Remove player from drawing session
-        drawingState.players.delete(socket.id);
-        drawingState.lastActivity = new Date();
-        
-        await saveDrawingSession(socket.drawingSessionId, drawingState);
-        
-        console.log(`Player left Drawing session ${socket.drawingSessionId}`);
-        
-        // Notify remaining players
-        io.to(socket.drawingSessionId).emit('drawing-player-left', {
-          playerCount: drawingState.players.size
-        });
-        
-        // Clean up empty Drawing sessions
-        if (drawingState.players.size === 0) {
-          console.log(`Drawing session ${socket.drawingSessionId} is empty, will be cleaned up later`);
-        }
+      console.log(`Player left Drawing session ${socket.drawingSessionId}`);
+      
+      // Notify remaining players
+      io.to(socket.drawingSessionId).emit('drawing-player-left', { playerCount });
+      
+      if (playerCount === 0) {
+        console.log(`Drawing session ${socket.drawingSessionId} is empty, will be cleaned up later`);
       }
     }
   });
@@ -766,12 +717,12 @@ app.get('/health', async (req, res) => {
     },
     activeSessions: sessions.size,
     activeGoSessions: goSessions.size,
-    activeDrawingSessions: drawingSessions.size,
+    activeDrawingSessions: drawingStore.sessionIds().length,
     totalDevices: Array.from(sessions.values()).reduce((sum, session) => sum + session.devices.length, 0),
     totalGoPlayers: Array.from(goSessions.values()).reduce((sum, game) => 
       sum + Object.values(game.players).filter(p => p !== null).length, 0),
-    totalDrawingPlayers: Array.from(drawingSessions.values()).reduce((sum, drawing) => 
-      sum + drawing.players.size, 0),
+    totalDrawingPlayers: drawingStore.sessionIds().reduce((sum, sessionId) =>
+      sum + drawingStore.playerCount(sessionId), 0),
     globalCounter: globalCounter
   });
 });
@@ -796,6 +747,7 @@ const PORT = process.env.PORT || 3001;
 // Graceful shutdown handling
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
+  await drawingStore.flushAll();
   await persistence.disconnect();
   server.close(() => {
     console.log('Server shut down');
@@ -805,6 +757,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...');
+  await drawingStore.flushAll();
   await persistence.disconnect();
   server.close(() => {
     console.log('Server shut down');

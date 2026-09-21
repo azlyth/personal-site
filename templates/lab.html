@@ -328,6 +328,8 @@
     let isDrawing = false;
     let lastX = 0;
     let lastY = 0;
+    let pendingDrawingSegments = [];
+    let drawingFlushHandle = null;
 
     // Track total connections for status bar
     let totalConnections = 0;
@@ -695,8 +697,8 @@
             updateDrawingPlayerCount(data.playerCount || 0);
         });
 
-        drawingSocket.on('drawing-update', (data) => {
-            redrawCanvas(data.drawingState);
+        drawingSocket.on('drawing-append', (data) => {
+            appendStrokes(data.strokes);
         });
 
         drawingSocket.on('drawing-player-joined', (data) => {
@@ -767,18 +769,7 @@
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Send to server
-        if (drawingSocket) {
-            drawingSocket.emit('drawing-data', {
-                sessionId: drawingSessionId,
-                fromX: lastX,
-                fromY: lastY,
-                toX: x,
-                toY: y,
-                color: drawingColor,
-                lineWidth: 3
-            });
-        }
+        queueDrawingSegment(lastX, lastY, x, y);
 
         lastX = x;
         lastY = y;
@@ -786,6 +777,54 @@
 
     function stopDrawing() {
         isDrawing = false;
+        flushDrawingSegments();
+    }
+
+    // Points are queued and flushed once per frame: a pointer moving fast fires
+    // events faster than one round trip, and a packet per event arrives at the
+    // server as a burst it then has to unpick.
+    function queueDrawingSegment(fromX, fromY, toX, toY) {
+        pendingDrawingSegments.push({ fromX, fromY, toX, toY });
+        if (drawingFlushHandle !== null) return;
+        drawingFlushHandle = requestAnimationFrame(() => {
+            drawingFlushHandle = null;
+            flushDrawingSegments();
+        });
+    }
+
+    function flushDrawingSegments() {
+        if (drawingFlushHandle !== null) {
+            cancelAnimationFrame(drawingFlushHandle);
+            drawingFlushHandle = null;
+        }
+        if (pendingDrawingSegments.length === 0 || !drawingSocket) return;
+
+        const segments = pendingDrawingSegments;
+        pendingDrawingSegments = [];
+
+        drawingSocket.emit('drawing-data', {
+            sessionId: drawingSessionId,
+            segments,
+            color: drawingColor,
+            lineWidth: 3
+        });
+    }
+
+    function appendStrokes(strokes) {
+        const canvas = document.getElementById('drawing-canvas');
+        if (!canvas || !strokes || strokes.length === 0) return;
+
+        const ctx = canvas.getContext('2d');
+        strokes.forEach(stroke => {
+            ctx.beginPath();
+            ctx.moveTo(stroke.fromX, stroke.fromY);
+            ctx.lineTo(stroke.toX, stroke.toY);
+            ctx.strokeStyle = stroke.color;
+            ctx.lineWidth = stroke.lineWidth;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        });
     }
 
     function handleTouchStart(e) {
@@ -819,18 +858,7 @@
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Send to server
-        if (drawingSocket) {
-            drawingSocket.emit('drawing-data', {
-                sessionId: drawingSessionId,
-                fromX: lastX,
-                fromY: lastY,
-                toX: x,
-                toY: y,
-                color: drawingColor,
-                lineWidth: 3
-            });
-        }
+        queueDrawingSegment(lastX, lastY, x, y);
 
         lastX = x;
         lastY = y;
@@ -841,7 +869,8 @@
         document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
         // Add active to clicked
         el.classList.add('active');
-        // Set color
+        // Set color; queued points belong to the previous colour
+        flushDrawingSegments();
         drawingColor = el.dataset.color;
     }
 

@@ -39,6 +39,29 @@ The `/lab` section contains real-time collaborative experiments using Socket.IO:
 - **Session pattern**: Global sessions (`GLOBAL_GO_SESSION`, `GLOBAL_DRAWING_SESSION`) for persistence across reloads
 - **UI pattern**: Desktop shows QR code + preview, mobile shows controller (use `?mobile=true` to test)
 
+**The drawing canvas does not read-modify-write per packet** (fixed 2026-09-20).
+Pointer events arrive faster than a Redis round trip, so the old handler — load
+the stroke array, push one stroke, save it back, all with `await`s — let two
+packets load the same version and each save over the other. Every stroke in a
+batch but the last was dropped, which is why fast straight lines came back
+broken. Now:
+
+- `lab-backend/drawing-store.js` holds the canvas in memory as the source of
+  truth: loaded from Redis once, mutated **synchronously** (nothing can
+  interleave mid-update), written back on a 250ms coalescing timer that loops
+  while the session is dirty. Strokes are capped at 20k per session, and
+  SIGTERM/SIGINT flush before Redis disconnects.
+- The client (`templates/experiment-drawing.html`) queues points and flushes
+  once per animation frame as `drawing-data { segments: [...] }`, also flushing
+  on pointer-up and on colour change. A single `{fromX, ...}` segment is still
+  accepted so older open tabs keep working.
+- The server broadcasts **only the new strokes** (`drawing-append`), not the
+  whole canvas on every packet; clients draw them incrementally instead of
+  clearing and repainting everything.
+- Tests: `cd lab-backend && npm test` (needs Docker for the Redis-backed
+  integration test). `scripts/verify-lab-drawing.py` drives real Chromium over
+  CDP against the deployed page and checks a fast drag stores every point.
+
 Current experiments:
 1. `experiment.html` - Shared counter (increment/decrement)
 2. `experiment-go.html` - Collaborative 9x9 Go board

@@ -120,6 +120,12 @@
     let ctx;
     let drawingState = [];
     let isDesktop = !window.location.search.includes('mobile=true');
+
+    // Points are queued and flushed once per frame: a finger moving fast fires
+    // pointer events faster than one round trip, and one packet per event both
+    // floods the socket and arrives as a burst the server has to unpick.
+    let pendingSegments = [];
+    let flushHandle = null;
     
     // Initialize the experiment
     function init() {
@@ -169,8 +175,12 @@
             updateDrawingState(data.drawingState);
         });
         
-        socket.on('drawing-update', (data) => {
-            redrawCanvas(data.drawingState);
+        socket.on('drawing-append', (data) => {
+            appendStrokes(data.strokes);
+        });
+        
+        socket.on('drawing-cleared', (data) => {
+            updateDrawingState(data.drawingState);
         });
         
         socket.on('drawing-player-joined', (data) => {
@@ -217,8 +227,8 @@
             updatePlayerCount(data.playerCount);
         });
         
-        socket.on('drawing-update', (data) => {
-            redrawCanvas(data.drawingState);
+        socket.on('drawing-append', (data) => {
+            appendStrokes(data.strokes);
         });
         
         socket.on('drawing-player-joined', (data) => {
@@ -267,6 +277,7 @@
                 option.style.border = '3px solid #0066cc';
                 option.style.transform = 'scale(1.1)';
                 
+                flushSegments(); // queued points belong to the previous colour
                 currentColor = option.dataset.color;
                 ctx.strokeStyle = currentColor;
             });
@@ -352,16 +363,7 @@
         ctx.lineTo(coords.x, coords.y);
         ctx.stroke();
         
-        // Emit drawing data to server
-        socket.emit('drawing-data', {
-            sessionId,
-            fromX: lastX,
-            fromY: lastY,
-            toX: coords.x,
-            toY: coords.y,
-            color: currentColor,
-            lineWidth: 3
-        });
+        queueSegment(lastX, lastY, coords.x, coords.y);
         
         lastX = coords.x;
         lastY = coords.y;
@@ -371,6 +373,37 @@
         if (!isDrawing) return;
         e.preventDefault();
         isDrawing = false;
+        flushSegments();
+    }
+    
+    function queueSegment(fromX, fromY, toX, toY) {
+        pendingSegments.push({ fromX, fromY, toX, toY });
+        if (flushHandle !== null) return;
+        flushHandle = requestAnimationFrame(() => {
+            flushHandle = null;
+            flushSegments();
+        });
+    }
+    
+    // Sends the points drawn since the last frame as one packet. Socket.IO
+    // buffers emits while the connection is down and replays them on reconnect,
+    // so a dropped connection delays strokes rather than losing them.
+    function flushSegments() {
+        if (flushHandle !== null) {
+            cancelAnimationFrame(flushHandle);
+            flushHandle = null;
+        }
+        if (pendingSegments.length === 0 || !socket) return;
+        
+        const segments = pendingSegments;
+        pendingSegments = [];
+        
+        socket.emit('drawing-data', {
+            sessionId,
+            segments,
+            color: currentColor,
+            lineWidth: 3
+        });
     }
     
     function createQRCode(elementId, url) {
@@ -394,6 +427,25 @@
         redrawCanvas(state);
     }
     
+    function appendStrokes(strokes) {
+        if (!strokes || strokes.length === 0) return;
+        drawingState = drawingState.concat(strokes);
+        strokes.forEach(drawStroke);
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = 3;
+    }
+    
+    function drawStroke(stroke) {
+        ctx.beginPath();
+        ctx.moveTo(stroke.fromX, stroke.fromY);
+        ctx.lineTo(stroke.toX, stroke.toY);
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
+    
     function redrawCanvas(state) {
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -401,16 +453,7 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Redraw all strokes
-        state.forEach(stroke => {
-            ctx.beginPath();
-            ctx.moveTo(stroke.fromX, stroke.fromY);
-            ctx.lineTo(stroke.toX, stroke.toY);
-            ctx.strokeStyle = stroke.color;
-            ctx.lineWidth = stroke.lineWidth;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.stroke();
-        });
+        state.forEach(drawStroke);
         
         // Reset current drawing style
         ctx.strokeStyle = currentColor;

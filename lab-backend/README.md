@@ -11,6 +11,18 @@ Backend service for interactive experiments on the personal site lab section.
 - Health check endpoints
 - CORS configuration for cross-origin requests
 
+## Tests
+
+```bash
+npm test
+```
+
+`test/drawing-store.test.js` covers the drawing state machine directly.
+`test/drawing-persistence.test.js` boots the real server against a disposable
+Redis container (skipped if Docker is unavailable) and asserts that a burst of
+packets arriving together is stored whole — the regression that broke drawn
+lines into fragments.
+
 ## Local Development
 
 ### Prerequisites
