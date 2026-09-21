@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    # Runs as the host user, like scripts/build-site.sh does. Without this the
+    # dev server writes public/ as root, and any file only this build produced
+    # (a newly added static asset) then fails the production promote: rsync
+    # runs as the host user and cannot chgrp a root-owned destination.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       - "1111:1111"
     volumes:

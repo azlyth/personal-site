@@ -85,7 +85,7 @@ upload-video:
 
 # Development mode - runs zola serve with live reloading + lab backend
 dev:
-	docker compose -f compose.dev.yaml up --build
+	HOST_UID=$(shell id -u) HOST_GID=$(shell id -g) docker compose -f compose.dev.yaml up --build
 
 # Open local development site
 open-local:
