@@ -24,6 +24,32 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture
+def repo_with_remote(tmp_path: Path) -> Path:
+    """A repo with a real (local, bare) origin and upstream tracking set up.
+
+    Lets tests exercise the real `git rev-list @{upstream}..HEAD` check
+    without touching any actual network remote -- the "origin" here is just
+    another directory under tmp_path.
+    """
+    work = tmp_path / "work"
+    work.mkdir()
+    origin = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "init", "-q", "--bare", str(origin)], check=True, capture_output=True
+    )
+    _git(work, "init", "-q", "-b", "main")
+    _git(work, "config", "user.email", "t@example.com")
+    _git(work, "config", "user.name", "Test")
+    (work / "content").mkdir()
+    (work / "content" / "a.md").write_text("original\n")
+    _git(work, "add", "content/a.md")
+    _git(work, "commit", "-qm", "init")
+    _git(work, "remote", "add", "origin", str(origin))
+    _git(work, "push", "-q", "-u", "origin", "main")
+    return work
+
+
 def test_commit_stages_only_named_paths(repo: Path):
     # The critical guarantee: unrelated dirty work is never swept in.
     (repo / "content" / "a.md").write_text("edited\n")
@@ -90,3 +116,111 @@ def test_publish_happy_path(repo: Path, monkeypatch):
     result = publish(repo, ["content/a.md"], "edit a")
 
     assert (result.committed, result.pushed, result.published) == (True, True, True)
+
+
+def test_publish_retries_unpushed_commit_after_failed_push(
+    repo_with_remote: Path, monkeypatch
+):
+    # A failed push must not make the *next* publish() lie: the earlier
+    # commit is still sitting there unpushed, so retrying must push and
+    # publish it rather than reporting "nothing to publish".
+    repo = repo_with_remote
+    (repo / "content" / "a.md").write_text("edited\n")
+
+    def boom(_repo):
+        raise subprocess.CalledProcessError(1, ["git", "push"], stderr="rejected")
+
+    monkeypatch.setattr("editor.publish.push", boom)
+    monkeypatch.setattr("editor.publish.publish_site", lambda _repo: None)
+
+    first = publish(repo, ["content/a.md"], "edit a")
+    assert first.committed is True
+    assert first.pushed is False
+
+    # Retry: nothing new to *commit* (the edit was already committed above),
+    # but the commit is still unpushed.
+    monkeypatch.setattr("editor.publish.push", lambda _repo: None)
+
+    second = publish(repo, ["content/a.md"], "edit a")
+
+    assert second.sha == first.sha
+    assert second.pushed is True
+    assert second.published is True
+    assert second.message != "nothing to publish"
+
+
+def test_publish_reports_nothing_to_publish_when_truly_clean(repo_with_remote: Path):
+    # Nothing changed and the fixture already pushed the initial commit:
+    # there is genuinely nothing outstanding.
+    result = publish(repo_with_remote, ["content/a.md"], "no-op")
+
+    assert result.message == "nothing to publish"
+    assert result.committed is False
+    assert result.pushed is False
+    assert result.published is False
+
+
+def test_publish_reports_nothing_to_publish_with_no_remote_configured(repo: Path):
+    # No edits, and no remote at all (the plain `repo` fixture). The
+    # unpushed-commit check must degrade gracefully rather than erroring.
+    result = publish(repo, ["content/a.md"], "no-op")
+
+    assert result.message == "nothing to publish"
+    assert result.committed is False
+
+
+def test_publish_reports_failed_commit(repo: Path):
+    # A pathspec that matches nothing makes `git add` fail; that must come
+    # back as a PublishResult, not an uncaught CalledProcessError -- the
+    # HTTP endpoint calling this can't turn an exception into a clean 4xx.
+    result = publish(repo, ["content/does-not-exist.md"], "ghost")
+
+    assert result.committed is False
+    assert result.sha is None
+    assert result.pushed is False
+    assert result.published is False
+    assert "commit" in result.message.lower()
+
+
+def test_commit_stages_dash_prefixed_filename_literally(repo: Path):
+    # A filename that looks like a flag must be treated as a literal path,
+    # not parsed as an option -- `git add --` already guarantees this, this
+    # proves it.
+    (repo / "-f.md").write_text("dash file\n")
+    (repo / "unrelated.txt").write_text("work in progress\n")
+
+    sha = commit_paths(repo, ["-f.md"], "add dash file")
+
+    assert sha
+    files = _git(repo, "show", "--name-only", "--format=", "HEAD").splitlines()
+    assert files == ["-f.md"]
+    assert "unrelated.txt" in _git(repo, "status", "--porcelain")
+
+
+def test_commit_stages_filename_with_spaces_literally(repo: Path):
+    (repo / "content" / "my post file.md").write_text("spaced\n")
+    (repo / "unrelated.txt").write_text("work in progress\n")
+
+    sha = commit_paths(repo, ["content/my post file.md"], "add spaced file")
+
+    assert sha
+    files = _git(repo, "show", "--name-only", "--format=", "HEAD").splitlines()
+    assert files == ["content/my post file.md"]
+    assert "unrelated.txt" in _git(repo, "status", "--porcelain")
+
+
+def test_commit_stages_literal_asterisk_filename(repo: Path):
+    # A sibling file that WOULD be matched if "*" were treated as a glob
+    # pattern -- it must be left alone; only the literal path is staged.
+    (repo / "content" / "star*.md").write_text("literal star\n")
+    (repo / "content" / "star2.md").write_text("decoy\n")
+    (repo / "unrelated.txt").write_text("work in progress\n")
+
+    sha = commit_paths(repo, ["content/star*.md"], "add literal star")
+
+    assert sha
+    files = _git(repo, "show", "--name-only", "--format=", "HEAD").splitlines()
+    assert files == ["content/star*.md"]
+    status = _git(repo, "status", "--porcelain")
+    assert "unrelated.txt" in status
+    assert "star2.md" in status  # still untracked, not swept into the commit

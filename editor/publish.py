@@ -62,10 +62,38 @@ def publish_site(repo: Path) -> None:
     )
 
 
+def _has_unpushed_commits(repo: Path) -> bool:
+    """True if HEAD has commits the upstream (or origin/main) doesn't.
+
+    Used so a retried publish after a failed push doesn't report "nothing to
+    publish" just because there's nothing new to *commit* -- the previous
+    commit is still sitting there unpushed.
+    """
+    for upstream in ("@{upstream}", "origin/main"):
+        try:
+            out = _git(repo, "rev-list", f"{upstream}..HEAD", "--count")
+        except subprocess.CalledProcessError:
+            continue
+        return out not in ("", "0")
+    return False
+
+
 def publish(repo: Path, paths: list[str], message: str) -> PublishResult:
-    sha = commit_paths(repo, paths, message)
+    try:
+        sha = commit_paths(repo, paths, message)
+    except subprocess.CalledProcessError as exc:
+        return PublishResult(
+            False, None, False, False,
+            f"commit failed: {exc.stderr or exc}",
+        )
+
     if sha is None:
-        return PublishResult(False, None, False, False, "nothing to publish")
+        if not _has_unpushed_commits(repo):
+            return PublishResult(False, None, False, False, "nothing to publish")
+        # A previous publish committed but failed to push (or publish). Pick
+        # up where it left off rather than reporting "nothing to publish"
+        # while a commit sits unpushed and the live site is stale.
+        sha = _git(repo, "rev-parse", "HEAD")
 
     try:
         push(repo)
