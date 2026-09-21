@@ -63,18 +63,34 @@
             display: block;
         }
 
+        /* Flex rather than grid so a row that wraps centres its last line.
+           A grid puts a leftover third photo in column 1 with dead space
+           beside it; there is no grid equivalent of "centre the last row".
+           The 50% cap is what stops that leftover photo from growing to fill
+           its line: tall phone photos at the full column width are the exact
+           thing the size presets exist to prevent. 50% is the tightest cap
+           that still lets two sit side by side. */
         .img-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
             gap: 0.75rem;
             margin: 1.5rem auto;
         }
 
         .img-row img {
             margin: 0;
-            width: 100%;
+            flex: 1 1 140px;
+            min-width: 140px;
+            max-width: calc(50% - 0.375rem);
             height: 100%;
             object-fit: cover;
+        }
+
+        /* A row of one is a sizing wrapper, not a row -- it must still fill
+           the width its size class allows. */
+        .img-row img:only-child {
+            max-width: 100%;
         }
 
         /* Same three presets as .video-row below, and the same reason a
@@ -106,18 +122,26 @@
            feature exists to fix. The row itself carries the size cap and is
            centered; `.container video`'s own max-width:100% still applies
            inside it, so a clip never exceeds its row. */
+        /* Same flex treatment as .img-row, for the same reason. */
         .video-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
             gap: 0.75rem;
             margin: 1.5rem auto;
         }
 
         .video-row video {
             margin: 0;
-            width: 100%;
+            flex: 1 1 140px;
+            min-width: 140px;
+            max-width: calc(50% - 0.375rem);
             height: auto;
             display: block;
+        }
+
+        .video-row video:only-child {
+            max-width: 100%;
         }
 
         /* Three size presets, picked against the complaint: full-width
