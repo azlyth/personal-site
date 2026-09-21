@@ -16,6 +16,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from PIL import UnidentifiedImageError
+
 from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
@@ -291,6 +293,14 @@ def _s3():
     return app.state.s3
 
 
+# This Pi runs the rest of the fleet too (Nextcloud, several other services),
+# so a burst of full-resolution camera-roll photos from the tablet is worth
+# bounding even though this route is LAN-only. 20MB is generous for a single
+# phone photo; 12 files is generous for one upload batch.
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_FILES = 12
+
+
 @app.post("/api/posts/{slug}/images")
 async def add_images(
     slug: str,
@@ -306,13 +316,60 @@ async def add_images(
             detail="post changed on disk since it was loaded; reload before saving",
         )
 
-    alt_list = json.loads(alts)
+    if len(files) > MAX_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"too many files ({len(files)}); max {MAX_FILES} per upload",
+        )
+
+    try:
+        alt_list = json.loads(alts)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="alts must be valid JSON")
+    if not isinstance(alt_list, list):
+        # A bare JSON scalar (e.g. '"x"') parses without error, and indexing
+        # into it below would walk its characters instead of raising --
+        # silently mislabeling every photo. Reject anything but a list.
+        raise HTTPException(
+            status_code=400, detail="alts must be a JSON array of strings"
+        )
+    # Pad explicitly rather than relying on the position < len(alt_list)
+    # guard at each use site -- one place that decides what a missing alt
+    # becomes.
+    alt_list = list(alt_list) + [""] * max(0, len(files) - len(alt_list))
+
     bucket = config.load_aws_env().get("PERSONAL_SITE_IMAGES_BUCKET", "img.cloudy.nyc")
 
     urls, used_alts = [], []
     for position, upload_file in enumerate(files):
-        alt = alt_list[position] if position < len(alt_list) else ""
-        processed = process_image(await upload_file.read())
+        alt = alt_list[position]
+        data = await upload_file.read()
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"photo {position + 1} of {len(files)} "
+                    f"({upload_file.filename}) is too large "
+                    f"({len(data) / 1_000_000:.1f}MB; "
+                    f"max {MAX_UPLOAD_BYTES // (1024 * 1024)}MB)"
+                ),
+            )
+        try:
+            processed = process_image(data)
+        except (UnidentifiedImageError, OSError) as exc:
+            # The post file is never touched here -- _write_body only runs
+            # after every file in the batch has processed successfully, so a
+            # later bad file can't leave a partial insert. An earlier valid
+            # photo in the same request may already be sitting in S3 by this
+            # point; that's an orphaned but harmless object (content-
+            # addressed), not a partial edit to the post.
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"photo {position + 1} of {len(files)} "
+                    f"({upload_file.filename}) is not a valid image: {exc}"
+                ),
+            )
         key = image_key(slug, alt, processed)
         urls.append(upload(processed, key, bucket, _s3()))
         used_alts.append(alt)
