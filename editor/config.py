@@ -11,6 +11,7 @@ CLOUDFLARED_CONFIG = HTTP_ROUTING / "cloudflared" / "config.yml"
 HOSTNAME = os.environ.get("EDITOR_HOSTNAME", "edit.cloudy.nyc")
 PORT = int(os.environ.get("EDITOR_PORT", "8804"))
 BLOG_DIR = REPO / "content" / "blog"
+WEB_DIR = REPO / "editor" / "web"
 
 
 def load_aws_env() -> dict:
