@@ -23,8 +23,11 @@ import os
 import subprocess
 import sys
 
-WIDTH = 640
-CRF = 26
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+# Shared with the tablet editor's upload path so a fix to one reaches both.
+from editor.ffmpeg_args import STRIP_METADATA, encode_args, is_hdr, video_filter  # noqa: E402
+
 FPS = 30
 
 
@@ -52,18 +55,9 @@ def process(src_path, out_path, loop_seconds=None):
     if loop_seconds:
         cmd += ["-stream_loop", "-1"]
     cmd += ["-i", src_path]
-    vf = f"scale={WIDTH}:-2"
-    if loop_seconds:
-        vf += f",fps={FPS}"
-    # -map_metadata -1 drops container/global metadata (phone clips carry
-    # GPS as TAG:location/location-eng plus TAG:com.android.model/
-    # manufacturer at the format level -- ffmpeg copies it across a
-    # re-encode by default, which is how the owner's home coordinates ended
-    # up on img.cloudy.nyc). Verified empirically with ffprobe: on real
-    # Pixel clips these tags live only in format_tags, never stream_tags, so
-    # -map_metadata -1 alone is sufficient -- no -map_metadata:s needed.
-    cmd += ["-map_metadata", "-1", "-vf", vf, "-an", "-c:v", "libx264", "-crf", str(CRF), "-preset", "medium",
-            "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]
+    hdr = is_hdr(src_path)
+    extra = f"fps={FPS}" if loop_seconds else ""
+    cmd += [*STRIP_METADATA, "-vf", video_filter(hdr, extra), *encode_args(hdr)]
     if loop_seconds:
         cmd += ["-t", str(loop_seconds), "-frames:v", str(round(loop_seconds * FPS))]
     cmd += [out_path]

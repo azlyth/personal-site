@@ -1965,21 +1965,81 @@
                 if (!period) return;
                 (syncGroups[period] = syncGroups[period] || []).push(v);
             });
+            // Correcting drift by assigning currentTime is a seek, and a seek
+            // costs a decode back to the previous keyframe. Doing that on every
+            // animation frame is what made these clips play at a few frames per
+            // second on a phone: slow decode drifts, drift seeks, the seek makes
+            // the decode slower, repeat. So prefer nudging playbackRate (no
+            // decoder flush), seek only when badly out and at most occasionally,
+            // and give up after a few failed attempts — a smooth clip that has
+            // fallen out of step beats a synchronised slideshow.
+            const SOFT_DRIFT = 0.1;    // below this, we're in sync
+            const HARD_DRIFT = 0.5;    // above this, nudging won't catch up
+            const SEEK_COOLDOWN = 3000;
+            const MAX_SEEKS = 3;
+            const CHECK_INTERVAL = 250;
+
             Object.entries(syncGroups).forEach(([key, videos]) => {
                 const period = parseFloat(key);
-                let clockStart = null;
-                function tick(now) {
-                    if (clockStart === null) clockStart = now;
-                    const elapsed = ((now - clockStart) / 1000) % period;
-                    videos.forEach((v) => {
-                        if (v.readyState < 2) return;
-                        const drift = Math.abs(v.currentTime - elapsed);
-                        // Skip corrections near the wrap point (e.g. video at 3.98s,
-                        // clock at 0.02s) — that's already in sync, about to loop on its own.
-                        if (drift > 0.08 && drift < period - 0.08) {
-                            v.currentTime = elapsed;
-                        }
+                const TAU = Math.PI * 2;
+                let lastCheck = 0;
+                const state = new Map();
+
+                // The reference is where the group already is, not a wall clock.
+                // A looping <video> loses a little time on every restart, so it
+                // can never hold to a free-running clock — measured against one,
+                // every clip sat permanently behind and was corrected forever.
+                // Against the group's own consensus, clips that agree need no
+                // correction at all, and the group drifting slowly as a whole is
+                // invisible. Averaged as angles so the 4s→0s wrap isn't a jump.
+                function consensus(live) {
+                    let x = 0, y = 0;
+                    live.forEach((v) => {
+                        const a = (v.currentTime / period) * TAU;
+                        x += Math.cos(a); y += Math.sin(a);
                     });
+                    let ref = Math.atan2(y / live.length, x / live.length) / TAU * period;
+                    return ref < 0 ? ref + period : ref;
+                }
+
+                function tick(now) {
+                    if (now - lastCheck >= CHECK_INTERVAL) {
+                        lastCheck = now;
+                        const live = videos.filter((v) => v.readyState >= 2 && !v.paused);
+                        if (live.length > 1) {
+                            const ref = consensus(live);
+                            live.forEach((v) => {
+                                let st = state.get(v);
+                                if (!st) { st = { lastSeek: 0, seeks: 0 }; state.set(v, st); }
+                                // Given up on this one: let it free-run rather
+                                // than keep seeking. Reset the rate first, or it
+                                // stays stranded on whatever nudge was last set.
+                                if (st.seeks >= MAX_SEEKS) {
+                                    if (v.playbackRate !== 1) v.playbackRate = 1;
+                                    return;
+                                }
+
+                                // Signed distance the short way around the loop, so
+                                // a clip at 3.98s against a reference of 0.02s reads
+                                // as 0.04s out, not nearly a whole period.
+                                let drift = v.currentTime - ref;
+                                if (drift > period / 2) drift -= period;
+                                if (drift < -period / 2) drift += period;
+                                const off = Math.abs(drift);
+
+                                if (off < SOFT_DRIFT) {
+                                    if (v.playbackRate !== 1) v.playbackRate = 1;
+                                } else if (off < HARD_DRIFT) {
+                                    v.playbackRate = drift > 0 ? 0.97 : 1.03;
+                                } else if (now - st.lastSeek >= SEEK_COOLDOWN) {
+                                    st.lastSeek = now;
+                                    st.seeks += 1;
+                                    v.playbackRate = 1;
+                                    v.currentTime = ref;
+                                }
+                            });
+                        }
+                    }
                     requestAnimationFrame(tick);
                 }
                 requestAnimationFrame(tick);

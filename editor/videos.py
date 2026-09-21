@@ -14,41 +14,30 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from editor.ffmpeg_args import STRIP_METADATA, encode_args, is_hdr, video_filter
 from editor.images import _slugify
 
 VIDEO_HOST = "img.cloudy.nyc"
 CACHE_CONTROL = "public, max-age=31536000, immutable"
 
-WIDTH = 640
-CRF = 26
-
 
 def process_video(data: bytes) -> bytes:
-    """Re-encode a clip the same way scripts/upload-video.py does -- muted
-    H.264 scaled to `WIDTH` wide -- but from/to bytes so a request handler
-    can call it without ever writing into the post or a durable path.
+    """Re-encode a clip the same way scripts/upload-video.py does -- both use
+    editor/ffmpeg_args.py -- but from/to bytes so a request handler can call
+    it without ever writing into the post or a durable path.
     """
     with tempfile.TemporaryDirectory() as tmp:
         src = Path(tmp) / "in"
         dst = Path(tmp) / "out.mp4"
         src.write_bytes(data)
+        hdr = is_hdr(str(src))
         result = subprocess.run(
             [
                 "ffmpeg", "-y", "-v", "error",
                 "-i", str(src),
-                # -map_metadata -1 drops container/global metadata. Phone
-                # clips carry GPS (TAG:location/location-eng) and device
-                # info (TAG:com.android.model/manufacturer) at the format
-                # level, and ffmpeg copies it across a re-encode by
-                # default -- this is the video equivalent of images.py's
-                # EXIF strip. Verified empirically with ffprobe: on real
-                # Pixel clips these tags live only in format_tags, never
-                # stream_tags, so -map_metadata -1 alone is sufficient.
-                "-map_metadata", "-1",
-                "-vf", f"scale={WIDTH}:-2",
-                "-an", "-c:v", "libx264", "-crf", str(CRF),
-                "-preset", "medium", "-profile:v", "high",
-                "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                *STRIP_METADATA,
+                "-vf", video_filter(hdr),
+                *encode_args(hdr),
                 str(dst),
             ],
             capture_output=True,

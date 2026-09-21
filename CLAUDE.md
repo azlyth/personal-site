@@ -269,6 +269,29 @@ drifts off-center everywhere else.
   re-encode-only is not automatically metadata-stripping — check what the
   encoder actually drops with `ffprobe -show_entries format_tags:stream_tags`
   on a real source file, don't assume.
+- **Video encode settings live in `editor/ffmpeg_args.py` — one definition for
+  both upload paths** (`editor/videos.py` and `scripts/upload-video.py`; a test
+  asserts the CLI doesn't re-hardcode flags). Three things in there are
+  load-bearing, all added 2026-09-21 after the guerilla-gardening clips played
+  at a few frames per second on a phone and looked brighter than the page:
+  - **HDR sources must be tone-mapped, not just bit-depth-reduced.** Phone video
+    is HLG/BT.2020 (`color_transfer=arib-std-b67`). `-pix_fmt yuv420p` drops it
+    to 8 bit but carries the HDR *tags* through, so the file is SDR-ish data
+    still labelled HDR and an HDR phone screen renders it through the HDR path.
+    The zscale/tonemap chain converts it and the colour flags re-tag it BT.709.
+    It is applied **only when the source is HDR** — that curve would crush an
+    already-SDR clip.
+  - **`is_hdr()` parses `-of default=nw=1`, not `csv=p=0`, on purpose.** Real
+    handheld clips carry display-matrix (rotation) side data, which pads CSV
+    output with a trailing field so the value reads `"arib-std-b67,"` and never
+    matches. Synthetic test clips have no rotation and hid this — the test suite
+    now builds a rotated clip specifically to keep it caught.
+  - **`-g`/`-keyint_min` are not a size tweak.** Clips previously had exactly one
+    keyframe, and `templates/base.html`'s loop-sync corrects drift by assigning
+    `currentTime`, which is a seek — every correction re-decoded from frame 0.
+    That fed back into more drift. The sync code now nudges `playbackRate`
+    instead and only seeks as a rate-limited last resort, but both halves matter:
+    don't restore a long GOP, and don't reintroduce per-frame seeking.
 - **Editing from a tablet:** `edit.cloudy.nyc` (LAN-only) runs `blog-editor.service`
   from `editor/`. It edits `content/blog/*.md` in the working tree, uploads photos
   to S3, and on Publish commits only `content/blog/` paths, pushes, and rebuilds
