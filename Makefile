@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image build-site publish-site editor-install editor-restart editor-logs
+.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image upload-video build-site publish-site editor-install editor-restart editor-logs
 
 # Colors for help output
 CYAN = \033[36m
@@ -38,6 +38,9 @@ help:
 	@echo "$(CYAN)Blog images (img.cloudy.nyc, public + Cloudflare-cached, not served from the Pi):$(RESET)"
 	@echo "  $(GREEN)make upload-image SLUG=<post-slug> NAME=<name> FILE=<path>$(RESET)"
 	@echo "      Strips EXIF, resizes, re-encodes as JPEG, uploads, prints the URL."
+	@echo "  $(GREEN)make upload-video SLUG=<post-slug> NAME=<name> FILE=<path> [LOOP=<seconds>]$(RESET)"
+	@echo "      Re-encodes as muted H.264, scales to 640px, uploads, prints the URL."
+	@echo "      LOOP loops+trims to an exact frame-accurate duration (for synced loops)."
 	@echo ""
 	@echo "$(YELLOW)💡 Tip: Run 'make dev' to start both site and experiments!$(RESET)"
 
@@ -76,6 +79,9 @@ uninstall:
 
 upload-image:
 	python3 scripts/upload-image.py "$(SLUG)" "$(NAME)" "$(FILE)"
+
+upload-video:
+	python3 scripts/upload-video.py "$(SLUG)" "$(NAME)" "$(FILE)" $(LOOP)
 
 # Development mode - runs zola serve with live reloading + lab backend
 dev:

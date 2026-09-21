@@ -64,12 +64,12 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 4 bags of organic compost per tree bed. I used my new cultivator, and mixed the compost into the tree beds. It's amazing how even just fresh, rich dirt alone made the tree beds look better. Healthier.
 
-<video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt.mp4" type="video/mp4">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop.mp4" type="video/mp4">
 </video>
 
-<video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed.mp4" type="video/mp4">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop.mp4" type="video/mp4">
 </video>
 
 ![Bags of organic humus and manure compost loaded on a cart](https://img.cloudy.nyc/guerilla-gardening/compost-bags.jpg)
@@ -93,12 +93,12 @@ After another Saturday afternoon of manual labor, with the help of my friend Dav
 <img src="https://img.cloudy.nyc/guerilla-gardening/planted-tree-bed-2.jpg" alt="A wider view of the finished, planted tree bed from above">
 </div>
 
-<video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1.mp4" type="video/mp4">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1-loop.mp4" type="video/mp4">
 </video>
 
-<video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2.mp4" type="video/mp4">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2-loop.mp4" type="video/mp4">
 </video>
 
 ## Why
@@ -113,8 +113,8 @@ If we're willing to accept that responsibility, we can have nice things: beautif
 
 I'm really happy with how the tree beds turned out, and I'm glad to report that neighbors have told me they're happy with them too.
 
-<video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night.mp4" type="video/mp4">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night-loop.mp4" type="video/mp4">
 </video>
 
 One guy told me: "They're beautiful, I've never seen anything like that in front of the building in the 30 years I've been here." I really thought that was beautiful.

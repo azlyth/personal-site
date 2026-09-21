@@ -77,6 +77,14 @@
             object-fit: cover;
         }
 
+        .container video {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin: 1.5rem auto;
+            display: block;
+        }
+
         a {
             color: #0066cc;
             text-decoration: none;
@@ -1893,6 +1901,35 @@
                     setInterval(cycleMarqueeColor, 8000);
                 }, 5000);
             }
+
+            // Keep <video data-sync-loop="N"> elements on the same page locked to a
+            // shared N-second clock, so they all cut back to frame 0 at the same
+            // instant instead of drifting apart based on each one's own load/start time.
+            const syncGroups = {};
+            document.querySelectorAll('video[data-sync-loop]').forEach((v) => {
+                const period = parseFloat(v.getAttribute('data-sync-loop'));
+                if (!period) return;
+                (syncGroups[period] = syncGroups[period] || []).push(v);
+            });
+            Object.entries(syncGroups).forEach(([key, videos]) => {
+                const period = parseFloat(key);
+                let clockStart = null;
+                function tick(now) {
+                    if (clockStart === null) clockStart = now;
+                    const elapsed = ((now - clockStart) / 1000) % period;
+                    videos.forEach((v) => {
+                        if (v.readyState < 2) return;
+                        const drift = Math.abs(v.currentTime - elapsed);
+                        // Skip corrections near the wrap point (e.g. video at 3.98s,
+                        // clock at 0.02s) — that's already in sync, about to loop on its own.
+                        if (drift > 0.08 && drift < period - 0.08) {
+                            v.currentTime = elapsed;
+                        }
+                    });
+                    requestAnimationFrame(tick);
+                }
+                requestAnimationFrame(tick);
+            });
         });
     </script>
 </body>
