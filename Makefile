@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image build-site editor-install editor-restart editor-logs
+.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image build-site publish-site editor-install editor-restart editor-logs
 
 # Colors for help output
 CYAN = \033[36m
@@ -56,6 +56,9 @@ deploy-ps:
 
 build-site:
 	./scripts/build-site.sh
+
+publish-site:
+	./scripts/publish-site.sh
 
 SERVICE  := personal-site.service
 UNIT_SRC := systemd/$(SERVICE)
