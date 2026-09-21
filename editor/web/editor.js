@@ -38,7 +38,13 @@ async function errorDetail(res, fallback) {
 }
 
 async function loadPostList() {
-  const res = await fetch('/api/posts');
+  let res;
+  try {
+    res = await fetch('/api/posts');
+  } catch (err) {
+    setStatus(`couldn't load post list — network error: ${err.message}`);
+    return [];
+  }
   if (!res.ok) {
     setStatus("couldn't load post list");
     return [];
@@ -51,7 +57,13 @@ async function loadPostList() {
 }
 
 async function loadPost(slug) {
-  const res = await fetch(`/api/posts/${slug}`);
+  let res;
+  try {
+    res = await fetch(`/api/posts/${slug}`);
+  } catch (err) {
+    setStatus(`couldn't load ${slug} — network error: ${err.message}`);
+    return;
+  }
   if (!res.ok) {
     setStatus(`couldn't load ${slug} — ${await errorDetail(res)}`);
     return;
@@ -87,11 +99,19 @@ function startEditingTitle() {
 
 async function saveMeta(fields) {
   setStatus('saving…');
-  const res = await fetch(`/api/posts/${state.slug}/meta`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...fields, hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/meta`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...fields, hash: state.hash }),
+    });
+  } catch (err) {
+    // Same rule as the non-OK branch below: don't touch `state`, just
+    // report it -- there's no response body to have clobbered anything with.
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
 
   if (res.status === 409) {
     setStatus('changed on disk — reload');
@@ -150,11 +170,17 @@ async function renameSlug() {
   if (!next || next === current) return;
 
   setStatus('renaming…');
-  const res = await fetch(`/api/posts/${current}/rename`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ new_slug: next, hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${current}/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_slug: next, hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`rename failed — network error: ${err.message}`);
+    return;
+  }
 
   if (res.status === 409) {
     setStatus('changed on disk — reload');
@@ -299,11 +325,24 @@ function renderMoveTargets() {
 
 async function submitMove(fromIndex, toIndex) {
   setStatus('saving…');
-  const res = await fetch(`/api/posts/${state.slug}/blocks/${fromIndex}/move`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to_index: toIndex, hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${fromIndex}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to_index: toIndex, hash: state.hash }),
+    });
+  } catch (err) {
+    // A thrown network error, not a non-2xx response -- there's no
+    // response to hand to applyWrite. Nothing was written, but leaving the
+    // drop-target UI up with a stuck "saving…" would strand the user
+    // mid-move with no way out but Cancel; drop back to the normal view
+    // the same way a successful move would, just without the reorder.
+    state.moveIndex = null;
+    renderBlocks();
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
   // Only leave move mode on success. applyWrite already leaves `state` and
   // the DOM untouched on a 409 or any other failure -- `moveIndex` gets
   // exactly the same treatment, so a failed move doesn't silently drop the
@@ -333,10 +372,17 @@ function pickImages(index) {
     form.append('hash', state.hash);
 
     setStatus(`uploading ${input.files.length} photo(s)…`);
-    await applyWrite(await fetch(`/api/posts/${state.slug}/images`, {
-      method: 'POST',
-      body: form,
-    }));
+    let res;
+    try {
+      res = await fetch(`/api/posts/${state.slug}/images`, {
+        method: 'POST',
+        body: form,
+      });
+    } catch (err) {
+      setStatus(`upload failed — network error: ${err.message}`);
+      return;
+    }
+    await applyWrite(res);
   });
 
   input.click();
@@ -344,21 +390,33 @@ function pickImages(index) {
 
 async function insertBlock(index) {
   setStatus('saving…');
-  const res = await fetch(`/api/posts/${state.slug}/blocks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ index, source: 'New paragraph.', hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index, source: 'New paragraph.', hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
   await applyWrite(res);
 }
 
 async function removeBlock(index) {
   setStatus('saving…');
-  const res = await fetch(`/api/posts/${state.slug}/blocks/${index}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${index}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
   await applyWrite(res);
 }
 
@@ -383,7 +441,17 @@ async function applyWrite(res) {
 }
 
 async function refreshStatus() {
-  const data = await (await fetch('/api/status')).json();
+  let data;
+  try {
+    data = await (await fetch('/api/status')).json();
+  } catch (err) {
+    // This only drives the publish button's label/enabled state, and every
+    // caller has already set its own status line for whatever it just did
+    // -- don't stomp that with a network-error message over a "saved" that
+    // already happened. The button just keeps its previous state.
+    console.error('refreshStatus failed:', err);
+    return;
+  }
   els.publish.disabled = data.clean;
   if (data.clean) {
     els.publish.textContent = 'Published';
@@ -404,11 +472,21 @@ els.publish.addEventListener('click', async () => {
   els.publish.disabled = true;
   setStatus('publishing…');
 
-  const res = await fetch('/api/publish', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
-  });
+  let res;
+  try {
+    res = await fetch('/api/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+  } catch (err) {
+    // Without this, a thrown network error here leaves the button
+    // disabled and the status stuck on "publishing…" forever with no way
+    // to tell anything went wrong or to retry.
+    setStatus(`publish failed — network error: ${err.message}`);
+    await refreshStatus();
+    return;
+  }
   const data = await res.json();
 
   setStatus(data.message);
@@ -438,11 +516,17 @@ function startEditing(el, block) {
 
 async function saveBlock(index, source) {
   setStatus('saving…');
-  const res = await fetch(`/api/posts/${state.slug}/blocks/${index}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source, hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${index}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
   await applyWrite(res);
 }
 
@@ -551,10 +635,16 @@ function startEditingImages(el, block) {
       form.append('alts', JSON.stringify(alts));
 
       setStatus(`uploading ${input.files.length} photo(s)…`);
-      const res = await fetch(`/api/posts/${state.slug}/images/upload`, {
-        method: 'POST',
-        body: form,
-      });
+      let res;
+      try {
+        res = await fetch(`/api/posts/${state.slug}/images/upload`, {
+          method: 'POST',
+          body: form,
+        });
+      } catch (err) {
+        setStatus(`upload failed — network error: ${err.message}`);
+        return;
+      }
       if (!res.ok) {
         // Same rule as applyWrite: an error body has no `images` field, so
         // leave the strip exactly as the user left it rather than pushing
@@ -606,11 +696,17 @@ function startEditingImages(el, block) {
 
 async function saveBlockImages(index, images) {
   setStatus('saving…');
-  const res = await fetch(`/api/posts/${state.slug}/blocks/${index}/images`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ images, hash: state.hash }),
-  });
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${index}/images`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images, hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
   // applyWrite re-renders every block from the fresh server response on
   // success, and on failure leaves the DOM untouched -- exactly right here
   // too: a failed save keeps the thumbnail editor open with the user's
@@ -623,11 +719,17 @@ async function newPost() {
   if (!title) return;
 
   setStatus('creating…');
-  const res = await fetch('/api/posts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title }),
-  });
+  let res;
+  try {
+    res = await fetch('/api/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+  } catch (err) {
+    setStatus(`could not create — network error: ${err.message}`);
+    return;
+  }
 
   if (!res.ok) {
     setStatus(await errorDetail(res, 'could not create'));

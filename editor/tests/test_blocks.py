@@ -225,6 +225,26 @@ def test_move_preserves_separators_across_mixed_kinds():
     assert [b.source for b in out_blocks] == [b.source for b in data[1:]] + [data[0].source]
 
 
+def test_move_reorders_img_row_block_across_neighbours():
+    # Photo rows are one of the most common real blocks to reorder (the
+    # owner's posts have several) -- a genuine, non-no-op move, not just
+    # the no-op path the img_row case otherwise only exercises. Move the
+    # `.img-row` block past both of its neighbours, to the very front.
+    data = parse_blocks(IMAGES)
+    assert [b.kind for b in data] == ["paragraph", "image", "img_row", "paragraph"]
+
+    out = move_block(IMAGES, 2, 0)
+    out_blocks = parse_blocks(out)
+    assert [b.kind for b in out_blocks] == ["img_row", "paragraph", "image", "paragraph"]
+
+    # Every block -- not just the moved one -- must come through
+    # byte-identical, not just reordered/rewrapped.
+    assert out_blocks[0].source == data[2].source
+    assert out_blocks[1].source == data[0].source
+    assert out_blocks[2].source == data[1].source
+    assert out_blocks[3].source == data[3].source
+
+
 def test_move_from_index_out_of_range_raises():
     with pytest.raises(IndexError):
         move_block(SIMPLE, 99, 0)
