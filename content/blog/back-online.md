@@ -4,7 +4,7 @@ date = 2016-10-16
 draft = false
 +++
 
-RECOVERY PATH TEST — will be reverted.
+It's been a while since I've had any form of personal site.
 
 Every time I wanted to start one, I would overthink it.
 
