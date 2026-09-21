@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image build-site
+.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image build-site editor-install editor-restart editor-logs
 
 # Colors for help output
 CYAN = \033[36m
@@ -113,6 +113,19 @@ stop:
 # Check if site builds successfully
 check:
 	docker compose -f compose.dev.yaml run --rm zola check
+
+EDITOR_SERVICE := blog-editor.service
+
+editor-install:
+	sudo cp systemd/$(EDITOR_SERVICE) /etc/systemd/system/$(EDITOR_SERVICE)
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now $(EDITOR_SERVICE)
+
+editor-restart:
+	sudo systemctl restart $(EDITOR_SERVICE)
+
+editor-logs:
+	journalctl -u $(EDITOR_SERVICE) -f
 
 
 

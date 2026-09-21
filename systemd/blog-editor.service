@@ -1,0 +1,16 @@
+[Unit]
+Description=blog-editor — LAN-only editor for cloudy.nyc (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=peter
+WorkingDirectory=/home/peter/projects/personal/personal-site
+ExecStart=/home/peter/projects/personal/personal-site/editor/.venv/bin/uvicorn \
+    editor.app:app --host 127.0.0.1 --port 8804
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
