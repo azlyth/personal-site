@@ -26,6 +26,33 @@ POST_NO_BLANK_LINE = (
     "Body starts immediately.\n"
 )
 
+# A multi-line TOML string in the frontmatter that contains a line starting
+# with "+++". A bare substring search for "\n+++" would treat that line as
+# the closing delimiter and truncate the frontmatter early; the real
+# terminator must be a line that is exactly "+++" and nothing else.
+POST_WITH_PLUSSES_IN_FRONTMATTER_STRING = (
+    "+++\n"
+    'title = """\n'
+    "+++ inside a string, not a delimiter\n"
+    '"""\n'
+    "date = 2026-09-20\n"
+    "+++\n"
+    "\n"
+    "Body.\n"
+)
+
+# A "+++" line inside a fenced code block in the body. The real terminator
+# comes first, so this must not affect where the split happens.
+POST_WITH_PLUSSES_IN_BODY_CODE_BLOCK = (
+    "+++\n"
+    'title = "x"\n'
+    "+++\n"
+    "\n"
+    "```\n"
+    "+++\n"
+    "```\n"
+)
+
 
 def test_split_separates_frontmatter_and_body():
     fm, body = split_post(POST)
@@ -80,3 +107,30 @@ def test_set_meta_preserves_field_order():
 def test_missing_delimiters_raises():
     with pytest.raises(ValueError):
         split_post("no frontmatter here\n")
+
+
+def test_unterminated_frontmatter_raises():
+    with pytest.raises(ValueError):
+        split_post('+++\ntitle = "x"\n')
+
+
+def test_bare_opening_delimiter_with_no_newline_raises():
+    # Degenerate case of the same "unterminated" branch: the file is
+    # exactly "+++" with nothing after it at all, not even a newline.
+    with pytest.raises(ValueError):
+        split_post("+++")
+
+
+def test_plusses_inside_frontmatter_string_do_not_terminate_early():
+    fm, body = split_post(POST_WITH_PLUSSES_IN_FRONTMATTER_STRING)
+    assert '+++ inside a string, not a delimiter' in fm
+    assert 'date = 2026-09-20' in fm
+    assert body == "\nBody.\n"
+    assert join_post(fm, body) == POST_WITH_PLUSSES_IN_FRONTMATTER_STRING
+
+
+def test_plusses_inside_body_code_block_do_not_affect_split():
+    fm, body = split_post(POST_WITH_PLUSSES_IN_BODY_CODE_BLOCK)
+    assert fm == 'title = "x"'
+    assert body == "\n```\n+++\n```\n"
+    assert join_post(fm, body) == POST_WITH_PLUSSES_IN_BODY_CODE_BLOCK
