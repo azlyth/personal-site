@@ -218,3 +218,129 @@ def test_merge_refuses_when_upper_block_is_unparseable(temp_post):
     res = _merge(4, data["hash"])
     assert res.status_code in (400, 409)
     assert temp_post.read_text(encoding="utf-8") == malformed
+
+
+# -- document-boundary cases ------------------------------------------------
+#
+# Every fixture above has a trailing "Outro." paragraph, so every merge so
+# far has been mid-document -- delete_block's trailing-blank absorption
+# always had something after the deleted block to absorb into. Two edge
+# cases were only hand-traced, not covered by name: merging the literal last
+# two blocks of a document (nothing after to absorb a separator from), and a
+# post that's nothing but the two blocks being merged (nothing before OR
+# after). This project has twice shipped a bug that only a from-scratch
+# fixture caught (parse_blocks eating a list's trailing separator,
+# join_post reformatting a body with no blank line after frontmatter), so
+# these get named tests rather than trusting the trace.
+
+LAST_PAIR_SLUG = "merge-block-last-pair-test-post"
+
+POST_LAST_PAIR = """+++
+title = "Merge Last Pair Test"
+date = 2026-01-01
+draft = true
++++
+
+Intro.
+
+<div class="video-row size-medium">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/p/a.mp4" type="video/mp4">
+</video>
+</div>
+
+<div class="video-row size-small">
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/p/b.mp4" type="video/mp4">
+</video>
+</div>
+"""
+
+
+@pytest.fixture
+def last_pair_post():
+    path = config.BLOG_DIR / f"{LAST_PAIR_SLUG}.md"
+    path.write_text(POST_LAST_PAIR, encoding="utf-8")
+    yield path
+    path.unlink(missing_ok=True)
+
+
+def test_merge_final_two_blocks_of_a_document(last_pair_post):
+    data = client.get(f"/api/posts/{LAST_PAIR_SLUG}").json()
+    assert len(data["blocks"]) == 3  # Intro. paragraph, then the two rows.
+
+    res = client.post(
+        f"/api/posts/{LAST_PAIR_SLUG}/blocks/1/merge",
+        json={"hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    out = res.json()
+
+    assert len(out["blocks"]) == 2
+    merged = out["blocks"][1]
+    assert merged["kind"] == "video"
+    assert merged["size"] == "medium"  # upper row's preset, per the rule
+    assert [v["url"] for v in merged["videos"]] == [
+        "https://img.cloudy.nyc/p/a.mp4",
+        "https://img.cloudy.nyc/p/b.mp4",
+    ]
+
+    # Reparse independently -- a fresh GET against the bytes actually on
+    # disk, not just the merge response -- so a well-formed *response* with
+    # a malformed file underneath it can't slip through.
+    reloaded = client.get(f"/api/posts/{LAST_PAIR_SLUG}").json()
+    assert len(reloaded["blocks"]) == 2
+    assert reloaded["blocks"][1]["videos"] == merged["videos"]
+
+    on_disk = last_pair_post.read_text(encoding="utf-8")
+    assert on_disk.count('<div class="video-row') == 1
+    assert not on_disk.rstrip("\n").endswith("\n\n")  # no stray trailing blank
+
+
+TWO_BLOCK_ONLY_SLUG = "merge-block-two-block-only-test-post"
+
+POST_TWO_BLOCKS_ONLY = """+++
+title = "Merge Two Block Only Test"
+date = 2026-01-01
+draft = true
++++
+
+![alt one](https://img.cloudy.nyc/p/one.jpg)
+
+![alt two](https://img.cloudy.nyc/p/two.jpg)
+"""
+
+
+@pytest.fixture
+def two_block_only_post():
+    path = config.BLOG_DIR / f"{TWO_BLOCK_ONLY_SLUG}.md"
+    path.write_text(POST_TWO_BLOCKS_ONLY, encoding="utf-8")
+    yield path
+    path.unlink(missing_ok=True)
+
+
+def test_merge_a_post_consisting_of_exactly_two_blocks(two_block_only_post):
+    # Nothing before, nothing after -- the whole body is the pair being
+    # merged, so the result must be a single well-formed block, not an
+    # empty file or a stray separator either side.
+    data = client.get(f"/api/posts/{TWO_BLOCK_ONLY_SLUG}").json()
+    assert len(data["blocks"]) == 2
+
+    res = client.post(
+        f"/api/posts/{TWO_BLOCK_ONLY_SLUG}/blocks/0/merge",
+        json={"hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    out = res.json()
+
+    assert len(out["blocks"]) == 1
+    assert out["blocks"][0]["kind"] == "img_row"
+    assert out["blocks"][0]["images"] == [
+        {"url": "https://img.cloudy.nyc/p/one.jpg", "alt": "alt one"},
+        {"url": "https://img.cloudy.nyc/p/two.jpg", "alt": "alt two"},
+    ]
+
+    # Independent reparse of the bytes on disk, same discipline as above.
+    reloaded = client.get(f"/api/posts/{TWO_BLOCK_ONLY_SLUG}").json()
+    assert len(reloaded["blocks"]) == 1
+    assert reloaded["blocks"][0]["images"] == out["blocks"][0]["images"]
