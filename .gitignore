@@ -20,6 +20,8 @@
 /.build-tmp
 /public.old
 /editor/.venv
+__pycache__/
+.pytest_cache/
 
 # misc
 .DS_Store
