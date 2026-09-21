@@ -210,7 +210,17 @@ function renderBlocks() {
     const el = document.createElement('div');
     el.className = 'block';
     el.dataset.index = block.index;
-    el.innerHTML = block.html;
+
+    // Content lives in its own child so the per-block editors below can
+    // wipe and rebuild *just this* -- blockControls() (Move, delete, ...)
+    // is appended to `el` as a sibling, not a descendant of `content`, so
+    // opening an editor can never take the controls out with it. See
+    // startEditing/startEditingImages/startEditingVideos.
+    const content = document.createElement('div');
+    content.className = 'block-content';
+    content.innerHTML = block.html;
+    el.appendChild(content);
+
     el.addEventListener('click', () => {
       // A photo block (a standalone image or an .img-row) gets a thumbnail
       // strip -- add/remove/reorder/alt-text -- instead of raw markup in a
@@ -223,15 +233,15 @@ function renderBlocks() {
       // back -- silently dropping whatever didn't parse. Raw source
       // editing is always safe, so that's the fallback.
       if (block.images) {
-        startEditingImages(el, block);
+        startEditingImages(el, content, block);
       } else if (block.videos) {
         // Same gating rule as photos: only present when videos.parse_videos
         // could losslessly round-trip this block's markup (see
         // startEditingVideos below) -- otherwise raw source is the only
         // safe way to edit it.
-        startEditingVideos(el, block);
+        startEditingVideos(el, content, block);
       } else {
-        startEditing(el, block);
+        startEditing(el, content, block);
       }
     });
     el.appendChild(blockControls(block));
@@ -272,6 +282,11 @@ function mergeControl(index) {
   btn.className = 'merge-control';
   btn.textContent = '⇄ Merge with block below';
   btn.title = 'Combine this block and the one below into a single row';
+  // Same reasoning as blockControls()'s bar-level mousedown guard: this can
+  // be tapped while an unrelated block's textarea still has focus, and
+  // without this, that tap's own mousedown-triggered blur can destroy this
+  // button mid-click via renderBlocks().
+  btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.addEventListener('click', () => mergeBlock(index));
   return btn;
 }
@@ -295,6 +310,20 @@ async function mergeBlock(index) {
 function blockControls(block) {
   const bar = document.createElement('div');
   bar.className = 'block-controls';
+
+  // These controls are now reachable while a *different* block's textarea
+  // still has focus (that's the whole point of keeping them alive during
+  // editing -- see renderBlocks()). A real tap's mousedown blurs whatever
+  // textarea is focused before its own click fires; startEditing()'s blur
+  // handler reacts to that by calling renderBlocks() synchronously, which
+  // replaces this exact button out from under the in-flight click. The
+  // browser then has no element to fire 'click' on, so the tap silently
+  // does nothing -- reproduced live via CDP (mousePressed/mouseReleased),
+  // not just theorized. preventDefault() on mousedown is the standard fix
+  // (how toolbar buttons coexist with a focused text field): it suppresses
+  // the browser's default "blur the focused element" behavior without
+  // suppressing the click that follows.
+  bar.addEventListener('mousedown', (e) => e.preventDefault());
 
   const add = document.createElement('button');
   add.textContent = '+';
@@ -552,23 +581,32 @@ els.publish.addEventListener('click', async () => {
   await refreshStatus();
 });
 
-function startEditing(el, block) {
+function startEditing(el, content, block) {
   if (el.classList.contains('editing')) return;
   el.classList.add('editing');
-  el.innerHTML = '';
+  content.innerHTML = '';
 
   const textarea = document.createElement('textarea');
   textarea.value = block.source;
   textarea.rows = Math.max(2, block.source.split('\n').length + 1);
-  el.appendChild(textarea);
+  content.appendChild(textarea);
   textarea.focus();
 
   textarea.addEventListener('blur', async () => {
-    el.classList.remove('editing');
     if (textarea.value === block.source) {
-      el.innerHTML = block.html;
+      // Nothing changed, so there's nothing to save -- restore this block
+      // (controls included) the same robust way every other exit path
+      // does: a full renderBlocks() from current state, which can't drift
+      // from what renderBlocks() actually builds.
+      renderBlocks();
       return;
     }
+    // Don't clear `editing` here -- saveBlock()/applyWrite() renders fresh
+    // from the server on success (which drops the class along with
+    // everything else), and on a 409/failed save leaves the DOM untouched
+    // on purpose so the textarea and its edits survive. Clearing the class
+    // up front used to desync the `.editing` style from that: a failed
+    // save left the textarea open but visually "not editing".
     await saveBlock(block.index, textarea.value);
   });
 }
@@ -594,17 +632,17 @@ async function saveBlock(index, source) {
 // only ever collects/reorders a list of {url, alt} and hands it to
 // PUT .../blocks/{index}/images, which regenerates the source via the same
 // markdown_for() the upload route uses.
-function startEditingImages(el, block) {
+function startEditingImages(el, content, block) {
   if (el.classList.contains('editing')) return;
   el.classList.add('editing');
-  el.innerHTML = '';
+  content.innerHTML = '';
 
   // A local working copy -- nothing here touches `state` until Done saves.
   const images = block.images.map((img) => ({ ...img }));
 
   const strip = document.createElement('div');
   strip.className = 'image-strip';
-  el.appendChild(strip);
+  content.appendChild(strip);
 
   function renderThumbs() {
     strip.innerHTML = '';
@@ -636,7 +674,8 @@ function startEditingImages(el, block) {
       left.textContent = '←';
       left.title = 'Move left';
       left.disabled = i === 0;
-      left.addEventListener('click', () => {
+      left.addEventListener('click', (e) => {
+        e.stopPropagation();
         [images[i - 1], images[i]] = [images[i], images[i - 1]];
         renderThumbs();
       });
@@ -647,7 +686,8 @@ function startEditingImages(el, block) {
       right.textContent = '→';
       right.title = 'Move right';
       right.disabled = i === images.length - 1;
-      right.addEventListener('click', () => {
+      right.addEventListener('click', (e) => {
+        e.stopPropagation();
         [images[i], images[i + 1]] = [images[i + 1], images[i]];
         renderThumbs();
       });
@@ -657,7 +697,8 @@ function startEditingImages(el, block) {
       remove.className = 'image-remove';
       remove.textContent = '×';
       remove.title = 'Remove this photo';
-      remove.addEventListener('click', () => {
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
         images.splice(i, 1);
         renderThumbs();
       });
@@ -671,7 +712,10 @@ function startEditingImages(el, block) {
     add.type = 'button';
     add.className = 'image-add';
     add.textContent = '+ Add photo';
-    add.addEventListener('click', addPhotosToStrip);
+    add.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addPhotosToStrip();
+    });
     strip.appendChild(add);
   }
 
@@ -727,7 +771,8 @@ function startEditingImages(el, block) {
   done.type = 'button';
   done.className = 'image-done';
   done.textContent = 'Done';
-  done.addEventListener('click', () => {
+  done.addEventListener('click', (e) => {
+    e.stopPropagation();
     // Removing the last thumbnail and hitting Done deletes the whole block
     // (PUT .../images with an empty list -- see the server route). That's
     // a legitimate action, but unlike deleting a paragraph it's easy to
@@ -742,13 +787,18 @@ function startEditingImages(el, block) {
   cancel.type = 'button';
   cancel.className = 'image-cancel';
   cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', () => {
-    el.classList.remove('editing');
-    el.innerHTML = block.html;
+  cancel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Re-render from current state instead of hand-patching `content` --
+    // nothing was saved, so state.blocks is exactly what it was before
+    // editing started, and a full renderBlocks() restores this block
+    // (controls included) by construction rather than by trying to
+    // remember everything renderBlocks() itself sets up.
+    renderBlocks();
   });
 
   actions.append(done, cancel);
-  el.appendChild(actions);
+  content.appendChild(actions);
 
   renderThumbs();
 }
@@ -779,17 +829,17 @@ async function saveBlockImages(index, images) {
 // PUT .../blocks/{index}/videos, which regenerates the source server-side
 // through videos.markdown_for(). No alt-text input (a <video> carries
 // none); sync_loop is preserved as opaque data, not user-editable here.
-function startEditingVideos(el, block) {
+function startEditingVideos(el, content, block) {
   if (el.classList.contains('editing')) return;
   el.classList.add('editing');
-  el.innerHTML = '';
+  content.innerHTML = '';
 
   const clips = block.videos.map((v) => ({ ...v }));
   let size = block.size;
 
   const strip = document.createElement('div');
   strip.className = 'video-strip';
-  el.appendChild(strip);
+  content.appendChild(strip);
 
   function renderThumbs() {
     strip.innerHTML = '';
@@ -813,7 +863,8 @@ function startEditingVideos(el, block) {
       left.textContent = '←';
       left.title = 'Move left';
       left.disabled = i === 0;
-      left.addEventListener('click', () => {
+      left.addEventListener('click', (e) => {
+        e.stopPropagation();
         [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]];
         renderThumbs();
       });
@@ -824,7 +875,8 @@ function startEditingVideos(el, block) {
       right.textContent = '→';
       right.title = 'Move right';
       right.disabled = i === clips.length - 1;
-      right.addEventListener('click', () => {
+      right.addEventListener('click', (e) => {
+        e.stopPropagation();
         [clips[i], clips[i + 1]] = [clips[i + 1], clips[i]];
         renderThumbs();
       });
@@ -834,7 +886,8 @@ function startEditingVideos(el, block) {
       remove.className = 'video-remove';
       remove.textContent = '×';
       remove.title = 'Remove this clip';
-      remove.addEventListener('click', () => {
+      remove.addEventListener('click', (e) => {
+        e.stopPropagation();
         clips.splice(i, 1);
         renderThumbs();
       });
@@ -848,7 +901,10 @@ function startEditingVideos(el, block) {
     add.type = 'button';
     add.className = 'video-add';
     add.textContent = '+ Add clip';
-    add.addEventListener('click', addVideosToStrip);
+    add.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addVideosToStrip();
+    });
     strip.appendChild(add);
   }
 
@@ -902,14 +958,15 @@ function startEditingVideos(el, block) {
     btn.type = 'button';
     btn.textContent = label;
     if (value === size) btn.classList.add('active');
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       size = value;
       sizes.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
     });
     sizes.appendChild(btn);
   });
-  el.appendChild(sizes);
+  content.appendChild(sizes);
 
   const actions = document.createElement('div');
   actions.className = 'image-editor-actions';
@@ -918,7 +975,8 @@ function startEditingVideos(el, block) {
   done.type = 'button';
   done.className = 'image-done';
   done.textContent = 'Done';
-  done.addEventListener('click', () => {
+  done.addEventListener('click', (e) => {
+    e.stopPropagation();
     // Same confirm-before-delete rule as the photo strip: clearing every
     // clip and hitting Done deletes the whole block.
     if (clips.length === 0 && !confirm('Remove this video row?')) return;
@@ -929,13 +987,18 @@ function startEditingVideos(el, block) {
   cancel.type = 'button';
   cancel.className = 'image-cancel';
   cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', () => {
-    el.classList.remove('editing');
-    el.innerHTML = block.html;
+  cancel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Same reasoning as the photo strip's Cancel: re-render from current
+    // state (nothing was saved) instead of hand-patching `content`, so
+    // this block -- controls included -- comes back exactly as
+    // renderBlocks() would build it fresh, not as a manual reconstruction
+    // that can drift from that.
+    renderBlocks();
   });
 
   actions.append(done, cancel);
-  el.appendChild(actions);
+  content.appendChild(actions);
 
   renderThumbs();
 }
