@@ -16,6 +16,22 @@ function setStatus(text) {
   els.status.textContent = text;
 }
 
+// Every write route can answer with a non-2xx that isn't the 409
+// staleness case -- a bad date, an unreadable image, oversized upload,
+// malformed alts JSON, etc. Centralize pulling the server's `detail` out
+// of that body (falling back to the status text) so every fetch call
+// site handles it the same way instead of falling through the success
+// path with an error body.
+async function errorDetail(res, fallback) {
+  try {
+    const body = await res.json();
+    return body.detail || fallback || res.statusText;
+  } catch {
+    // Body wasn't JSON (or was empty) -- fall back below.
+  }
+  return fallback || res.statusText;
+}
+
 async function loadPostList() {
   const res = await fetch('/api/posts');
   if (!res.ok) {
@@ -32,13 +48,7 @@ async function loadPostList() {
 async function loadPost(slug) {
   const res = await fetch(`/api/posts/${slug}`);
   if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      detail = (await res.json()).detail || detail;
-    } catch {
-      // response body wasn't JSON; fall back to statusText above
-    }
-    setStatus(`couldn't load ${slug} — ${detail}`);
+    setStatus(`couldn't load ${slug} — ${await errorDetail(res)}`);
     return;
   }
   const data = await res.json();
@@ -80,6 +90,13 @@ async function saveMeta(fields) {
 
   if (res.status === 409) {
     setStatus('changed on disk — reload');
+    return;
+  }
+  if (!res.ok) {
+    // Don't touch `state` or re-render -- an error body has no `hash` or
+    // `meta`, and stomping state.hash with `undefined` would fail every
+    // subsequent save. Leave the field exactly as the user left it.
+    setStatus(`save failed — ${await errorDetail(res)}`);
     return;
   }
 
@@ -139,8 +156,7 @@ async function renameSlug() {
     return;
   }
   if (!res.ok) {
-    const detail = (await res.json().catch(() => ({}))).detail || res.statusText;
-    setStatus(`rename failed — ${detail}`);
+    setStatus(`rename failed — ${await errorDetail(res)}`);
     return;
   }
 
@@ -250,6 +266,13 @@ async function applyWrite(res) {
     setStatus('changed on disk — reload');
     return;
   }
+  if (!res.ok) {
+    // As in saveMeta: don't touch `state` or call renderBlocks() -- that
+    // would wipe out whatever's still sitting in an open textarea with an
+    // error body's `undefined` fields. Leave the editing UI exactly as is.
+    setStatus(`save failed — ${await errorDetail(res)}`);
+    return;
+  }
   const data = await res.json();
   state.hash = data.hash;
   state.blocks = data.blocks;
@@ -334,7 +357,7 @@ async function newPost() {
   });
 
   if (!res.ok) {
-    setStatus((await res.json()).detail || 'could not create');
+    setStatus(await errorDetail(res, 'could not create'));
     return;
   }
 
