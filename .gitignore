@@ -34,3 +34,6 @@ yarn-error.log*
 .aws.env
 
 node_modules
+
+# SDD scratch workspace
+.superpowers/
