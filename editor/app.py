@@ -6,10 +6,11 @@ import hashlib
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from editor import config
-from editor.blocks import parse_blocks
-from editor.frontmatter import read_meta, split_post
+from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
+from editor.frontmatter import join_post, read_meta, split_post
 from editor.guard import assert_not_publicly_routed
 
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
@@ -93,6 +94,51 @@ def get_post(slug: str):
             for b in parse_blocks(body)
         ],
     }
+
+
+class BlockEdit(BaseModel):
+    source: str
+    hash: str
+
+
+class BlockInsert(BaseModel):
+    index: int
+    source: str
+    hash: str
+
+
+class BlockDelete(BaseModel):
+    hash: str
+
+
+def _write_body(slug: str, expected_hash: str, transform):
+    """Rewrite a post's body, refusing if the file changed since it was read."""
+    path, raw, frontmatter, body = _read_post(slug)
+
+    actual = hashlib.sha256(raw).hexdigest()
+    if actual != expected_hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before saving",
+        )
+
+    path.write_text(join_post(frontmatter, transform(body)))
+    return get_post(slug)
+
+
+@app.put("/api/posts/{slug}/blocks/{index}")
+def edit_block(slug: str, index: int, edit: BlockEdit):
+    return _write_body(slug, edit.hash, lambda body: replace_block(body, index, edit.source))
+
+
+@app.post("/api/posts/{slug}/blocks")
+def add_block(slug: str, edit: BlockInsert):
+    return _write_body(slug, edit.hash, lambda body: insert_block(body, edit.index, edit.source))
+
+
+@app.delete("/api/posts/{slug}/blocks/{index}")
+def remove_block(slug: str, index: int, edit: BlockDelete):
+    return _write_body(slug, edit.hash, lambda body: delete_block(body, index))
 
 
 @app.get("/")

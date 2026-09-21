@@ -59,8 +59,65 @@ function renderBlocks() {
     el.dataset.index = block.index;
     el.innerHTML = block.html;
     el.addEventListener('click', () => startEditing(el, block));
+    el.appendChild(blockControls(block));
     els.blocks.appendChild(el);
   });
+}
+
+function blockControls(block) {
+  const bar = document.createElement('div');
+  bar.className = 'block-controls';
+
+  const add = document.createElement('button');
+  add.textContent = '+';
+  add.title = 'Insert a paragraph here';
+  add.addEventListener('click', (e) => {
+    e.stopPropagation();
+    insertBlock(block.index);
+  });
+
+  const del = document.createElement('button');
+  del.textContent = '×';
+  del.title = 'Delete this block';
+  del.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (confirm('Delete this block?')) removeBlock(block.index);
+  });
+
+  bar.append(add, del);
+  return bar;
+}
+
+async function insertBlock(index) {
+  setStatus('saving…');
+  const res = await fetch(`/api/posts/${state.slug}/blocks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ index, source: 'New paragraph.', hash: state.hash }),
+  });
+  await applyWrite(res);
+}
+
+async function removeBlock(index) {
+  setStatus('saving…');
+  const res = await fetch(`/api/posts/${state.slug}/blocks/${index}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hash: state.hash }),
+  });
+  await applyWrite(res);
+}
+
+async function applyWrite(res) {
+  if (res.status === 409) {
+    setStatus('changed on disk — reload');
+    return;
+  }
+  const data = await res.json();
+  state.hash = data.hash;
+  state.blocks = data.blocks;
+  renderBlocks();
+  setStatus('saved');
 }
 
 function startEditing(el, block) {
@@ -91,17 +148,7 @@ async function saveBlock(index, source) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ source, hash: state.hash }),
   });
-
-  if (res.status === 409) {
-    setStatus('changed on disk — reload');
-    return;
-  }
-
-  const data = await res.json();
-  state.hash = data.hash;
-  state.blocks = data.blocks;
-  renderBlocks();
-  setStatus('saved');
+  await applyWrite(res);
 }
 
 els.picker.addEventListener('change', () => loadPost(els.picker.value));
