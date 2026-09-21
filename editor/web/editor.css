@@ -69,3 +69,62 @@ a { color: #0066cc; }
     border: 1px solid #ddd; border-radius: 6px;
     background: #fff; cursor: pointer; font-size: 1rem;
 }
+
+/* Thumbnail editor for an image / img-row block. Buttons are sized for a
+   thumb on the tablet this is built for, not a mouse -- 44px is the usual
+   touch-target floor. */
+.image-strip {
+    display: flex; flex-wrap: wrap; gap: 0.75rem;
+    padding: 0.5rem 0;
+}
+
+.image-thumb {
+    display: flex; flex-direction: column; gap: 0.4rem;
+    width: 140px;
+}
+
+.image-thumb img {
+    width: 140px; height: 140px; object-fit: cover;
+    border-radius: 6px; margin: 0; display: block;
+    border: 1px solid #e9ecef;
+}
+
+.image-alt-input {
+    width: 100%; box-sizing: border-box;
+    font: inherit; font-size: 0.85rem;
+    padding: 0.4rem; border: 1px solid #ddd; border-radius: 6px;
+}
+
+.image-thumb-controls { display: flex; gap: 0.4rem; }
+.image-thumb-controls button {
+    flex: 1; min-width: 0; height: 44px; line-height: 1;
+    border: 1px solid #ddd; border-radius: 6px;
+    background: #fff; cursor: pointer; font-size: 1.1rem;
+}
+.image-thumb-controls button:disabled { opacity: 0.35; cursor: default; }
+.image-thumb-controls .image-remove { color: #cc3333; border-color: #f0c9c9; }
+
+.image-add {
+    align-self: flex-start;
+    width: 140px; height: 140px;
+    border: 2px dashed #cbd6e2; border-radius: 6px;
+    background: #fbfdff; color: #0066cc;
+    font: inherit; font-size: 0.95rem; cursor: pointer;
+}
+
+.image-editor-actions {
+    display: flex; gap: 0.5rem;
+    padding: 0.75rem 0 0.25rem;
+    border-top: 1px solid #e9ecef; margin-top: 0.5rem;
+}
+.image-editor-actions button {
+    flex: 1; height: 44px;
+    font: inherit; font-size: 1rem;
+    border-radius: 6px; cursor: pointer;
+}
+.image-done {
+    border: 1px solid #0066cc; background: #0066cc; color: #fff;
+}
+.image-cancel {
+    border: 1px solid #ddd; background: #fff; color: #333;
+}

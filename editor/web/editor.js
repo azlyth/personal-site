@@ -174,7 +174,16 @@ function renderBlocks() {
     el.className = 'block';
     el.dataset.index = block.index;
     el.innerHTML = block.html;
-    el.addEventListener('click', () => startEditing(el, block));
+    el.addEventListener('click', () => {
+      // A photo block (a standalone image or an .img-row) gets a thumbnail
+      // strip -- add/remove/reorder/alt-text -- instead of raw markup in a
+      // textarea. Everything else still edits its markdown source directly.
+      if (block.kind === 'image' || block.kind === 'img_row') {
+        startEditingImages(el, block);
+      } else {
+        startEditing(el, block);
+      }
+    });
     el.appendChild(blockControls(block));
     els.blocks.appendChild(el);
   });
@@ -342,6 +351,169 @@ async function saveBlock(index, source) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ source, hash: state.hash }),
   });
+  await applyWrite(res);
+}
+
+// Thumbnail editor for an `image`/`img_row` block. All markup generation
+// (standalone vs. .img-row, alt-text escaping) stays server-side -- this
+// only ever collects/reorders a list of {url, alt} and hands it to
+// PUT .../blocks/{index}/images, which regenerates the source via the same
+// markdown_for() the upload route uses.
+function startEditingImages(el, block) {
+  if (el.classList.contains('editing')) return;
+  el.classList.add('editing');
+  el.innerHTML = '';
+
+  // A local working copy -- nothing here touches `state` until Done saves.
+  const images = block.images.map((img) => ({ ...img }));
+
+  const strip = document.createElement('div');
+  strip.className = 'image-strip';
+  el.appendChild(strip);
+
+  function renderThumbs() {
+    strip.innerHTML = '';
+    images.forEach((img, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'image-thumb';
+
+      const preview = document.createElement('img');
+      preview.src = img.url;
+      preview.alt = img.alt;
+      thumb.appendChild(preview);
+
+      const altInput = document.createElement('input');
+      altInput.type = 'text';
+      altInput.className = 'image-alt-input';
+      altInput.placeholder = 'alt text';
+      altInput.value = img.alt;
+      altInput.addEventListener('input', () => {
+        img.alt = altInput.value;
+      });
+      thumb.appendChild(altInput);
+
+      const controls = document.createElement('div');
+      controls.className = 'image-thumb-controls';
+
+      const left = document.createElement('button');
+      left.type = 'button';
+      left.className = 'image-move';
+      left.textContent = '←';
+      left.title = 'Move left';
+      left.disabled = i === 0;
+      left.addEventListener('click', () => {
+        [images[i - 1], images[i]] = [images[i], images[i - 1]];
+        renderThumbs();
+      });
+
+      const right = document.createElement('button');
+      right.type = 'button';
+      right.className = 'image-move';
+      right.textContent = '→';
+      right.title = 'Move right';
+      right.disabled = i === images.length - 1;
+      right.addEventListener('click', () => {
+        [images[i], images[i + 1]] = [images[i + 1], images[i]];
+        renderThumbs();
+      });
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'image-remove';
+      remove.textContent = '×';
+      remove.title = 'Remove this photo';
+      remove.addEventListener('click', () => {
+        images.splice(i, 1);
+        renderThumbs();
+      });
+
+      controls.append(left, right, remove);
+      thumb.appendChild(controls);
+      strip.appendChild(thumb);
+    });
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'image-add';
+    add.textContent = '+ Add photo';
+    add.addEventListener('click', addPhotosToStrip);
+    strip.appendChild(add);
+  }
+
+  function addPhotosToStrip() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+
+    input.addEventListener('change', async () => {
+      if (!input.files.length) return;
+
+      const alts = [];
+      for (const file of input.files) {
+        alts.push(prompt(`Alt text for ${file.name} (describes the photo):`, '') || '');
+      }
+
+      const form = new FormData();
+      for (const file of input.files) form.append('files', file);
+      form.append('alts', JSON.stringify(alts));
+
+      setStatus(`uploading ${input.files.length} photo(s)…`);
+      const res = await fetch(`/api/posts/${state.slug}/images/upload`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!res.ok) {
+        // Same rule as applyWrite: an error body has no `images` field, so
+        // leave the strip exactly as the user left it rather than pushing
+        // `undefined`.
+        setStatus(`upload failed — ${await errorDetail(res)}`);
+        return;
+      }
+      const data = await res.json();
+      images.push(...data.images);
+      renderThumbs();
+      setStatus('');
+    });
+
+    input.click();
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'image-editor-actions';
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'image-done';
+  done.textContent = 'Done';
+  done.addEventListener('click', () => saveBlockImages(block.index, images));
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'image-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => {
+    el.classList.remove('editing');
+    el.innerHTML = block.html;
+  });
+
+  actions.append(done, cancel);
+  el.appendChild(actions);
+
+  renderThumbs();
+}
+
+async function saveBlockImages(index, images) {
+  setStatus('saving…');
+  const res = await fetch(`/api/posts/${state.slug}/blocks/${index}/images`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ images, hash: state.hash }),
+  });
+  // applyWrite re-renders every block from the fresh server response on
+  // success, and on failure leaves the DOM untouched -- exactly right here
+  // too: a failed save keeps the thumbnail editor open with the user's
+  // reorder/remove/alt-text edits intact, not silently discarded.
   await applyWrite(res);
 }
 
