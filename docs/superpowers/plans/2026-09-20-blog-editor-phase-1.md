@@ -647,17 +647,24 @@ git commit -m "Add frontmatter read/write for the editor"
 
 ### Task 4: Publish pipeline
 
+> **AMENDED 2026-09-20.** cloudy.nyc is now served by Cloudflare directly from
+> an S3 website bucket, not by this Pi. Building locally therefore publishes
+> nothing the public can see. `scripts/publish-site.sh` (already written and
+> working) builds, syncs to S3 with per-type cache headers, and purges
+> Cloudflare. This task wraps git around that script rather than calling
+> `build-site.sh`.
+
 **Files:**
 - Create: `editor/publish.py`
 - Create: `editor/tests/test_publish.py`
 
 **Interfaces:**
-- Consumes: `scripts/build-site.sh` (Task 1).
+- Consumes: `scripts/publish-site.sh`.
 - Produces:
-  - `PublishResult` dataclass: `committed: bool`, `sha: str | None`, `pushed: bool`, `built: bool`, `message: str`
+  - `PublishResult` dataclass: `committed: bool`, `sha: str | None`, `pushed: bool`, `published: bool`, `message: str`
   - `commit_paths(repo: Path, paths: list[str], message: str) -> str | None` — stages exactly `paths`, commits, returns sha, or `None` if nothing changed
   - `push(repo: Path) -> None` — raises `subprocess.CalledProcessError` on failure
-  - `build_site(repo: Path) -> None` — runs `scripts/build-site.sh`; raises on failure
+  - `publish_site(repo: Path) -> None` — runs `scripts/publish-site.sh`; raises on failure
   - `publish(repo: Path, paths: list[str], message: str) -> PublishResult`
 
 - [ ] **Step 1: Write the failing tests**
@@ -722,30 +729,41 @@ def test_publish_reports_failed_push_without_claiming_success(repo: Path, monkey
         raise subprocess.CalledProcessError(1, ["git", "push"], stderr="no remote")
 
     monkeypatch.setattr("editor.publish.push", boom)
-    monkeypatch.setattr("editor.publish.build_site", lambda _repo: None)
+    monkeypatch.setattr("editor.publish.publish_site", lambda _repo: None)
 
     result = publish(repo, ["content/a.md"], "edit a")
 
     assert result.committed is True
     assert result.pushed is False
+    assert result.published is False
     assert "push" in result.message.lower()
 
 
-def test_publish_reports_failed_build(repo: Path, monkeypatch):
+def test_publish_reports_failed_site_publish(repo: Path, monkeypatch):
     (repo / "content" / "a.md").write_text("edited\n")
 
     monkeypatch.setattr("editor.publish.push", lambda _repo: None)
 
     def boom(_repo):
-        raise subprocess.CalledProcessError(1, ["build"], stderr="zola exploded")
+        raise subprocess.CalledProcessError(1, ["publish"], stderr="s3 sync failed")
 
-    monkeypatch.setattr("editor.publish.build_site", boom)
+    monkeypatch.setattr("editor.publish.publish_site", boom)
 
     result = publish(repo, ["content/a.md"], "edit a")
 
     assert result.pushed is True
-    assert result.built is False
-    assert "build" in result.message.lower()
+    assert result.published is False
+    assert "s3" in result.message.lower() or "publish" in result.message.lower()
+
+
+def test_publish_happy_path(repo: Path, monkeypatch):
+    (repo / "content" / "a.md").write_text("edited\n")
+    monkeypatch.setattr("editor.publish.push", lambda _repo: None)
+    monkeypatch.setattr("editor.publish.publish_site", lambda _repo: None)
+
+    result = publish(repo, ["content/a.md"], "edit a")
+
+    assert (result.committed, result.pushed, result.published) == (True, True, True)
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -758,16 +776,17 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'editor.publish'`
 Create `editor/publish.py`:
 
 ```python
-"""Commit, push, and rebuild the live site.
+"""Commit, push, and publish the site.
 
 Two rules are load-bearing here:
 
 1. Only explicitly named paths are staged. This repo routinely has unrelated
    work in flight, and an editor that ran `git add -A` would quietly sweep it
    into a commit.
-2. The site build goes through scripts/build-site.sh, which builds into a
-   scratch directory and swaps -- a failed build must leave the last good site
-   serving rather than wiping it.
+2. Publishing goes through scripts/publish-site.sh, which builds, syncs to S3
+   and purges Cloudflare. cloudy.nyc is served by Cloudflare straight from S3,
+   so a local build alone changes nothing the public can see -- and because
+   pages live at stable URLs, skipping the purge would leave the old post up.
 """
 from __future__ import annotations
 
@@ -781,7 +800,7 @@ class PublishResult:
     committed: bool
     sha: str | None
     pushed: bool
-    built: bool
+    published: bool
     message: str
 
 
@@ -811,9 +830,9 @@ def push(repo: Path) -> None:
     _git(repo, "push", "origin", "HEAD")
 
 
-def build_site(repo: Path) -> None:
+def publish_site(repo: Path) -> None:
     subprocess.run(
-        [str(repo / "scripts" / "build-site.sh")],
+        [str(repo / "scripts" / "publish-site.sh")],
         cwd=repo,
         check=True,
         capture_output=True,
@@ -835,12 +854,12 @@ def publish(repo: Path, paths: list[str], message: str) -> PublishResult:
         )
 
     try:
-        build_site(repo)
+        publish_site(repo)
     except subprocess.CalledProcessError as exc:
         return PublishResult(
             True, sha, True, False,
-            f"pushed {sha[:8]} but site build failed "
-            f"(previous site still serving): {exc.stderr or exc}",
+            f"pushed {sha[:8]} but publishing to S3 failed "
+            f"(the live site still shows the previous version): {exc.stderr or exc}",
         )
 
     return PublishResult(True, sha, True, True, f"published {sha[:8]}")
@@ -2553,6 +2572,11 @@ The last link: a Publish button that commits, pushes, and rebuilds the live site
 - Modify: `editor/web/editor.js`
 - Create: `editor/tests/test_api_publish.py`
 
+> **AMENDED 2026-09-20.** `PublishResult.built` is now `published`, and
+> publishing runs `scripts/publish-site.sh` (build + S3 sync + Cloudflare
+> purge) rather than a local-only build. `_dirty_paths` must also handle
+> staged renames — see the ruling below.
+
 **Interfaces:**
 - Consumes: `publish.publish` (Task 4).
 - Produces:
@@ -2600,7 +2624,7 @@ def test_publish_passes_only_blog_paths_to_git(monkeypatch):
 
     assert seen["paths"] == ["content/blog/a.md"]
     assert out["sha"] == "abc12345"
-    assert out["built"] is True
+    assert out["published"] is True
 
 
 def test_publish_with_nothing_to_do(monkeypatch):
@@ -2629,11 +2653,25 @@ class PublishRequest(BaseModel):
 
 
 def _dirty_paths() -> list[str]:
+    """Paths git reports as dirty.
+
+    Renames matter: `git mv` (the slug-change route) makes git report
+    `R  old.md -> new.md` on ONE line. Handing that whole string to `git add`
+    as a single path fails, so both sides are split out -- the pre-image needs
+    staging for the deletion, the new path for the addition.
+    """
     out = subprocess.run(
         ["git", "status", "--porcelain"],
         cwd=config.REPO, check=True, capture_output=True, text=True,
     ).stdout
-    return [line[3:].strip() for line in out.splitlines() if line.strip()]
+
+    paths: list[str] = []
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        entry = line[3:].strip()
+        paths.extend(part.strip() for part in entry.split(" -> "))
+    return paths
 
 
 def _blog_paths() -> list[str]:
@@ -2651,7 +2689,7 @@ def do_publish(request: PublishRequest):
     paths = _blog_paths()
     if not paths:
         return {"committed": False, "sha": None, "pushed": False,
-                "built": False, "message": "nothing to publish"}
+                "published": False, "message": "nothing to publish"}
 
     message = request.message or f"Update {len(paths)} post(s) from the editor"
     result = publish(config.REPO, paths, message)
@@ -2745,13 +2783,186 @@ git commit -m "Add publish from the editor"
 
 ---
 
+---
+
+### Task 12: Create a new post
+
+> **ADDED 2026-09-20.** Brainstorming agreed Phase 1 covers "edit AND create",
+> but the original plan only covered editing. Without this, starting a post
+> still needs a terminal, which undercuts a tablet-first editor.
+
+**Files:**
+- Modify: `editor/app.py`
+- Modify: `editor/web/editor.js`
+- Create: `editor/tests/test_api_new_post.py`
+
+**Interfaces:**
+- Consumes: `frontmatter.join_post` (Task 3), `config.BLOG_DIR` (Task 6).
+- Produces:
+  - `POST /api/posts` body `{title}` → `{slug, ...}` (same shape as `GET /api/posts/{slug}`)
+  - Slug is derived from the title, sanitised to `[a-z0-9-]`, de-duplicated with a numeric suffix.
+  - New posts are created with `draft = true` and today's date.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `editor/tests/test_api_new_post.py`:
+
+```python
+import datetime
+
+import pytest
+from fastapi.testclient import TestClient
+
+from editor import config
+from editor.app import app
+
+client = TestClient(app)
+CREATED: list = []
+
+
+@pytest.fixture(autouse=True)
+def cleanup():
+    yield
+    for slug in CREATED:
+        (config.BLOG_DIR / f"{slug}.md").unlink(missing_ok=True)
+    CREATED.clear()
+
+
+def _create(title: str):
+    res = client.post("/api/posts", json={"title": title})
+    if res.status_code == 200:
+        CREATED.append(res.json()["slug"])
+    return res
+
+
+def test_creates_a_post_with_a_slug_from_the_title():
+    out = _create("A Brand New Post!").json()
+    assert out["slug"] == "a-brand-new-post"
+    assert (config.BLOG_DIR / "a-brand-new-post.md").exists()
+
+
+def test_new_post_is_a_draft_dated_today():
+    out = _create("Draft Check").json()
+    assert out["meta"]["draft"] is True
+    assert out["meta"]["date"] == datetime.date.today().isoformat()
+
+
+def test_new_post_has_an_editable_starter_block():
+    out = _create("Starter Block").json()
+    assert len(out["blocks"]) >= 1
+
+
+def test_duplicate_titles_get_distinct_slugs():
+    first = _create("Same Title").json()["slug"]
+    second = _create("Same Title").json()["slug"]
+    assert first != second
+    assert second.startswith(first)
+
+
+def test_title_that_sanitises_to_nothing_is_rejected():
+    assert client.post("/api/posts", json={"title": "!!!"}).status_code == 400
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `editor/.venv/bin/python -m pytest editor/tests/test_api_new_post.py -v`
+Expected: FAIL — the route does not exist (405/404).
+
+- [ ] **Step 3: Implement the route**
+
+Modify `editor/app.py`:
+
+```python
+class NewPost(BaseModel):
+    title: str
+
+
+@app.post("/api/posts")
+def create_post(new: NewPost):
+    slug = re.sub(r"[^a-z0-9]+", "-", new.title.lower()).strip("-")
+    if not slug:
+        raise HTTPException(status_code=400, detail="title has no usable characters")
+
+    # De-duplicate rather than overwrite: losing an existing post to a title
+    # collision would be silent data loss.
+    candidate, n = slug, 2
+    while (config.BLOG_DIR / f"{candidate}.md").exists():
+        candidate = f"{slug}-{n}"
+        n += 1
+
+    frontmatter = (
+        f'title = "{new.title}"\n'
+        f"date = {datetime.date.today().isoformat()}\n"
+        "draft = true\n"
+    )
+    body = "Start writing.\n"
+    (config.BLOG_DIR / f"{candidate}.md").write_text(join_post(frontmatter, body))
+    return get_post(candidate)
+```
+
+- [ ] **Step 4: Run to verify it passes**
+
+Run: `editor/.venv/bin/python -m pytest editor/tests/ -v`
+Expected: all PASS.
+
+- [ ] **Step 5: Add the "New post" button**
+
+Modify `editor/web/editor.js` — add next to the post picker in the header:
+
+```js
+async function newPost() {
+  const title = prompt('Title for the new post:');
+  if (!title) return;
+
+  setStatus('creating…');
+  const res = await fetch('/api/posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!res.ok) {
+    setStatus((await res.json()).detail || 'could not create');
+    return;
+  }
+
+  const data = await res.json();
+  await loadPostList();
+  els.picker.value = data.slug;
+  await loadPost(data.slug);
+  setStatus('created (draft)');
+}
+```
+
+Add a button to `editor/web/index.html`'s `.bar`, before the status span:
+
+```html
+<button id="new-post" class="publish" title="Start a new post">+ New</button>
+```
+
+and wire it in `main()`: `document.getElementById('new-post').addEventListener('click', newPost);`
+
+- [ ] **Step 6: Verify in the browser**
+
+`make editor-restart`, open the editor, click "+ New", give a title. Expect the
+new draft to load with its starter block, and `git status` to show the new file
+under `content/blog/`. Delete the test post afterwards.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add editor/app.py editor/web editor/tests/test_api_new_post.py
+git commit -m "Add new-post creation to the editor"
+```
+
 ## Phase 1 done when
 
 - Editing a paragraph from the tablet changes the post and shows "saved".
 - Uploading two photos produces an `.img-row` served from `img.cloudy.nyc`.
 - Title, date and draft are editable; renaming warns about broken links.
-- Publish commits **only** `content/blog/` paths, pushes, and cloudy.nyc shows
-  the change within a couple of seconds.
+- Publish commits **only** `content/blog/` paths, pushes, syncs to S3 and
+  purges Cloudflare; cloudy.nyc shows the change within a few seconds.
+- "+ New" creates a draft post you can immediately write into.
 - `edit.cloudy.nyc` answers on the LAN and is unreachable publicly.
 - `editor/.venv/bin/python -m pytest editor/tests/ -v` is green.
 
