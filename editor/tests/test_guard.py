@@ -134,6 +134,15 @@ def test_wildcard_hostname_covers_our_host(tmp_path):
         assert_not_publicly_routed("edit.cloudy.nyc", cfg)
 
 
+def test_bare_wildcard_hostname_covers_everything(tmp_path):
+    # A bare "*" ingress entry (match-everything) covers our host too, even
+    # though it has no literal dot for the "*.suffix" branch to key on.
+    cfg = _http_routing_dir(tmp_path)
+    cfg.write_text('ingress:\n  - hostname: "*"\n    service: https://x\n')
+    with pytest.raises(RuntimeError, match="publicly routed"):
+        assert_not_publicly_routed("edit.cloudy.nyc", cfg)
+
+
 def test_top_level_list_document_raises_cleanly(tmp_path):
     # A config whose top-level YAML document is a list (not a mapping) must
     # raise a clear RuntimeError, not an uncaught AttributeError from

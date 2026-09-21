@@ -16,12 +16,13 @@ formatting-based bypass.
 
 Structural parsing alone is not sufficient, though: DNS/cloudflared routing
 is case-insensitive and treats a trailing dot as equivalent to the bare form,
-and a wildcard ingress entry (`*.suffix`) covers our host without ever
-string-matching it. So each configured hostname is also lowercased and
-stripped of a trailing dot before comparison, and a `*.suffix` entry is
-treated as a match whenever our (normalized) hostname ends with `.suffix`.
-That wildcard handling is intentionally narrow — literal `*.` prefix only,
-no general glob support — because a broader matcher is itself a new source of
+and a wildcard ingress entry (`*.suffix`, or a bare `*` matching everything)
+covers our host without ever string-matching it. So each configured hostname
+is also lowercased and stripped of a trailing dot before comparison, a
+`*.suffix` entry is treated as a match whenever our (normalized) hostname
+ends with `.suffix`, and a bare `*` is treated as covering every hostname.
+That wildcard handling is intentionally narrow — literal `*.` prefix or an
+exact `*`, nothing else — because a broader matcher is itself a new source of
 bugs in a security control.
 """
 from __future__ import annotations
@@ -39,11 +40,13 @@ def _covers(configured_hostname: str, hostname: str) -> bool:
     """True if an ingress entry's hostname would route `hostname`.
 
     Handles exact matches after normalizing case and a trailing dot, plus the
-    narrow `*.suffix` wildcard form cloudflared supports.
+    narrow `*.suffix` and bare `*` wildcard forms cloudflared supports.
     """
     configured = _normalize(configured_hostname)
     target = _normalize(hostname)
     if configured == target:
+        return True
+    if configured == "*":
         return True
     if configured.startswith("*."):
         suffix = configured[1:]  # e.g. "*.cloudy.nyc" -> ".cloudy.nyc"
