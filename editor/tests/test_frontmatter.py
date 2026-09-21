@@ -14,16 +14,45 @@ POST = (
     "Body starts here.\n"
 )
 
+# Older posts in this repo have no blank line between the closing +++ and
+# the body's first line. split_post/join_post must preserve that style
+# byte-for-byte too, not normalise it to the blank-line style.
+POST_NO_BLANK_LINE = (
+    "+++\n"
+    'title = "No Blank Line"\n'
+    "date = 2016-11-24\n"
+    "draft = false\n"
+    "+++\n"
+    "Body starts immediately.\n"
+)
+
 
 def test_split_separates_frontmatter_and_body():
     fm, body = split_post(POST)
     assert 'title = "Guerrilla Gardening"' in fm
-    assert body == "Body starts here.\n"
+    assert body == "\nBody starts here.\n"
+
+
+def test_split_preserves_no_blank_line_style():
+    fm, body = split_post(POST_NO_BLANK_LINE)
+    assert 'title = "No Blank Line"' in fm
+    assert body == "Body starts immediately.\n"
 
 
 def test_join_is_the_inverse_of_split():
     fm, body = split_post(POST)
     assert join_post(fm, body) == POST
+
+
+def test_join_is_the_inverse_of_split_no_blank_line():
+    fm, body = split_post(POST_NO_BLANK_LINE)
+    assert join_post(fm, body) == POST_NO_BLANK_LINE
+
+
+@pytest.mark.parametrize("text", [POST, POST_NO_BLANK_LINE])
+def test_round_trip_is_byte_exact_for_both_separator_styles(text):
+    fm, body = split_post(text)
+    assert join_post(fm, body) == text
 
 
 def test_read_meta_returns_values():
