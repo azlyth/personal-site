@@ -86,7 +86,12 @@ def _blog_paths() -> list[str]:
 @app.get("/api/status")
 def status():
     dirty = _blog_paths()
-    unpushed = _has_unpushed_commits(config.REPO)
+    # Scoped to content/blog/: this repo accumulates unrelated unpushed code
+    # commits constantly (the editor's own development, a concurrent
+    # session), and an unscoped check would count those as outstanding blog
+    # work forever -- lighting up the Publish button with nothing for it to
+    # actually do.
+    unpushed = _has_unpushed_commits(config.REPO, BLOG_PREFIX)
     outstanding = bool(dirty) or unpushed
     return {"dirty": dirty, "unpushed": unpushed, "clean": not outstanding}
 
@@ -97,12 +102,15 @@ def do_publish(request: PublishRequest):
     # Don't short-circuit on empty paths: a clean tree with an unpushed
     # commit is exactly the state a prior publish() left behind after a
     # failed push or S3 publish, and publish() already knows how to finish
-    # that -- returning "nothing to publish" here would strand it.
+    # that -- returning "nothing to publish" here would strand it. The
+    # pathspec keeps that recovery scoped to blog work, same reasoning as
+    # status() above -- otherwise this would push and re-publish over
+    # unrelated in-progress code commits.
     message = request.message or (
         f"Update {len(paths)} post(s) from the editor" if paths
         else "Publish from the editor"
     )
-    result = publish(config.REPO, paths, message)
+    result = publish(config.REPO, paths, message, pathspec=BLOG_PREFIX)
     return result.__dict__
 
 
