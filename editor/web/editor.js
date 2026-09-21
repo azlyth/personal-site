@@ -4,6 +4,7 @@ const state = { slug: null, hash: null, blocks: [] };
 
 const els = {
   picker: document.getElementById('post-picker'),
+  newPost: document.getElementById('new-post'),
   title: document.getElementById('post-title'),
   meta: document.getElementById('post-meta'),
   blocks: document.getElementById('blocks'),
@@ -321,7 +322,31 @@ async function saveBlock(index, source) {
   await applyWrite(res);
 }
 
+async function newPost() {
+  const title = prompt('Title for the new post:');
+  if (!title) return;
+
+  setStatus('creating…');
+  const res = await fetch('/api/posts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!res.ok) {
+    setStatus((await res.json()).detail || 'could not create');
+    return;
+  }
+
+  const data = await res.json();
+  await loadPostList();
+  els.picker.value = data.slug;
+  await loadPost(data.slug);
+  setStatus('created (draft)');
+}
+
 els.picker.addEventListener('change', () => loadPost(els.picker.value));
+els.newPost.addEventListener('click', newPost);
 els.title.addEventListener('click', startEditingTitle);
 
 (async function main() {

@@ -18,6 +18,8 @@ from pydantic import BaseModel
 
 from PIL import UnidentifiedImageError
 
+import tomlkit
+
 from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
@@ -142,6 +144,41 @@ def list_posts():
         )
     posts.sort(key=lambda p: p["date"], reverse=True)
     return posts
+
+
+class NewPost(BaseModel):
+    title: str
+
+
+@app.post("/api/posts")
+def create_post(new: NewPost):
+    slug = re.sub(r"[^a-z0-9]+", "-", new.title.lower()).strip("-")
+    if not slug:
+        raise HTTPException(status_code=400, detail="title has no usable characters")
+
+    # De-duplicate rather than overwrite: losing an existing post to a title
+    # collision would be silent data loss.
+    candidate, n = slug, 2
+    while (config.BLOG_DIR / f"{candidate}.md").exists():
+        candidate = f"{slug}-{n}"
+        n += 1
+
+    # Build the frontmatter with tomlkit rather than f-string interpolation
+    # -- a title containing a double quote (or a backslash) would otherwise
+    # produce invalid TOML that read_meta can't parse back. Same class of
+    # bug as the alt-text escaping elsewhere in this project.
+    doc = tomlkit.document()
+    doc["title"] = new.title
+    doc["date"] = datetime.date.today()
+    doc["draft"] = True
+    frontmatter = tomlkit.dumps(doc)
+
+    # Blank-line-before-body style, matching every current post (see
+    # test_frontmatter.py) and join_post's separator handling.
+    body = "\nStart writing.\n"
+
+    _atomic_write_text(config.BLOG_DIR / f"{candidate}.md", join_post(frontmatter, body))
+    return get_post(candidate)
 
 
 def _post_path(slug: str):
