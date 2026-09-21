@@ -4,6 +4,11 @@ base_url = "https://peter.direct"
 # Global author for RSS feeds
 author = "Peter Valdez"
 
+# Root-level title/description: the feed template reads these, NOT the
+# [extra] copies below, so without them rss.xml ships untitled.
+title = "Peter Valdez"
+description = "Personal blog and technical writings"
+
 # Whether to automatically compile all Sass files in the sass directory
 compile_sass = true
 

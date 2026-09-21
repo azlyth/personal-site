@@ -39,7 +39,7 @@ trap 'rm -f "$LEGACY_CONFIG_ABS"' EXIT
 # container, build from a scratch copy of config.toml with the old keys
 # ALSO set (harmless on old Zola, which ignores keys it doesn't recognize) --
 # leaving the real, committed config.toml untouched and correct for CI.
-ZOLA_VERSION="$(docker run --rm personal-site-zola zola --version | awk '{print $2}')"
+ZOLA_VERSION="$(docker run --rm --entrypoint zola personal-site-zola --version | awk '{print $2}')"
 ZOLA_MINOR="$(echo "$ZOLA_VERSION" | cut -d. -f2)"
 CONFIG_ARGS=()
 if [ "$ZOLA_MINOR" -lt 19 ]; then
@@ -87,8 +87,9 @@ docker run --rm \
   -e HOME=/tmp \
   -v "$REPO:/project" \
   -w /project \
+  --entrypoint zola \
   personal-site-zola \
-  zola "${CONFIG_ARGS[@]}" build --base-url "$BASE_URL" --output-dir "/project/$TMP_REL" --force
+  "${CONFIG_ARGS[@]}" build --base-url "$BASE_URL" --output-dir "/project/$TMP_REL" --force
 
 # Refuse to promote a build that produced nothing -- rsync --delete against an
 # empty or bogus scratch dir would wipe the live public/ instead of updating it.
