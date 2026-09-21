@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import os
 import re
 import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import boto3
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -18,6 +20,7 @@ from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
+from editor.images import image_key, markdown_for, process_image, upload
 from editor.publish import _has_unpushed_commits, publish
 
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
@@ -273,6 +276,49 @@ def add_block(slug: str, edit: BlockInsert):
 @app.delete("/api/posts/{slug}/blocks/{index}")
 def remove_block(slug: str, index: int, edit: BlockDelete):
     return _write_body(slug, edit.hash, lambda body: delete_block(body, index))
+
+
+def _s3():
+    """Lazily build the client so tests can inject a fake before first use."""
+    if not hasattr(app.state, "s3") or app.state.s3 is None:
+        env = config.load_aws_env()
+        app.state.s3 = boto3.client(
+            "s3",
+            aws_access_key_id=env.get("PERSONAL_SITE_IMAGES_ACCESS_KEY_ID"),
+            aws_secret_access_key=env.get("PERSONAL_SITE_IMAGES_SECRET_ACCESS_KEY"),
+            region_name=env.get("AWS_REGION", "us-east-1"),
+        )
+    return app.state.s3
+
+
+@app.post("/api/posts/{slug}/images")
+async def add_images(
+    slug: str,
+    index: int = Form(...),
+    hash: str = Form(...),
+    alts: str = Form("[]"),
+    files: list[UploadFile] = File(...),
+):
+    _, raw, _, _ = _read_post(slug)
+    if hashlib.sha256(raw).hexdigest() != hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before saving",
+        )
+
+    alt_list = json.loads(alts)
+    bucket = config.load_aws_env().get("PERSONAL_SITE_IMAGES_BUCKET", "img.cloudy.nyc")
+
+    urls, used_alts = [], []
+    for position, upload_file in enumerate(files):
+        alt = alt_list[position] if position < len(alt_list) else ""
+        processed = process_image(await upload_file.read())
+        key = image_key(slug, alt, processed)
+        urls.append(upload(processed, key, bucket, _s3()))
+        used_alts.append(alt)
+
+    snippet = markdown_for(urls, used_alts)
+    return _write_body(slug, hash, lambda body: insert_block(body, index, snippet))
 
 
 class MetaEdit(BaseModel):

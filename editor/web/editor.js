@@ -183,8 +183,45 @@ function blockControls(block) {
     if (confirm('Delete this block?')) removeBlock(block.index);
   });
 
-  bar.append(add, del);
+  const photo = document.createElement('button');
+  photo.textContent = '🖼';
+  photo.title = 'Add photos here';
+  photo.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pickImages(block.index);
+  });
+  bar.append(add, photo, del);
   return bar;
+}
+
+function pickImages(index) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+
+  input.addEventListener('change', async () => {
+    if (!input.files.length) return;
+
+    const alts = [];
+    for (const file of input.files) {
+      alts.push(prompt(`Alt text for ${file.name} (describes the photo):`, '') || '');
+    }
+
+    const form = new FormData();
+    for (const file of input.files) form.append('files', file);
+    form.append('alts', JSON.stringify(alts));
+    form.append('index', index);
+    form.append('hash', state.hash);
+
+    setStatus(`uploading ${input.files.length} photo(s)…`);
+    await applyWrite(await fetch(`/api/posts/${state.slug}/images`, {
+      method: 'POST',
+      body: form,
+    }));
+  });
+
+  input.click();
 }
 
 async function insertBlock(index) {
