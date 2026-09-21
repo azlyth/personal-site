@@ -16,7 +16,12 @@ function setStatus(text) {
 }
 
 async function loadPostList() {
-  const posts = await (await fetch('/api/posts')).json();
+  const res = await fetch('/api/posts');
+  if (!res.ok) {
+    setStatus("couldn't load post list");
+    return [];
+  }
+  const posts = await res.json();
   els.picker.innerHTML = posts
     .map((p) => `<option value="${p.slug}">${p.title}${p.draft ? ' (draft)' : ''}</option>`)
     .join('');
@@ -24,7 +29,18 @@ async function loadPostList() {
 }
 
 async function loadPost(slug) {
-  const data = await (await fetch(`/api/posts/${slug}`)).json();
+  const res = await fetch(`/api/posts/${slug}`);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail || detail;
+    } catch {
+      // response body wasn't JSON; fall back to statusText above
+    }
+    setStatus(`couldn't load ${slug} — ${detail}`);
+    return;
+  }
+  const data = await res.json();
   state.slug = data.slug;
   state.hash = data.hash;
   state.blocks = data.blocks;
@@ -91,13 +107,17 @@ async function saveBlock(index, source) {
 els.picker.addEventListener('change', () => loadPost(els.picker.value));
 
 (async function main() {
-  const posts = await loadPostList();
-  const fromPath = location.pathname.startsWith('/edit/')
-    ? location.pathname.slice('/edit/'.length)
-    : null;
-  const slug = fromPath || (posts[0] && posts[0].slug);
-  if (slug) {
-    els.picker.value = slug;
-    await loadPost(slug);
+  try {
+    const posts = await loadPostList();
+    const fromPath = location.pathname.startsWith('/edit/')
+      ? location.pathname.slice('/edit/'.length)
+      : null;
+    const slug = fromPath || (posts[0] && posts[0].slug);
+    if (slug) {
+      els.picker.value = slug;
+      await loadPost(slug);
+    }
+  } catch (err) {
+    setStatus(`error: ${err.message}`);
   }
 })();

@@ -66,14 +66,19 @@ def _post_path(slug: str):
 
 def _read_post(slug: str):
     path = _post_path(slug)
-    raw = path.read_text()
+    raw_bytes = path.read_bytes()
+    raw = raw_bytes.decode()
     frontmatter, body = split_post(raw)
-    return path, raw, frontmatter, body
+    return path, raw_bytes, frontmatter, body
 
 
 @app.get("/api/posts/{slug}")
 def get_post(slug: str):
-    _, raw, frontmatter, body = _read_post(slug)
+    # Hash the bytes actually on disk, not a decode-then-re-encode round
+    # trip through str -- Task 8 uses this hash as the staleness guard that
+    # decides whether to accept a write, so it needs to match the file
+    # exactly.
+    _, raw_bytes, frontmatter, body = _read_post(slug)
     meta = read_meta(frontmatter)
     return {
         "slug": slug,
@@ -82,7 +87,7 @@ def get_post(slug: str):
             "date": str(meta.get("date", "")),
             "draft": bool(meta.get("draft", False)),
         },
-        "hash": hashlib.sha256(raw.encode()).hexdigest(),
+        "hash": hashlib.sha256(raw_bytes).hexdigest(),
         "blocks": [
             {"index": b.index, "kind": b.kind, "source": b.source, "html": b.html}
             for b in parse_blocks(body)
