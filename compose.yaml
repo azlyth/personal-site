@@ -1,12 +1,10 @@
 services:
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: nginx:alpine
     ports:
       - "127.0.0.1:8802:80"
-    environment:
-      - NODE_ENV=production
+    volumes:
+      - ./public:/usr/share/nginx/html:ro
     restart: unless-stopped
 
   redis:

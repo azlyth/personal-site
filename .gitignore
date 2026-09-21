@@ -17,6 +17,9 @@
 
 # Zola build output
 /public
+/.build-tmp
+/public.old
+/editor/.venv
 
 # misc
 .DS_Store
