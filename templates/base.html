@@ -85,6 +85,41 @@
             display: block;
         }
 
+        /* Looping clips (see scripts/upload-video.py) are wrapped in a
+           .video-row the same way consecutive photos are wrapped in an
+           .img-row -- same grid, so several clips sit side by side and wrap
+           on narrow screens instead of stacking full-width. A *single* clip
+           still gets wrapped (not left as a bare <video>) purely so it has
+           a size class to control -- vertical phone footage at the full
+           ~700-900px reading column height is the complaint this whole
+           feature exists to fix. The row itself carries the size cap and is
+           centered; `.container video`'s own max-width:100% still applies
+           inside it, so a clip never exceeds its row. */
+        .video-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin: 1.5rem auto;
+        }
+
+        .video-row video {
+            margin: 0;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Three size presets, picked against the complaint: full-width
+           vertical video (9:16) at the ~700px column renders over 1200px
+           tall and dominates the page. Medium (420px wide -> ~745px tall
+           for 9:16) is a clear step down from that. Small (240px -> ~425px
+           tall) is close to a normal inline photo's footprint. Full keeps
+           the old full-bleed behavior for landscape clips or when that's
+           deliberately wanted. */
+        .video-row.size-small { max-width: 240px; }
+        .video-row.size-medium { max-width: 420px; }
+        .video-row.size-full { max-width: 100%; }
+
         a {
             color: #0066cc;
             text-decoration: none;

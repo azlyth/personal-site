@@ -20,7 +20,7 @@ from PIL import UnidentifiedImageError
 
 import tomlkit
 
-from editor import config
+from editor import config, videos
 from editor.blocks import delete_block, insert_block, move_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
@@ -276,6 +276,12 @@ def _block_json(block) -> dict:
         images = parse_images(block.kind, block.source)
         if images is not None:
             out["images"] = images
+    elif block.kind == "video":
+        # Same discipline as parse_images -- see videos.parse_videos.
+        parsed = videos.parse_videos(block.kind, block.source)
+        if parsed is not None:
+            out["videos"] = parsed["videos"]
+            out["size"] = parsed["size"]
     return out
 
 
@@ -376,6 +382,37 @@ def edit_block_images(slug: str, index: int, edit: BlockImagesEdit):
         urls = [image.url for image in edit.images]
         alts = [image.alt for image in edit.images]
         return replace_block(body, index, markdown_for(urls, alts))
+
+    return _write_body(slug, edit.hash, transform)
+
+
+class VideoItem(BaseModel):
+    url: str
+    sync_loop: str | None = None
+
+
+class BlockVideosEdit(BaseModel):
+    videos: list[VideoItem]
+    size: str
+    hash: str
+
+
+@app.put("/api/posts/{slug}/blocks/{index}/videos")
+def edit_block_videos(slug: str, index: int, edit: BlockVideosEdit):
+    """Rewrite a `video` block from the row editor's clip list -- same shape
+    as `edit_block_images` above, right down to an empty list deleting the
+    block. All markup generation stays server-side (`videos.markdown_for`).
+    """
+
+    def transform(body: str) -> str:
+        if not edit.videos:
+            return delete_block(body, index)
+        clips = [{"url": video.url, "sync_loop": video.sync_loop} for video in edit.videos]
+        try:
+            new_source = videos.markdown_for(clips, edit.size)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        return replace_block(body, index, new_source)
 
     return _write_body(slug, edit.hash, transform)
 
@@ -548,6 +585,91 @@ async def upload_images(
 
     urls, used_alts = await _upload_files(slug, files, alts)
     return {"images": [{"url": url, "alt": alt} for url, alt in zip(urls, used_alts)]}
+
+
+# A raw phone clip is much bigger than a raw phone photo before ffmpeg gets a
+# chance to shrink it -- a few seconds of 4K video easily clears 100MB, so
+# this needs real headroom, not MAX_UPLOAD_BYTES. Still bounded: this Pi
+# runs the rest of the fleet, and ffmpeg re-encodes one clip at a time in
+# this same request, so a handful of files is already a while to wait on a
+# LAN tablet.
+MAX_VIDEO_UPLOAD_BYTES = 250 * 1024 * 1024
+MAX_VIDEO_FILES = 6
+
+
+def _video_too_large(position: int, total: int, filename: str | None, size_bytes: float) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail=(
+            f"clip {position + 1} of {total} "
+            f"({filename}) is too large "
+            f"({size_bytes / 1_000_000:.1f}MB; max {MAX_VIDEO_UPLOAD_BYTES // (1024 * 1024)}MB)"
+        ),
+    )
+
+
+async def _upload_video_files(slug: str, files: list[UploadFile]) -> list[str]:
+    """Video counterpart to `_upload_files`: process each clip through
+    ffmpeg (`videos.process_video`) and upload it, same caps-then-read
+    discipline as the photo pipeline. No alt text -- `<video>` carries none.
+    """
+    if len(files) > MAX_VIDEO_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"too many clips ({len(files)}); max {MAX_VIDEO_FILES} per upload",
+        )
+
+    bucket = config.load_aws_env().get("PERSONAL_SITE_IMAGES_BUCKET", "img.cloudy.nyc")
+
+    urls: list[str] = []
+    for position, upload_file in enumerate(files):
+        if upload_file.size is not None and upload_file.size > MAX_VIDEO_UPLOAD_BYTES:
+            raise _video_too_large(position, len(files), upload_file.filename, upload_file.size)
+
+        data = await upload_file.read()
+        if len(data) > MAX_VIDEO_UPLOAD_BYTES:
+            raise _video_too_large(position, len(files), upload_file.filename, len(data))
+
+        try:
+            processed = videos.process_video(data)
+        except ValueError as exc:
+            # Same non-post-touching guarantee as _upload_files: nothing
+            # here has written to the post yet, so a bad clip partway
+            # through a batch can't leave a partial edit behind.
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"clip {position + 1} of {len(files)} "
+                    f"({upload_file.filename}) could not be processed: {exc}"
+                ),
+            )
+
+        name_hint = Path(upload_file.filename or "").stem
+        key = videos.video_key(slug, name_hint, processed)
+        urls.append(videos.upload(processed, key, bucket, _s3()))
+
+    return urls
+
+
+@app.post("/api/posts/{slug}/videos/upload")
+async def upload_videos(
+    request: Request,
+    slug: str,
+    files: list[UploadFile] = File(...),
+):
+    """Upload clips without touching the post -- the video-row editor's
+    "+ Add clip" button, same role as `/images/upload` for photos: it hands
+    URLs back for the client to fold into the row it's editing, which then
+    saves the whole list via `PUT .../blocks/{index}/videos`.
+    """
+    _assert_same_origin(request)
+    _post_path(slug)  # 404s for an unknown slug rather than uploading into the void
+
+    urls = await _upload_video_files(slug, files)
+    # A freshly added clip has no data-sync-loop -- that's only meaningful
+    # for clips deliberately cut to a matching duration (see
+    # scripts/upload-video.py), which this ad hoc upload path doesn't do.
+    return {"videos": [{"url": url, "sync_loop": None} for url in urls]}
 
 
 class MetaEdit(BaseModel):

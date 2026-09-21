@@ -28,6 +28,7 @@ _KIND_BY_TOKEN = {
 }
 
 _IMG_ROW_RE = re.compile(r'<div\s+class="img-row"', re.I)
+_VIDEO_ROW_RE = re.compile(r'<div\s+class="video-row', re.I)
 # The alt group allows an escaped `\]` (or `\[`, or any other `\x`) as well
 # as any plain non-bracket character, so a standalone image whose alt text
 # contains a literal `]` -- which `images.markdown_for` renders as `\]` --
@@ -56,6 +57,8 @@ def _refine_kind(kind: str, source: str) -> str:
     stripped = source.strip()
     if kind == "html" and _IMG_ROW_RE.search(stripped):
         return "img_row"
+    if kind == "html" and _VIDEO_ROW_RE.search(stripped):
+        return "video"
     if kind == "paragraph" and _ONLY_IMAGE_RE.match(stripped):
         return "image"
     return kind

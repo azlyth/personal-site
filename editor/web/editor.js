@@ -224,6 +224,12 @@ function renderBlocks() {
       // editing is always safe, so that's the fallback.
       if (block.images) {
         startEditingImages(el, block);
+      } else if (block.videos) {
+        // Same gating rule as photos: only present when videos.parse_videos
+        // could losslessly round-trip this block's markup (see
+        // startEditingVideos below) -- otherwise raw source is the only
+        // safe way to edit it.
+        startEditingVideos(el, block);
       } else {
         startEditing(el, block);
       }
@@ -711,6 +717,189 @@ async function saveBlockImages(index, images) {
   // success, and on failure leaves the DOM untouched -- exactly right here
   // too: a failed save keeps the thumbnail editor open with the user's
   // reorder/remove/alt-text edits intact, not silently discarded.
+  await applyWrite(res);
+}
+
+// Row editor for a `video` block. Same shape as startEditingImages above --
+// a local working copy of {url, sync_loop} clips plus a `size` preset,
+// nothing touching `state` until Done saves via
+// PUT .../blocks/{index}/videos, which regenerates the source server-side
+// through videos.markdown_for(). No alt-text input (a <video> carries
+// none); sync_loop is preserved as opaque data, not user-editable here.
+function startEditingVideos(el, block) {
+  if (el.classList.contains('editing')) return;
+  el.classList.add('editing');
+  el.innerHTML = '';
+
+  const clips = block.videos.map((v) => ({ ...v }));
+  let size = block.size;
+
+  const strip = document.createElement('div');
+  strip.className = 'video-strip';
+  el.appendChild(strip);
+
+  function renderThumbs() {
+    strip.innerHTML = '';
+    clips.forEach((clip, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'video-thumb';
+
+      const preview = document.createElement('video');
+      preview.src = clip.url;
+      preview.muted = true;
+      preview.playsInline = true;
+      preview.controls = true;
+      thumb.appendChild(preview);
+
+      const controls = document.createElement('div');
+      controls.className = 'video-thumb-controls';
+
+      const left = document.createElement('button');
+      left.type = 'button';
+      left.className = 'video-move';
+      left.textContent = '←';
+      left.title = 'Move left';
+      left.disabled = i === 0;
+      left.addEventListener('click', () => {
+        [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]];
+        renderThumbs();
+      });
+
+      const right = document.createElement('button');
+      right.type = 'button';
+      right.className = 'video-move';
+      right.textContent = '→';
+      right.title = 'Move right';
+      right.disabled = i === clips.length - 1;
+      right.addEventListener('click', () => {
+        [clips[i], clips[i + 1]] = [clips[i + 1], clips[i]];
+        renderThumbs();
+      });
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'video-remove';
+      remove.textContent = '×';
+      remove.title = 'Remove this clip';
+      remove.addEventListener('click', () => {
+        clips.splice(i, 1);
+        renderThumbs();
+      });
+
+      controls.append(left, right, remove);
+      thumb.appendChild(controls);
+      strip.appendChild(thumb);
+    });
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'video-add';
+    add.textContent = '+ Add clip';
+    add.addEventListener('click', addVideosToStrip);
+    strip.appendChild(add);
+  }
+
+  function addVideosToStrip() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.multiple = true;
+
+    input.addEventListener('change', async () => {
+      if (!input.files.length) return;
+
+      const form = new FormData();
+      for (const file of input.files) form.append('files', file);
+
+      setStatus(`uploading ${input.files.length} clip(s)…`);
+      let res;
+      try {
+        res = await fetch(`/api/posts/${state.slug}/videos/upload`, {
+          method: 'POST',
+          body: form,
+        });
+      } catch (err) {
+        setStatus(`upload failed — network error: ${err.message}`);
+        return;
+      }
+      if (!res.ok) {
+        // Same rule as the photo strip's addPhotosToStrip: an error body
+        // has no `videos` field, so leave the strip exactly as the user
+        // left it rather than pushing `undefined`.
+        setStatus(`upload failed — ${await errorDetail(res)}`);
+        return;
+      }
+      const data = await res.json();
+      clips.push(...data.videos);
+      renderThumbs();
+      setStatus('');
+    });
+
+    input.click();
+  }
+
+  const sizes = document.createElement('div');
+  sizes.className = 'video-size-buttons';
+  [
+    ['small', 'Small'],
+    ['medium', 'Medium'],
+    ['full', 'Full'],
+  ].forEach(([value, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    if (value === size) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      size = value;
+      sizes.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    sizes.appendChild(btn);
+  });
+  el.appendChild(sizes);
+
+  const actions = document.createElement('div');
+  actions.className = 'image-editor-actions';
+
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'image-done';
+  done.textContent = 'Done';
+  done.addEventListener('click', () => {
+    // Same confirm-before-delete rule as the photo strip: clearing every
+    // clip and hitting Done deletes the whole block.
+    if (clips.length === 0 && !confirm('Remove this video row?')) return;
+    saveBlockVideos(block.index, clips, size);
+  });
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'image-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => {
+    el.classList.remove('editing');
+    el.innerHTML = block.html;
+  });
+
+  actions.append(done, cancel);
+  el.appendChild(actions);
+
+  renderThumbs();
+}
+
+async function saveBlockVideos(index, clips, size) {
+  setStatus('saving…');
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${index}/videos`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videos: clips, size, hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
   await applyWrite(res);
 }
 

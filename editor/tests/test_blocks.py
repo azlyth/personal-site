@@ -24,6 +24,18 @@ IMAGES = (
     "Outro.\n"
 )
 
+VIDEOS = (
+    "Intro.\n"
+    "\n"
+    '<div class="video-row size-medium">\n'
+    '<video autoplay loop muted playsinline data-sync-loop="4">\n'
+    '<source src="https://img.cloudy.nyc/p/one.mp4" type="video/mp4">\n'
+    "</video>\n"
+    "</div>\n"
+    "\n"
+    "Outro.\n"
+)
+
 # Covers the four kinds IMAGES/SIMPLE never exercise: list, blockquote, code,
 # hr. The fence has a language tag and a blank line inside it -- the case
 # most likely to break line-range logic.
@@ -76,6 +88,12 @@ def test_parse_classifies_image_and_img_row():
     assert kinds == ["paragraph", "image", "img_row", "paragraph"]
 
 
+def test_parse_classifies_video_row():
+    blocks = parse_blocks(VIDEOS)
+    kinds = [b.kind for b in blocks]
+    assert kinds == ["paragraph", "video", "paragraph"]
+
+
 def test_parse_classifies_list_blockquote_code_hr():
     blocks = parse_blocks(MIXED_KINDS)
     kinds = [b.kind for b in blocks]
@@ -99,7 +117,7 @@ def test_fenced_code_with_markdown_like_content_is_one_block():
 
 def test_replace_with_identical_source_is_byte_identical():
     # The load-bearing property: a no-op edit must not perturb the file.
-    for body in (SIMPLE, IMAGES, MIXED_KINDS, CODE_WITH_FAKE_HEADING):
+    for body in (SIMPLE, IMAGES, VIDEOS, MIXED_KINDS, CODE_WITH_FAKE_HEADING):
         for block in parse_blocks(body):
             assert replace_block(body, block.index, block.source) == body
 
@@ -186,7 +204,7 @@ def test_move_to_own_position_is_byte_identical_noop():
     # current position (immediately above it and immediately below it) are
     # "where it already is" and must not perturb the file at all -- not even
     # whitespace.
-    for body in (SIMPLE, IMAGES, MIXED_KINDS, CODE_WITH_FAKE_HEADING):
+    for body in (SIMPLE, IMAGES, VIDEOS, MIXED_KINDS, CODE_WITH_FAKE_HEADING):
         for block in parse_blocks(body):
             assert move_block(body, block.index, block.index) == body
             assert move_block(body, block.index, block.index + 1) == body
