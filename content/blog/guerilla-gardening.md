@@ -38,7 +38,7 @@ I also started doing little litter patrols in the neighborhood.
 
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass. So I swept it all up.
 
-<div class="video-row size-medium">
+<div class="video-row size-small">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-1-loop.mp4" type="video/mp4">
 </video>
@@ -56,7 +56,7 @@ I took a walk around the neighborhood for some inspiration, looked at a few diff
 
 Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work later, we had a pretty red brick border on the two tree beds framing my apartment courtyard entrance.
 
-<div class="video-row size-full">
+<div class="video-row size-medium">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop.mp4" type="video/mp4">
 </video>
@@ -75,7 +75,7 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 4 bags of organic compost per tree bed. I used my new cultivator, and mixed the compost into the tree beds. It's amazing how even just fresh, rich dirt alone made the tree beds look better. Healthier.
 
-<div class="video-row size-medium">
+<div class="video-row size-small">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/compost-bags-loop.mp4" type="video/mp4">
 </video>
