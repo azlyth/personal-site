@@ -118,7 +118,34 @@ async function applyWrite(res) {
   state.blocks = data.blocks;
   renderBlocks();
   setStatus('saved');
+  await refreshStatus();
 }
+
+async function refreshStatus() {
+  const data = await (await fetch('/api/status')).json();
+  els.publish.disabled = data.clean;
+  els.publish.textContent = data.clean
+    ? 'Published'
+    : `Publish (${data.dirty.length})`;
+}
+
+els.publish.addEventListener('click', async () => {
+  const message = prompt('Commit message:', `Update ${state.slug}`);
+  if (message === null) return;
+
+  els.publish.disabled = true;
+  setStatus('publishing…');
+
+  const res = await fetch('/api/publish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  const data = await res.json();
+
+  setStatus(data.message);
+  await refreshStatus();
+});
 
 function startEditing(el, block) {
   if (el.classList.contains('editing')) return;
@@ -164,6 +191,7 @@ els.picker.addEventListener('change', () => loadPost(els.picker.value));
       els.picker.value = slug;
       await loadPost(slug);
     }
+    await refreshStatus();
   } catch (err) {
     setStatus(`error: ${err.message}`);
   }

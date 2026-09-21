@@ -233,6 +233,13 @@ drifts off-center everywhere else.
   (not in an `.img-row`) is centered (`.container img { margin: 1.5rem auto }`)
   rather than flush-left, since most photos render narrower than the 700px
   content column.
+- **Editing from a tablet:** `edit.cloudy.nyc` (LAN-only) runs `blog-editor.service`
+  from `editor/`. It edits `content/blog/*.md` in the working tree, uploads photos
+  to S3, and on Publish commits only `content/blog/` paths, pushes, and rebuilds
+  the live site via `scripts/publish-site.sh` (build + S3 sync + Cloudflare
+  purge). Design: `docs/superpowers/specs/2026-09-20-blog-editor-design.md`.
+  ⚠ The service refuses to start if `edit.cloudy.nyc` is ever added to the
+  cloudflared tunnel config — it must stay LAN-only.
 
 ## Git Workflow
 - Use simple present tense commit messages (e.g., "Add dark mode toggle")

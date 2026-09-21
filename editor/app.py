@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -15,10 +16,61 @@ from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, split_post
 from editor.guard import assert_not_publicly_routed
+from editor.publish import publish
 
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
 
 app = FastAPI(title="blog editor")
+
+BLOG_PREFIX = "content/blog/"
+
+
+class PublishRequest(BaseModel):
+    message: str | None = None
+
+
+def _dirty_paths() -> list[str]:
+    """Paths git reports as dirty.
+
+    Renames matter: `git mv` (the slug-change route) makes git report
+    `R  old.md -> new.md` on ONE line. Handing that whole string to `git add`
+    as a single path fails, so both sides are split out -- the pre-image needs
+    staging for the deletion, the new path for the addition.
+    """
+    out = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=config.REPO, check=True, capture_output=True, text=True,
+    ).stdout
+
+    paths: list[str] = []
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        entry = line[3:].strip()
+        paths.extend(part.strip() for part in entry.split(" -> "))
+    return paths
+
+
+def _blog_paths() -> list[str]:
+    return [p for p in _dirty_paths() if p.startswith(BLOG_PREFIX)]
+
+
+@app.get("/api/status")
+def status():
+    dirty = _blog_paths()
+    return {"dirty": dirty, "clean": not dirty}
+
+
+@app.post("/api/publish")
+def do_publish(request: PublishRequest):
+    paths = _blog_paths()
+    if not paths:
+        return {"committed": False, "sha": None, "pushed": False,
+                "published": False, "message": "nothing to publish"}
+
+    message = request.message or f"Update {len(paths)} post(s) from the editor"
+    result = publish(config.REPO, paths, message)
+    return result.__dict__
 
 
 @app.get("/healthz")
