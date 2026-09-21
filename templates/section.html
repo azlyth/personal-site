@@ -2,103 +2,28 @@
 
 {% block title %}{{ section.title }} - Peter Valdez{% endblock title %}
 
-{% block container_class %} blog-container{% endblock container_class %}
-
 {% block content %}
 {% if section.pages %}
-<div class="blog-layout">
-    <!-- Left sidebar: post list -->
-    <aside class="blog-sidebar">
-        <ul class="blog-post-list">
-        {% for page in section.pages %}
-            <li class="blog-post-item{% if loop.first %} active{% endif %}" data-post-id="{{ page.slug }}">
-                <div class="blog-post-item-title">{{ page.title }}</div>
-                <div class="blog-post-item-date">{{ page.date | date(format="%B %d, %Y") }}</div>
+{# section.pages is already date-sorted (sort_by = "date" in _index.md), so
+   group_by keeps the years in descending order without re-sorting here. #}
+<div class="archive">
+    {% for year, posts in section.pages | group_by(attribute="year") %}
+    <section class="archive-year">
+        <h2 class="archive-year-label">{{ year }}</h2>
+        <ul class="archive-list">
+            {% for page in posts %}
+            <li class="archive-item">
+                <a href="{{ page.permalink | safe }}">
+                    <span class="archive-title">{{ page.title }}</span>
+                    <span class="archive-date">{{ page.date | date(format="%B %-d") }}</span>
+                </a>
             </li>
-        {% endfor %}
+            {% endfor %}
         </ul>
-    </aside>
-
-    <!-- Right content: full post -->
-    <main class="blog-content">
-        {% for page in section.pages %}
-        <article class="blog-content-post{% if loop.first %} active{% endif %}" data-post-id="{{ page.slug }}">
-            <h1><a href="{{ page.permalink | safe }}">{{ page.title }}</a></h1>
-            <div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>
-            <div class="blog-post-body">
-                {{ page.content | safe }}
-            </div>
-        </article>
-        {% endfor %}
-    </main>
+    </section>
+    {% endfor %}
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const postItems = document.querySelectorAll('.blog-post-item');
-    const postContents = document.querySelectorAll('.blog-content-post');
-
-    // Check if mobile (content is hidden)
-    function isMobile() {
-        return window.innerWidth <= 768;
-    }
-
-    // Handle URL hash on load
-    function showPostFromHash() {
-        const hash = window.location.hash;
-        if (hash && hash.length > 1) {
-            const postId = hash.substring(1);
-            selectPost(postId);
-        }
-    }
-
-    function selectPost(postId) {
-        // Update sidebar active state
-        postItems.forEach(item => {
-            if (item.dataset.postId === postId) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
-        });
-
-        // Update content visibility
-        postContents.forEach(post => {
-            if (post.dataset.postId === postId) {
-                post.classList.add('active');
-            } else {
-                post.classList.remove('active');
-            }
-        });
-    }
-
-    // Click handlers for post items
-    postItems.forEach(item => {
-        item.addEventListener('click', function() {
-            const postId = this.dataset.postId;
-
-            // On mobile, navigate to the post page
-            if (isMobile()) {
-                window.location.href = '/blog/' + postId + '/';
-                return;
-            }
-
-            selectPost(postId);
-            // Scroll to top of page
-            window.scrollTo(0, 0);
-            // Update URL hash without scrolling
-            history.replaceState(null, null, '#' + postId);
-        });
-    });
-
-    // Handle hash on load (only on desktop)
-    if (!isMobile()) {
-        showPostFromHash();
-    }
-
-    // Handle hash changes
-    window.addEventListener('hashchange', showPostFromHash);
-});
-</script>
+{% else %}
+<p>No posts yet.</p>
 {% endif %}
 {% endblock content %}

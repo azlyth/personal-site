@@ -276,108 +276,133 @@
             letter-spacing: 0.05em;
         }
 
-        /* Two-column blog layout: sidebar (post list) + content (full post),
-           as a CSS grid so both sides flow and size naturally. The previous
-           version pinned the sidebar with `position: fixed` and hand-computed
-           calc() offsets tied to one specific 900px container width -- past
-           that width (tablet landscape, laptop, ...) the container simply
-           stopped growing, so the post column never got wider than 630px no
-           matter how much screen was available. */
-        .blog-layout {
+        /* Blog index: an archive grouped by year. The year sits in its own
+           margin column on wide screens and above its posts on narrow ones.
+           There is no JS here -- posts are real pages, so the index only has
+           to be a list of links. */
+        .archive-year {
             display: grid;
-            grid-template-columns: 260px minmax(0, 1fr);
-            gap: 3rem;
-            align-items: start;
+            grid-template-columns: 5.5rem minmax(0, 1fr);
+            gap: 0 1.5rem;
+            margin-bottom: 2.5rem;
         }
 
-        .blog-sidebar {
-            position: sticky;
-            top: 6rem;
-            max-height: calc(100vh - 8rem);
-            overflow-y: auto;
-        }
-
-        .blog-sidebar-header {
-            font-size: 0.75rem;
+        .archive-year-label {
+            font-size: 1.5rem;
             font-weight: 600;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid #eee;
+            color: #d8d8d8;
+            margin: 0;
+            line-height: 1.6;
+            font-variant-numeric: tabular-nums;
         }
 
-        .blog-post-list {
+        .archive-list {
             list-style: none;
             padding: 0;
             margin: 0;
         }
 
-        .blog-post-item {
-            padding: 0.75rem 0.75rem 0.75rem 0.5rem;
-            margin-bottom: 0.25rem;
-            border-left: 3px solid transparent;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            border-radius: 0 4px 4px 0;
+        .archive-item a {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 1rem;
+            padding: 0.55rem 0;
+            text-decoration: none;
+            border-bottom: 1px solid #f0f0f0;
         }
 
-        .blog-post-item:hover {
-            border-left-color: #99ccff;
-            background: #f8fafc;
+        .archive-item:last-child a {
+            border-bottom: none;
         }
 
-        .blog-post-item.active {
-            border-left-color: #0066cc;
-            background: #f0f7ff;
+        .archive-title {
+            color: #0066cc;
+            line-height: 1.4;
         }
 
-        .blog-post-item-title {
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: #333;
-            line-height: 1.3;
-            margin-bottom: 0.2rem;
+        .archive-item a:hover .archive-title {
+            text-decoration: underline;
         }
 
-        .blog-post-item-date {
-            font-size: 0.75rem;
-            color: #888;
+        .archive-date {
+            flex: none;
+            font-size: 0.8rem;
+            color: #999;
+            font-variant-numeric: tabular-nums;
         }
 
-        .blog-content-post {
-            display: none;
+        /* Narrow: the year's margin column costs ~110px that the titles need
+           more, so it becomes a heading above its own list instead. */
+        @media (max-width: 600px) {
+            .archive-year {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 0.25rem;
+                margin-bottom: 2rem;
+            }
+
+            .archive-year-label {
+                font-size: 1.25rem;
+                line-height: 1.2;
+            }
         }
 
-        .blog-content-post.active {
-            display: block;
+        /* Post pages read wider than the site's default column -- this is the
+           width the post body, and the image/video size presets in it, were
+           tuned against. nav and footer stay at 700px, matching how the home
+           page handles its own wider container. */
+        .container.post-container {
+            max-width: min(900px, 94vw);
         }
 
-        .blog-content-post h1 {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .blog-content {
-            min-width: 0;
-            max-width: 900px;
-        }
-
-        /* Expand container for blog page, scaling with the viewport up to a
-           cap (94vw keeps a sliver of edge padding on huge screens) instead
-           of a flat 900px, so tablet-landscape/laptop widths actually get to
-           use the wider grid below instead of sitting in a box that stopped
-           growing early. */
-        .container.blog-container {
-            max-width: min(1400px, 94vw);
-        }
-
-        /* Keep nav at normal width on blog page */
-        .container.blog-container nav {
+        /* :not(.post-nav) because the prev/next block is itself a <nav> and
+           belongs at the post's full width, not the site nav's. */
+        .container.post-container > nav:not(.post-nav),
+        .container.post-container > footer {
             max-width: 700px;
             margin-left: auto;
             margin-right: auto;
+        }
+
+        .post-nav {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #eee;
+        }
+
+        .post-nav-side {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+
+        .post-nav-right {
+            text-align: right;
+        }
+
+        .post-nav a {
+            text-decoration: none;
+        }
+
+        .post-nav-label {
+            display: block;
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 0.2rem;
+        }
+
+        .post-nav-title {
+            display: block;
+            line-height: 1.35;
+        }
+
+        .post-nav a:hover .post-nav-title {
+            text-decoration: underline;
+        }
+
+        .post-back {
+            margin-top: 1.5rem;
         }
 
         /* Home: the project lists are short-line content that just leaves the
@@ -444,68 +469,6 @@
             }
         }
 
-        /* Mobile: stack vertically */
-        @media (max-width: 768px) {
-            .blog-layout {
-                grid-template-columns: 1fr;
-                gap: 0;
-            }
-
-            .blog-sidebar {
-                position: static;
-                max-height: none;
-                border-right: none;
-                border-bottom: 1px solid #eee;
-                padding-bottom: 1rem;
-                margin-bottom: 1.5rem;
-                overflow-y: visible;
-            }
-
-            .blog-post-list {
-                display: block;
-            }
-
-            .blog-post-item {
-                padding: 1rem 0;
-                border-left: none;
-                border-bottom: 1px solid #eee;
-                border-radius: 0;
-                background: transparent;
-                margin-bottom: 0;
-            }
-
-            .blog-post-item:first-child {
-                padding-top: 0;
-            }
-
-            .blog-post-item:hover {
-                background: transparent;
-            }
-
-            .blog-post-item.active {
-                background: transparent;
-            }
-
-            .blog-post-item-title {
-                font-size: 1rem;
-                color: #0066cc;
-            }
-
-            .blog-post-item-date {
-                display: block;
-                margin-top: 0.25rem;
-                font-size: 0.85rem;
-            }
-
-            /* Hide full post content on mobile - just show list */
-            .blog-content {
-                display: none;
-            }
-
-            .container.blog-container {
-                max-width: 700px;
-            }
-        }
 
         nav {
             margin-bottom: 2rem;

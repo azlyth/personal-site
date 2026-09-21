@@ -2,13 +2,41 @@
 
 {% block title %}{{ page.title }} - Peter Valdez{% endblock title %}
 
+{% block container_class %} post-container{% endblock container_class %}
+
 {% block content %}
 <h1>{{ page.title }}</h1>
 <div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>
 
+<div class="blog-post-body">
 {{ page.content | safe }}
-
-<div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #eee;">
-    <a href="{{ get_url(path='/blog/') }}">← Back to posts</a>
 </div>
-{% endblock content %} 
+
+{# Guarded as a pair: Zola is currently handing this template no earlier/later
+   (nor lighter/heavier) for these pages, so without the outer check the block
+   would render as a bare rule and empty space. Kept rather than deleted -- the
+   markup is right, and it starts working the moment the neighbours resolve. #}
+{% if page.later or page.earlier %}
+<nav class="post-nav">
+    {# "later" is the newer post, so it sits on the left. #}
+    <div class="post-nav-side">
+        {% if page.later %}
+        <a href="{{ page.later.permalink | safe }}">
+            <span class="post-nav-label">← Newer</span>
+            <span class="post-nav-title">{{ page.later.title }}</span>
+        </a>
+        {% endif %}
+    </div>
+    <div class="post-nav-side post-nav-right">
+        {% if page.earlier %}
+        <a href="{{ page.earlier.permalink | safe }}">
+            <span class="post-nav-label">Older →</span>
+            <span class="post-nav-title">{{ page.earlier.title }}</span>
+        </a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+
+<p class="post-back"><a href="{{ get_url(path='/blog/') }}">All posts</a></p>
+{% endblock content %}
