@@ -1,5 +1,6 @@
 import io
 
+import pytest
 from PIL import Image
 
 from editor.images import process_image, image_key, markdown_for, upload
@@ -62,6 +63,58 @@ def test_multiple_images_render_as_img_row():
     assert out.startswith('<div class="img-row">')
     assert out.rstrip().endswith("</div>")
     assert out.count("<img ") == 2
+
+
+def test_single_image_alt_with_bracket_does_not_break_the_link():
+    out = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a photo of [me]"])
+    assert out == "![a photo of \\[me\\]](https://img.cloudy.nyc/p/a.jpg)"
+
+
+def test_img_row_alt_with_quote_does_not_break_the_tag():
+    out = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ['the 30" monitor', "b"],
+    )
+    line = [l for l in out.splitlines() if l.startswith("<img ")][0]
+    assert line.count('alt="') == 1
+    assert line.endswith('">')
+    assert 'alt="the 30&quot; monitor"' in line
+
+
+def test_img_row_alt_with_lt_and_amp_is_escaped():
+    out = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ["A & B < C", "b"],
+    )
+    line = [l for l in out.splitlines() if l.startswith("<img ")][0]
+    assert "&amp;" in line
+    assert "&lt;" in line
+    assert line.count('alt="') == 1
+    assert line.endswith('">')
+
+
+def test_single_image_alt_with_newline_is_collapsed():
+    out = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["line one\nline two"])
+    assert "\n" not in out
+    assert out == "![line one line two](https://img.cloudy.nyc/p/a.jpg)"
+
+
+def test_img_row_alt_with_newline_is_collapsed():
+    out = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ["line one\nline two", "b"],
+    )
+    line = [l for l in out.splitlines() if l.startswith("<img ")][0]
+    assert "\n" not in line
+    assert 'alt="line one line two"' in line
+
+
+def test_markdown_for_raises_on_length_mismatch():
+    with pytest.raises(ValueError, match=r"2.*1|1.*2"):
+        markdown_for(
+            ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+            ["only one alt"],
+        )
 
 
 class FakeS3:

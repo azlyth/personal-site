@@ -8,6 +8,7 @@ different URL.
 from __future__ import annotations
 
 import hashlib
+import html
 import io
 import re
 
@@ -48,12 +49,25 @@ def image_key(post_slug: str, alt_text: str, data: bytes) -> str:
 
 
 def markdown_for(urls: list[str], alts: list[str]) -> str:
-    """One image is a standalone; several become an .img-row."""
+    """One image is a standalone; several become an .img-row.
+
+    Alt text is free-form input typed by a person, so it's escaped for
+    whichever context it lands in: `]`/`[` (and a collapsed newline) for the
+    markdown link, HTML entities (and a collapsed newline) for the <img> tag.
+    """
+    if len(urls) != len(alts):
+        raise ValueError(
+            f"urls and alts must be the same length (got {len(urls)} urls, {len(alts)} alts)"
+        )
+
     if len(urls) == 1:
-        return f"![{alts[0]}]({urls[0]})"
+        alt = alts[0].replace("\n", " ").replace("[", "\\[").replace("]", "\\]")
+        return f"![{alt}]({urls[0]})"
 
     lines = ['<div class="img-row">']
-    lines += [f'<img src="{url}" alt="{alt}">' for url, alt in zip(urls, alts)]
+    for url, alt in zip(urls, alts):
+        safe_alt = html.escape(alt.replace("\n", " "), quote=True)
+        lines.append(f'<img src="{url}" alt="{safe_alt}">')
     lines.append("</div>")
     return "\n".join(lines)
 
