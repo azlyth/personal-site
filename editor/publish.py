@@ -87,6 +87,12 @@ def publish(repo: Path, paths: list[str], message: str) -> PublishResult:
             f"commit failed: {exc.stderr or exc}",
         )
 
+    # Whether *this call* created a commit. Once sha is backfilled below
+    # (the retry path, picking up a pre-existing unpushed commit) it stays
+    # populated for push()/publish_site() to use, but `committed` must not
+    # claim this invocation did something it didn't.
+    did_commit = sha is not None
+
     if sha is None:
         if not _has_unpushed_commits(repo):
             return PublishResult(False, None, False, False, "nothing to publish")
@@ -99,7 +105,7 @@ def publish(repo: Path, paths: list[str], message: str) -> PublishResult:
         push(repo)
     except subprocess.CalledProcessError as exc:
         return PublishResult(
-            True, sha, False, False,
+            did_commit, sha, False, False,
             f"committed {sha[:8]} but push failed: {exc.stderr or exc}",
         )
 
@@ -107,9 +113,9 @@ def publish(repo: Path, paths: list[str], message: str) -> PublishResult:
         publish_site(repo)
     except subprocess.CalledProcessError as exc:
         return PublishResult(
-            True, sha, True, False,
+            did_commit, sha, True, False,
             f"pushed {sha[:8]} but publishing to S3 failed "
             f"(the live site still shows the previous version): {exc.stderr or exc}",
         )
 
-    return PublishResult(True, sha, True, True, f"published {sha[:8]}")
+    return PublishResult(did_commit, sha, True, True, f"published {sha[:8]}")

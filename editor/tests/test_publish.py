@@ -147,6 +147,10 @@ def test_publish_retries_unpushed_commit_after_failed_push(
     assert second.pushed is True
     assert second.published is True
     assert second.message != "nothing to publish"
+    # This call didn't create a commit -- it picked up one that already
+    # existed -- so `committed` must say so, even though the publish as a
+    # whole succeeded.
+    assert second.committed is False
 
 
 def test_publish_reports_nothing_to_publish_when_truly_clean(repo_with_remote: Path):
