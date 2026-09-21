@@ -127,6 +127,38 @@ def test_rename_moves_the_file_and_warns(temp_post):
     assert not temp_post.exists()
 
 
+def test_rename_of_never_committed_post_does_not_500():
+    # A post from "+ New" (create_post -> _atomic_write_text) is written
+    # straight to disk with no `git add` -- unlike the `temp_post` fixture
+    # above, which stages the file precisely because `git mv` refuses to
+    # touch something not under version control. Renaming such a post used
+    # to shell `git mv` with check=True and let git's exit 128 ("not under
+    # version control") surface as a bare 500.
+    created = client.post("/api/posts", json={"title": "Untracked Rename Test"}).json()
+    slug = created["slug"]
+    new_slug = "untracked-rename-test-renamed"
+    try:
+        res = client.post(
+            f"/api/posts/{slug}/rename",
+            json={"new_slug": new_slug, "hash": created["hash"]},
+        )
+        assert res.status_code == 200
+        assert res.json()["slug"] == new_slug
+        assert (config.BLOG_DIR / f"{new_slug}.md").exists()
+        assert not (config.BLOG_DIR / f"{slug}.md").exists()
+    finally:
+        (config.BLOG_DIR / f"{slug}.md").unlink(missing_ok=True)
+        (config.BLOG_DIR / f"{new_slug}.md").unlink(missing_ok=True)
+        subprocess.run(
+            [
+                "git", "reset", "--",
+                str(config.BLOG_DIR / f"{slug}.md"),
+                str(config.BLOG_DIR / f"{new_slug}.md"),
+            ],
+            cwd=config.REPO, capture_output=True,
+        )
+
+
 def test_rename_shows_up_as_outstanding_work(temp_post):
     # /api/status (via _blog_paths/_dirty_paths) is what decides whether the
     # Publish button lights up. If a staged rename didn't show up there, the

@@ -500,7 +500,18 @@ def rename_post(slug: str, rename: Rename):
 
     # git mv keeps the file's history attached to the new name, and stages
     # the rename -- _dirty_paths already knows how to parse that (an "R  "
-    # porcelain entry) when the post is next published.
+    # porcelain entry) when the post is next published. But git mv refuses
+    # (exit 128, "not under version control") a path that isn't tracked
+    # yet, and a post from "+ New" is exactly that: create_post only
+    # _atomic_write_texts the file, it never `git add`s it. `git add`
+    # first so the path is always known to git by the time `git mv` runs --
+    # a no-op for an already-tracked post, and it composes with git mv's
+    # index rename instead of duplicating that logic with a plain
+    # Path.rename fallback.
+    subprocess.run(
+        ["git", "add", "--", str(path.relative_to(config.REPO))],
+        cwd=config.REPO, check=True, capture_output=True, text=True,
+    )
     subprocess.run(
         ["git", "mv", str(path.relative_to(config.REPO)), str(target.relative_to(config.REPO))],
         cwd=config.REPO, check=True, capture_output=True, text=True,
