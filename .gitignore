@@ -18,6 +18,7 @@
 # Zola build output
 /public
 /.build-tmp
+/.build-legacy-config.toml
 /public.old
 /editor/.venv
 
