@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editing — Peter's blog</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/editor.css">
+</head>
+<body>
+  <header class="bar">
+    <select id="post-picker"></select>
+    <span id="status" class="status"></span>
+    <button id="publish" class="publish">Publish</button>
+  </header>
+  <main class="container">
+    <h1 id="post-title" class="title" data-field="title"></h1>
+    <div id="post-meta" class="post-meta"></div>
+    <div id="blocks"></div>
+  </main>
+  <script src="/static/editor.js"></script>
+</body>
+</html>

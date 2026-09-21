@@ -1,10 +1,14 @@
 """The blog editor service. LAN-only; see editor/guard.py."""
 from __future__ import annotations
 
-from fastapi import FastAPI
+import hashlib
+
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from editor import config
+from editor.blocks import parse_blocks
 from editor.frontmatter import read_meta, split_post
 from editor.guard import assert_not_publicly_routed
 
@@ -18,10 +22,11 @@ def healthz():
     return {"ok": True}
 
 
-# There is no front end here — "/" is a JSON 404 — so there's no <head> to put
-# a <link rel="icon"> in. The browser still fires an implicit GET
-# /favicon.ico for whatever tab has this origin open, so that's the only way
-# to get a tab icon; it 307s to the real SVG below.
+# "/" and "/edit/{slug}" serve the editor page (see editor_page below), so
+# there's a real <head> with a <link rel="icon"> in editor/web/index.html.
+# The browser still fires an implicit GET /favicon.ico for any tab on this
+# origin regardless of what the page declares, so this route stays as the
+# fallback; it 307s to the real SVG below.
 @app.get("/favicon.svg", include_in_schema=False)
 def favicon_svg():
     return FileResponse(config.WEB_DIR / "favicon.svg", media_type="image/svg+xml")
@@ -50,3 +55,48 @@ def list_posts():
         )
     posts.sort(key=lambda p: p["date"], reverse=True)
     return posts
+
+
+def _post_path(slug: str):
+    path = config.BLOG_DIR / f"{slug}.md"
+    if not path.exists() or path.name == "_index.md":
+        raise HTTPException(status_code=404, detail=f"no post {slug!r}")
+    return path
+
+
+def _read_post(slug: str):
+    path = _post_path(slug)
+    raw = path.read_text()
+    frontmatter, body = split_post(raw)
+    return path, raw, frontmatter, body
+
+
+@app.get("/api/posts/{slug}")
+def get_post(slug: str):
+    _, raw, frontmatter, body = _read_post(slug)
+    meta = read_meta(frontmatter)
+    return {
+        "slug": slug,
+        "meta": {
+            "title": meta.get("title", slug),
+            "date": str(meta.get("date", "")),
+            "draft": bool(meta.get("draft", False)),
+        },
+        "hash": hashlib.sha256(raw.encode()).hexdigest(),
+        "blocks": [
+            {"index": b.index, "kind": b.kind, "source": b.source, "html": b.html}
+            for b in parse_blocks(body)
+        ],
+    }
+
+
+@app.get("/")
+@app.get("/edit/{slug}")
+def editor_page(slug: str | None = None):
+    return FileResponse(config.WEB_DIR / "index.html")
+
+
+# Mounted last, and not at "/", so it can't shadow the routes above (a
+# StaticFiles mount at the same prefix as a decorated route wins by
+# registration order in Starlette, so this has to come after them).
+app.mount("/static", StaticFiles(directory=config.WEB_DIR), name="static")
