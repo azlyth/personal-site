@@ -189,6 +189,22 @@ a { color: #0066cc; }
     border-color: #0066cc; background: #0066cc; color: #fff;
 }
 
+/* Merge control -- sits between two adjacent, same-family media blocks.
+   Full-width and thumb-sized (44px, the touch-target floor used throughout
+   this tablet UI) rather than folded into the small icon row in
+   .block-controls, since it acts on a pair of blocks, not just one. */
+.merge-control {
+    display: block; width: 100%; box-sizing: border-box;
+    min-height: 44px;
+    margin: -0.15rem 0 0.5rem;
+    padding: 0.5rem;
+    border: 2px dashed #2f855a; border-radius: 6px;
+    background: #eafaf1; color: #2f855a;
+    font: inherit; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer;
+}
+.merge-control:hover, .merge-control:active { background: #d3f3e3; }
+
 /* Move mode. Drop targets are the whole mechanic, so they get the biggest,
    loudest touch target on the page -- taller than the 44px floor used
    elsewhere -- and the banner makes "you are in move mode" unmissable

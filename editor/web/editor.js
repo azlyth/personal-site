@@ -236,7 +236,60 @@ function renderBlocks() {
     });
     el.appendChild(blockControls(block));
     els.blocks.appendChild(el);
+
+    if (canMergeWithNext(block.index)) {
+      els.blocks.appendChild(mergeControl(block.index));
+    }
   });
+}
+
+// A block's "family" for merge purposes -- `images`/`videos` are only
+// present when the server's parse_images/parse_videos could losslessly
+// round-trip this block's markup (same gate the click handler above uses to
+// decide raw vs. structured editing), so keying off those fields here means
+// the merge control can never appear for a block the server would refuse to
+// merge anyway.
+function mergeFamily(block) {
+  if (block.images) return 'photo';
+  if (block.videos) return 'video';
+  return null;
+}
+
+function canMergeWithNext(index) {
+  const upper = state.blocks[index];
+  const lower = state.blocks[index + 1];
+  if (!upper || !lower) return false;
+  const family = mergeFamily(upper);
+  return family !== null && family === mergeFamily(lower);
+}
+
+// A full-width, thumb-sized strip between two mergeable blocks -- distinct
+// from the small icon buttons in blockControls() since this acts on a pair
+// of blocks, not just the one it's attached to.
+function mergeControl(index) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'merge-control';
+  btn.textContent = '⇄ Merge with block below';
+  btn.title = 'Combine this block and the one below into a single row';
+  btn.addEventListener('click', () => mergeBlock(index));
+  return btn;
+}
+
+async function mergeBlock(index) {
+  setStatus('saving…');
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${index}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
+  await applyWrite(res);
 }
 
 function blockControls(block) {
