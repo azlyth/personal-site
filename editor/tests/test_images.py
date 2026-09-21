@@ -3,7 +3,7 @@ import io
 import pytest
 from PIL import Image
 
-from editor.images import process_image, image_key, markdown_for, upload
+from editor.images import process_image, image_key, markdown_for, parse_images, upload
 
 
 def _jpeg_with_exif(size=(2400, 1800)) -> bytes:
@@ -115,6 +115,53 @@ def test_markdown_for_raises_on_length_mismatch():
             ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
             ["only one alt"],
         )
+
+
+def test_parse_images_single_markdown_image():
+    out = parse_images("image", "![a cat](https://img.cloudy.nyc/p/a.jpg)")
+    assert out == [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}]
+
+
+def test_parse_images_img_row_multiple():
+    source = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg", "https://img.cloudy.nyc/p/c.jpg"],
+        ["a", "b", "c"],
+    )
+    out = parse_images("img_row", source)
+    assert out == [
+        {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
+        {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
+        {"url": "https://img.cloudy.nyc/p/c.jpg", "alt": "c"},
+    ]
+
+
+def test_parse_images_round_trips_escaped_markdown_alt():
+    # markdown_for escapes `[`/`]` in a standalone image's alt text; parsing
+    # it back out must undo that, not leave the backslashes in.
+    source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a photo of [me]"])
+    out = parse_images("image", source)
+    assert out == [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a photo of [me]"}]
+
+
+def test_parse_images_img_row_round_trips_html_escaped_alt():
+    source = markdown_for(
+        ["https://img.cloudy.nyc/p/a.jpg", "https://img.cloudy.nyc/p/b.jpg"],
+        ['the 30" monitor & more <thing>', "b"],
+    )
+    out = parse_images("img_row", source)
+    assert out[0] == {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": 'the 30" monitor & more <thing>'}
+    assert out[1] == {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"}
+
+
+def test_parse_images_malformed_or_unparseable_block_returns_empty_list():
+    assert parse_images("image", "not an image at all") == []
+    assert parse_images("image", "") == []
+    assert parse_images("img_row", '<div class="img-row">nothing here</div>') == []
+    assert parse_images("img_row", "") == []
+
+
+def test_parse_images_unknown_kind_returns_empty_list():
+    assert parse_images("paragraph", "Some text.") == []
 
 
 class FakeS3:

@@ -24,7 +24,7 @@ from editor import config
 from editor.blocks import delete_block, insert_block, parse_blocks, replace_block
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
-from editor.images import image_key, markdown_for, process_image, upload
+from editor.images import image_key, markdown_for, parse_images, process_image, upload
 from editor.publish import _has_unpushed_commits, publish
 
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
@@ -261,11 +261,15 @@ def get_post(slug: str):
             "draft": bool(meta.get("draft", False)),
         },
         "hash": hashlib.sha256(raw_bytes).hexdigest(),
-        "blocks": [
-            {"index": b.index, "kind": b.kind, "source": b.source, "html": b.html}
-            for b in parse_blocks(body)
-        ],
+        "blocks": [_block_json(b) for b in parse_blocks(body)],
     }
+
+
+def _block_json(block) -> dict:
+    out = {"index": block.index, "kind": block.kind, "source": block.source, "html": block.html}
+    if block.kind in ("image", "img_row"):
+        out["images"] = parse_images(block.kind, block.source)
+    return out
 
 
 class BlockEdit(BaseModel):
@@ -325,6 +329,36 @@ def remove_block(slug: str, index: int, edit: BlockDelete):
     return _write_body(slug, edit.hash, lambda body: delete_block(body, index))
 
 
+class ImageItem(BaseModel):
+    url: str
+    alt: str
+
+
+class BlockImagesEdit(BaseModel):
+    images: list[ImageItem]
+    hash: str
+
+
+@app.put("/api/posts/{slug}/blocks/{index}/images")
+def edit_block_images(slug: str, index: int, edit: BlockImagesEdit):
+    """Rewrite an `image`/`img_row` block from a thumbnail-editor's list.
+
+    All markup generation stays server-side (`markdown_for` already owns the
+    escaping); the client only ever sends back the URLs/alts it's editing.
+    An empty list deletes the block rather than writing out a `<div
+    class="img-row"></div>` with nothing in it.
+    """
+
+    def transform(body: str) -> str:
+        if not edit.images:
+            return delete_block(body, index)
+        urls = [image.url for image in edit.images]
+        alts = [image.alt for image in edit.images]
+        return replace_block(body, index, markdown_for(urls, alts))
+
+    return _write_body(slug, edit.hash, transform)
+
+
 def _s3():
     """Lazily build the client so tests can inject a fake before first use."""
     if not hasattr(app.state, "s3") or app.state.s3 is None:
@@ -357,45 +391,23 @@ def _too_large(position: int, total: int, filename: str | None, size_bytes: floa
     )
 
 
-@app.post("/api/posts/{slug}/images")
-async def add_images(
-    request: Request,
-    slug: str,
-    index: int = Form(...),
-    hash: str = Form(...),
-    alts: str = Form("[]"),
-    files: list[UploadFile] = File(...),
-):
+def _assert_same_origin(request: Request) -> None:
     # The JSON routes are implicitly guarded by CORS preflight (a
     # cross-origin fetch with a JSON body triggers one, and the browser
     # never sends the real request if it fails), but a multipart
-    # POST -- what this route takes -- is a browser "simple request" that
+    # POST -- what these routes take -- is a browser "simple request" that
     # never asks first. A page the tablet happens to have open could POST
-    # here; it would need this post's exact sha256 (the `hash` check
-    # below) to pass, which is computable from the public GitHub repo, so
-    # this isn't purely theoretical. Sec-Fetch-Site is sent by every
-    # browser this LAN app needs to support and can't be forged by page
-    # JS, so reject anything explicitly marked as not same-origin. Absent
-    # entirely (curl, very old browsers) it's let through -- this route is
-    # LAN-only already, and those clients don't carry a stolen browser
-    # session to begin with.
+    # here directly. Sec-Fetch-Site is sent by every browser this LAN app
+    # needs to support and can't be forged by page JS, so reject anything
+    # explicitly marked as not same-origin. Absent entirely (curl, very old
+    # browsers) it's let through -- these routes are LAN-only already, and
+    # those clients don't carry a stolen browser session to begin with.
     sec_fetch_site = request.headers.get("sec-fetch-site")
     if sec_fetch_site is not None and sec_fetch_site != "same-origin":
         raise HTTPException(status_code=403, detail="cross-site requests are not allowed")
 
-    _, raw, _, _ = _read_post(slug)
-    if hashlib.sha256(raw).hexdigest() != hash:
-        raise HTTPException(
-            status_code=409,
-            detail="post changed on disk since it was loaded; reload before saving",
-        )
 
-    if len(files) > MAX_FILES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"too many files ({len(files)}); max {MAX_FILES} per upload",
-        )
-
+def _parse_alts(alts: str, file_count: int) -> list[str]:
     try:
         alt_list = json.loads(alts)
     except json.JSONDecodeError:
@@ -410,8 +422,21 @@ async def add_images(
     # Pad explicitly rather than relying on the position < len(alt_list)
     # guard at each use site -- one place that decides what a missing alt
     # becomes.
-    alt_list = list(alt_list) + [""] * max(0, len(files) - len(alt_list))
+    return list(alt_list) + [""] * max(0, file_count - len(alt_list))
 
+
+async def _upload_files(slug: str, files: list[UploadFile], alts: str) -> tuple[list[str], list[str]]:
+    """Shared upload pipeline for both `/images` (insert a block) and
+    `/images/upload` (hand URLs back for the thumbnail editor to splice in
+    itself). Enforces the same caps and re-encoding either way.
+    """
+    if len(files) > MAX_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"too many files ({len(files)}); max {MAX_FILES} per upload",
+        )
+
+    alt_list = _parse_alts(alts, len(files))
     bucket = config.load_aws_env().get("PERSONAL_SITE_IMAGES_BUCKET", "img.cloudy.nyc")
 
     urls, used_alts = [], []
@@ -435,7 +460,7 @@ async def add_images(
         try:
             processed = process_image(data)
         except (UnidentifiedImageError, OSError) as exc:
-            # The post file is never touched here -- _write_body only runs
+            # The post file is never touched here -- callers only write
             # after every file in the batch has processed successfully, so a
             # later bad file can't leave a partial insert. An earlier valid
             # photo in the same request may already be sitting in S3 by this
@@ -452,8 +477,56 @@ async def add_images(
         urls.append(upload(processed, key, bucket, _s3()))
         used_alts.append(alt)
 
+    return urls, used_alts
+
+
+@app.post("/api/posts/{slug}/images")
+async def add_images(
+    request: Request,
+    slug: str,
+    index: int = Form(...),
+    hash: str = Form(...),
+    alts: str = Form("[]"),
+    files: list[UploadFile] = File(...),
+):
+    _assert_same_origin(request)
+
+    # It would need this post's exact sha256 (the `hash` check below) to
+    # pass, which is computable from the public GitHub repo, so the
+    # same-origin check above isn't the only thing standing in the way --
+    # this isn't purely theoretical.
+    _, raw, _, _ = _read_post(slug)
+    if hashlib.sha256(raw).hexdigest() != hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before saving",
+        )
+
+    urls, used_alts = await _upload_files(slug, files, alts)
+
     snippet = markdown_for(urls, used_alts)
     return _write_body(slug, hash, lambda body: insert_block(body, index, snippet))
+
+
+@app.post("/api/posts/{slug}/images/upload")
+async def upload_images(
+    request: Request,
+    slug: str,
+    alts: str = Form("[]"),
+    files: list[UploadFile] = File(...),
+):
+    """Upload photos without touching the post -- used by the thumbnail
+    editor to add photos to an *existing* image/img_row block, which then
+    saves the whole list via `PUT .../blocks/{index}/images`. Same
+    protections as `/images` (EXIF strip, size/count caps, same-origin
+    check), just no post write and no `hash` staleness check since nothing
+    here can conflict with a concurrent edit.
+    """
+    _assert_same_origin(request)
+    _post_path(slug)  # 404s for an unknown slug rather than uploading into the void
+
+    urls, used_alts = await _upload_files(slug, files, alts)
+    return {"images": [{"url": url, "alt": alt} for url, alt in zip(urls, used_alts)]}
 
 
 class MetaEdit(BaseModel):

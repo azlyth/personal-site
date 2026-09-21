@@ -48,6 +48,36 @@ def image_key(post_slug: str, alt_text: str, data: bytes) -> str:
     return f"{post_slug}/{name}.jpg"
 
 
+_MD_IMAGE_RE = re.compile(r"^!\[(?P<alt>.*)\]\((?P<url>[^)]*)\)$", re.S)
+_IMG_TAG_RE = re.compile(r'<img\s+src="(?P<url>[^"]*)"\s+alt="(?P<alt>[^"]*)"\s*/?>')
+
+
+def parse_images(kind: str, source: str) -> list[dict]:
+    """The inverse of `markdown_for`: pull `{url, alt}` pairs back out of an
+    `image` or `img_row` block's markdown source, undoing the escaping
+    `markdown_for` applied on the way in.
+
+    Best-effort -- a block that doesn't look like what `markdown_for`
+    produces (hand-edited markup, a future format this parser doesn't know)
+    returns an empty list rather than raising. The caller falls back to raw
+    source editing for it.
+    """
+    if kind == "image":
+        match = _MD_IMAGE_RE.match(source.strip())
+        if not match:
+            return []
+        alt = match.group("alt").replace("\\]", "]").replace("\\[", "[")
+        return [{"url": match.group("url"), "alt": alt}]
+
+    if kind == "img_row":
+        return [
+            {"url": match.group("url"), "alt": html.unescape(match.group("alt"))}
+            for match in _IMG_TAG_RE.finditer(source)
+        ]
+
+    return []
+
+
 def markdown_for(urls: list[str], alts: list[str]) -> str:
     """One image is a standalone; several become an .img-row.
 
