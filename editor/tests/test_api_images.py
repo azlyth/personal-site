@@ -167,6 +167,36 @@ def test_oversized_file_is_rejected(temp_post):
     assert temp_post.read_text() == POST
 
 
+def test_oversized_file_is_rejected_via_size_before_being_read(temp_post, monkeypatch):
+    """The multipart parser populates UploadFile.size (from the part's
+    Content-Length) before the route runs, so an oversized file should be
+    rejected by that check alone -- never buffered into memory via
+    `.read()`. Patch `.read()` to blow up if the route ever calls it, which
+    would mean the size check was skipped or the backstop-only path was
+    taken instead.
+    """
+    from editor.app import MAX_UPLOAD_BYTES
+    from starlette.datastructures import UploadFile as StarletteUploadFile
+
+    async def _boom(self, *args, **kwargs):
+        raise AssertionError("UploadFile.read() was called; the .size check should short-circuit first")
+
+    monkeypatch.setattr(StarletteUploadFile, "read", _boom)
+
+    data = client.get(f"/api/posts/{SLUG}").json()
+    oversized = b"\x00" * (MAX_UPLOAD_BYTES + 1)
+    res = client.post(
+        f"/api/posts/{SLUG}/images",
+        files=[("files", ("huge.png", oversized, "image/png"))],
+        data={"alts": '["x"]', "index": "1", "hash": data["hash"]},
+    )
+
+    assert res.status_code == 400
+    assert "huge.png" in res.json()["detail"]
+    assert not app.state.s3.calls
+    assert temp_post.read_text() == POST
+
+
 def test_too_many_files_is_rejected(temp_post):
     from editor.app import MAX_FILES
 

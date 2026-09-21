@@ -301,6 +301,17 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_FILES = 12
 
 
+def _too_large(position: int, total: int, filename: str | None, size_bytes: float) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail=(
+            f"photo {position + 1} of {total} "
+            f"({filename}) is too large "
+            f"({size_bytes / 1_000_000:.1f}MB; max {MAX_UPLOAD_BYTES // (1024 * 1024)}MB)"
+        ),
+    )
+
+
 @app.post("/api/posts/{slug}/images")
 async def add_images(
     slug: str,
@@ -343,17 +354,21 @@ async def add_images(
     urls, used_alts = [], []
     for position, upload_file in enumerate(files):
         alt = alt_list[position]
+
+        # Check the size the multipart parser already recorded *before*
+        # reading -- rejecting after `.read()` would have already buffered
+        # the whole oversized file in memory, which is exactly what the cap
+        # is meant to prevent.
+        if upload_file.size is not None and upload_file.size > MAX_UPLOAD_BYTES:
+            raise _too_large(position, len(files), upload_file.filename, upload_file.size)
+
         data = await upload_file.read()
         if len(data) > MAX_UPLOAD_BYTES:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"photo {position + 1} of {len(files)} "
-                    f"({upload_file.filename}) is too large "
-                    f"({len(data) / 1_000_000:.1f}MB; "
-                    f"max {MAX_UPLOAD_BYTES // (1024 * 1024)}MB)"
-                ),
-            )
+            # Backstop for the rare case `.size` wasn't populated (e.g. a
+            # part with no Content-Length) -- costs nothing since the file
+            # was read either way.
+            raise _too_large(position, len(files), upload_file.filename, len(data))
+
         try:
             processed = process_image(data)
         except (UnidentifiedImageError, OSError) as exc:
