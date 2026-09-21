@@ -75,7 +75,11 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 </video>
 </div>
 
-![Bags of organic humus and manure compost loaded on a cart](https://img.cloudy.nyc/guerilla-gardening/compost-bags.jpg)
+<div class="video-row size-medium">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/compost-bags-loop.mp4" type="video/mp4">
+</video>
+</div>
 
 ## Make it pretty, with flowers
 
