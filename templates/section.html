@@ -4,25 +4,23 @@
 
 {% block content %}
 {% if section.pages %}
-{# section.pages is already date-sorted (sort_by = "date" in _index.md), so
-   group_by keeps the years in descending order without re-sorting here. #}
-<div class="archive">
-    {% for year, posts in section.pages | group_by(attribute="year") %}
-    <section class="archive-year">
-        <h2 class="archive-year-label">{{ year }}</h2>
-        <ul class="archive-list">
-            {% for page in posts %}
-            <li class="archive-item">
-                <a href="{{ page.permalink | safe }}">
-                    <span class="archive-title">{{ page.title }}</span>
-                    <span class="archive-date">{{ page.date | date(format="%B %-d") }}</span>
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-    </section>
+{# One continuous list rather than a block per year. Posting has been
+   irregular, so grouping carved the page into lopsided chunks and made the
+   quiet years look like holes. The year still marks the list, but only where
+   it changes, in the margin. #}
+<ul class="archive">
+    {% set_global shown_year = 0 %}
+    {% for page in section.pages %}
+    <li class="archive-row">
+        <span class="archive-year">{% if page.year != shown_year %}{{ page.year }}{% endif %}</span>
+        <a class="archive-link" href="{{ page.permalink | safe }}">
+            <span class="archive-title">{{ page.title }}</span>
+            <span class="archive-date">{{ page.date | date(format="%b %-d") }}</span>
+        </a>
+    </li>
+    {% set_global shown_year = page.year %}
     {% endfor %}
-</div>
+</ul>
 {% else %}
 <p>No posts yet.</p>
 {% endif %}

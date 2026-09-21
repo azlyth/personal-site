@@ -8,6 +8,12 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
+    <!-- One request per family on purpose: the Fontshare API honours only the
+         first f[] parameter and silently drops the rest, so a combined URL
+         returns Sentient alone and Switzer never loads. -->
+    <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=sentient@400,500&display=swap">
+    <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap">
     <style>
         * {
             margin: 0;
@@ -19,8 +25,17 @@
             scrollbar-gutter: stable;
         }
 
+        /* Switzer carries running text and UI; Sentient carries headings and
+           post titles. Two families, deliberately unalike, so a title reads
+           as a piece of writing rather than a heavier row of the same text.
+           System stack stays as the fallback while webfonts load. */
+        :root {
+            --font-text: 'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-display: 'Sentient', Georgia, 'Times New Roman', serif;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: var(--font-text);
             line-height: 1.6;
             color: #333;
             background: #fff;
@@ -33,21 +48,33 @@
             margin: 0 auto;
         }
 
+        /* One scale for the whole site. h1 and h2 used to be 1.6 and 1.5rem,
+           near enough to read as the same level; these are spaced far enough
+           apart to actually signal depth. */
+        h1, h2, h3, h4 {
+            font-family: var(--font-display);
+            color: #1a1a1a;
+            font-weight: 500;
+            line-height: 1.25;
+        }
+
         h1 {
-            font-size: 1.6rem;
-            font-weight: 600;
+            font-size: 2rem;
         }
 
         h2 {
             font-size: 1.5rem;
-            margin: 2rem 0 1rem 0;
-            font-weight: 500;
+            margin: 2.5rem 0 1rem 0;
         }
 
         h3 {
             font-size: 1.25rem;
-            margin: 1.5rem 0 0.75rem 0;
-            font-weight: 600;
+            margin: 2rem 0 0.75rem 0;
+        }
+
+        h4 {
+            font-size: 1.0625rem;
+            margin: 1.5rem 0 0.5rem 0;
         }
 
         p {
@@ -276,53 +303,50 @@
             letter-spacing: 0.05em;
         }
 
-        /* Blog index: an archive grouped by year. The year sits in its own
-           margin column on wide screens and above its posts on narrow ones.
-           There is no JS here -- posts are real pages, so the index only has
-           to be a list of links. */
-        .archive-year {
-            display: grid;
-            grid-template-columns: 5.5rem minmax(0, 1fr);
-            gap: 0 1.5rem;
-            margin-bottom: 2.5rem;
+        /* Blog index. No rules, no cards, no hover motion -- the titles are
+           the only loud thing on the page and spacing does the rest. */
+        .archive {
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0 0;
         }
 
-        .archive-year-label {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #d8d8d8;
+        /* baseline alignment on the row is what puts the year marker on the
+           same line as its title -- the padding lives on the row, not the
+           link, so the two columns share a first baseline. */
+        .archive-row {
+            display: grid;
+            grid-template-columns: 4.5rem minmax(0, 1fr);
+            gap: 0 1.5rem;
+            align-items: baseline;
+            padding: 0.85rem 0;
             margin: 0;
-            line-height: 1.6;
+        }
+
+        .archive-year {
+            font-size: 0.8rem;
+            color: #b0b0b0;
             font-variant-numeric: tabular-nums;
         }
 
-        .archive-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .archive-item a {
+        .archive-link {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
-            gap: 1rem;
-            padding: 0.55rem 0;
+            gap: 1.5rem;
             text-decoration: none;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .archive-item:last-child a {
-            border-bottom: none;
+            color: inherit;
         }
 
         .archive-title {
-            color: #0066cc;
-            line-height: 1.4;
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            line-height: 1.3;
+            color: #1a1a1a;
         }
 
-        .archive-item a:hover .archive-title {
-            text-decoration: underline;
+        .archive-link:hover .archive-title {
+            color: #0066cc;
         }
 
         .archive-date {
@@ -332,18 +356,14 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* Narrow: the year's margin column costs ~110px that the titles need
-           more, so it becomes a heading above its own list instead. */
         @media (max-width: 600px) {
-            .archive-year {
-                grid-template-columns: minmax(0, 1fr);
-                gap: 0.25rem;
-                margin-bottom: 2rem;
+            .archive-row {
+                grid-template-columns: 2.75rem minmax(0, 1fr);
+                gap: 0 0.75rem;
             }
 
-            .archive-year-label {
-                font-size: 1.25rem;
-                line-height: 1.2;
+            .archive-title {
+                font-size: 1.0625rem;
             }
         }
 
