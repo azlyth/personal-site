@@ -100,11 +100,15 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 <div class="clear-beside"></div>
 
-## Make it pretty, with flowers
-
-<div class="img-row size-medium beside-right">
+<div class="pair pair-right size-medium">
+<div class="pair-media">
+<div class="img-row size-medium">
 <img src="https://img.cloudy.nyc/guerilla-gardening/flowers-in-trunk.jpg" alt="The trunk of a rented SUV packed with potted purple and orange flowers and lilyturf">
 </div>
+</div>
+<div class="pair-text">
+
+## Make it pretty, with flowers
 
 Litter, cleaned regularly. Bricks, laid. Organic compost, all set.
 
@@ -114,7 +118,8 @@ I rented a Toyota 4Runner through Zipcar and made another visit to Home Depot.
 
 Bought twelve lilyturf, four orange aster, four light purple aster. To be split between the two tree beds.
 
-<div class="clear-beside"></div>
+</div>
+</div>
 
 After another Saturday afternoon of manual labor, with the help of my lovely girlfriend Anne and my friend David, the plants were planted.
 
