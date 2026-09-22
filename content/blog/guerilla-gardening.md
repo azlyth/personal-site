@@ -57,8 +57,6 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 </div>
 </div>
 
-## Make it pretty, with bricks
-
 <div class="video-row size-medium beside-right">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop-c31c0f9f.mp4" type="video/mp4">
@@ -67,6 +65,8 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 <source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop-68edd3a2.mp4" type="video/mp4">
 </video>
 </div>
+
+## Make it pretty, with bricks
 
 After a few weeks of this cleaning, it occurred to me that the tree beds were a form of public space. Public gardens that often weren't tended to.
 
