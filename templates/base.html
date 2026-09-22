@@ -600,22 +600,14 @@
             padding: 0 1rem;
         }
 
-        /* The two cloud layers, as a class, because the blog list and the
-           home page both wear them (`.archive-sky` and `.home-sky`) and one
-           sky drifting at one pair of speeds is what makes the two pages
-           feel like the same afternoon. Anything wearing it must be
-           positioned and must establish a stacking context of its own, or
-           these negative z-indexes escape to the root and paint behind the
-           page.
-
-           Percentages resolve against the element, so the forms spread
-           across whatever box they are given and only some of them pass
-           behind the column. Every stop ends in an explicit `rgba(..., 0)`
-           and never in `transparent`: engines interpolate `transparent`
-           through transparent *black* and leave a grey fringe across the
-           fade. */
-        .sky-layers::before,
-        .sky-layers::after {
+        /* The two cloud layers. Percentages resolve against the
+           full-viewport sky, so the forms spread across the whole screen
+           and only some of them pass behind the column. Every stop ends in
+           an explicit `rgba(..., 0)` and never in `transparent`: engines
+           interpolate `transparent` through transparent *black* and leave a
+           grey fringe across the fade. */
+        .archive-sky::before,
+        .archive-sky::after {
             content: '';
             position: absolute;
             inset: 0;
@@ -625,7 +617,7 @@
         /* Near layer: fewer, larger, a shade stronger, each with an
            underside in a deeper blue -- a cloud is denser where it sits in
            its own shade, and without that it has no weight. */
-        .sky-layers::before {
+        .archive-sky::before {
             z-index: -2;
             background:
                 radial-gradient(14% 9% at 16% 14%, rgba(116, 196, 231, 0.30), rgba(116, 196, 231, 0) 70%),
@@ -641,7 +633,7 @@
         /* Far layer: more of them, smaller, fainter, drifting the other way
            at two thirds the speed. Two layers moving independently is what
            makes this read as depth rather than as one sliding texture. */
-        .sky-layers::after {
+        .archive-sky::after {
             z-index: -3;
             background:
                 radial-gradient(7% 5% at 8% 30%, rgba(116, 196, 231, 0.16), rgba(116, 196, 231, 0) 74%),
@@ -657,11 +649,11 @@
            here fights anything else. The two durations are deliberately not
            multiples of each other, so the layers never fall back into step. */
         @media (prefers-reduced-motion: no-preference) {
-            .sky-layers::before {
+            .archive-sky::before {
                 animation: sky-near 124s ease-in-out infinite;
             }
 
-            .sky-layers::after {
+            .archive-sky::after {
                 animation: sky-far 187s ease-in-out infinite reverse;
             }
         }
@@ -1154,264 +1146,6 @@
             display: flow-root;
         }
 
-        /* Home: weather and woods. The page sits under the same sky the
-           blog index does -- literally the same class, the same two
-           parallax layers at the same two speeds -- with a treeline along
-           the bottom moving in the same wind. The light wash, the ferns and
-           the flower clusters that stood here before are gone: a sky and a
-           horizon carry the whole background, and anything else in the
-           margins was just furniture.
-
-           Same idiom as `.archive-sky`: the scene bleeds to the viewport
-           while the words stay in the column, and every layer sits behind
-           the text on a negative z-index inside this element's own stacking
-           context. Depth is that z-index order and it is the whole effect:
-           sky furthest back, then the far treeline (smaller, paler, moving
-           less), then the near one, then the petal in front of all of it. */
-        .home-scene {
-            position: relative;
-            isolation: isolate;
-            /* Deliberately NOT clipping here. The layers below bleed past
-               this element to the viewport, so a clip on the scene crops
-               them back to the reading column -- and it crops on both axes,
-               because `overflow-x: clip` makes a `visible` y axis compute
-               to `clip` as well. That cost an hour once: the plants
-               vanished entirely and the sky gained a hard horizontal edge
-               under the nav. Each layer clips itself instead. */
-        }
-
-        .home-sky,
-        .home-woods,
-        .home-petalpath {
-            position: absolute;
-            left: calc(50% - 50vw);
-            width: 100vw;
-            pointer-events: none;
-        }
-
-        /* The sky owns the top three quarters of the page and fades out
-           before it reaches the trees, so there is no horizon line -- the
-           cloud simply thins until the woods take over. `isolation` is what
-           keeps `.sky-layers`' -2 and -3 inside this box, and the clip is
-           for their drift, which is a `translate` of up to 18px and would
-           otherwise widen the page. Clipping here is safe (and is what
-           `.archive-sky` does) because this element IS the full-bleed box
-           and its children are `inset: 0`. */
-        .home-sky {
-            top: -1.5rem;
-            height: 74%;
-            z-index: -4;
-            isolation: isolate;
-            overflow-x: clip;
-            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 56%, rgba(0, 0, 0, 0) 100%);
-            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 56%, rgba(0, 0, 0, 0) 100%);
-        }
-
-        /* Two treelines, near and far. Each is one wide SVG tile repeated
-           across the viewport rather than N positioned trees, because the
-           whole line has to lean as one thing for the wind to read -- and
-           because two tiles of different widths hide each other's repeat.
-
-           These two are the only assets on the site that are FILES rather
-           than inline SVG (`static/trees-*-1.svg`). Everything else here is
-           a data URI, but all CSS is inlined into every page, so 40KB of
-           trees would have ridden along on the blog index and the lab,
-           which never draw them. A CSS background is only fetched by a page
-           that has the element. The `-1` is a manual version: the edge
-           caches these by name, so a redraw needs a new number, not an
-           overwrite. */
-        .home-woods {
-            bottom: -1rem;
-            height: 330px;
-            z-index: -3;
-            overflow: clip;
-        }
-
-        .home-woods::before,
-        .home-woods::after {
-            content: '';
-            position: absolute;
-            /* Past both edges, because a skew that starts at x=0 pulls the
-               line away from the left of the screen as it leans. */
-            left: -4%;
-            right: -4%;
-            bottom: 0;
-            background-repeat: repeat-x;
-            background-position: bottom center;
-            /* Trees bend from the ground, so the wind is a skew about the
-               bottom edge rather than a slide. */
-            transform-origin: 50% 100%;
-        }
-
-        .home-woods::before {
-            height: 200px;
-            opacity: 0.085;
-            background-image: url('/trees-far-1.svg');
-            background-size: 1000px 200px;
-        }
-
-        .home-woods::after {
-            height: 320px;
-            opacity: 0.12;
-            background-image: url('/trees-near-1.svg');
-            background-size: 1320px 320px;
-        }
-
-        /* One petal, built exactly like the blog list's gull, and for the
-           same three reasons.
-
-           The path clips. A runner that translates is not contained by its
-           own `overflow` -- the property clips what is inside the box, not
-           the box's own movement -- so without an ancestor doing the
-           clipping this handed the home page 17px of real horizontal scroll
-           at 1280px and 5px at 412px, drifting in and out as the petal fell.
-
-           The runner owns the fall, because a percentage translate resolves
-           against the element's OWN box: a 19px petal translated to 69%
-           moves 13px and reads as a twitch. The runner is the full height
-           of the scene, so 69% of it is a descent.
-
-           The petal owns its spin, because two animations on one element
-           means the second `animation` shorthand simply replaces the first.
-
-           It is in the air for about a quarter of the cycle; the rest of the
-           time nothing is falling, which is what makes catching it feel like
-           a moment rather than like wallpaper. */
-        .home-petalpath {
-            top: 0;
-            bottom: 0;
-            z-index: -1;
-            /* hidden, not clip: this one has to contain a moving child on
-               both axes, and a descent past 100% would otherwise extend the
-               page's scrollable height as well as its width. */
-            overflow: hidden;
-        }
-
-        .home-petal {
-            position: absolute;
-            inset: 0;
-            opacity: 0;
-        }
-
-        .home-petal::before {
-            content: '';
-            position: absolute;
-            /* Down the left margin, not through the column. The gull keeps
-               to the gaps between rows for the same reason: a small shape
-               crossing a line of text reads as a stray diacritic. */
-            top: 0;
-            left: 3%;
-            width: 13px;
-            height: 19px;
-            background-repeat: no-repeat;
-            background-size: contain;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 26'%3E%3Cpath d='M9 1 C18 8 17 20 9 25 C1.44 20 0.36 8 9 1Z' fill='%23c58fa0'/%3E%3C/svg%3E");
-        }
-
-        /* Wind. The near line leans further and recovers sooner than the far
-           one, which is most of what sells the distance between them, and
-           the two periods are not multiples of each other so they never fall
-           into step. Both are slow enough that you have to sit and watch to
-           catch either of them moving. */
-        @media (prefers-reduced-motion: no-preference) {
-            .home-woods::before {
-                animation: wind-far 97s ease-in-out infinite;
-            }
-
-            .home-woods::after {
-                animation: wind-near 61s ease-in-out infinite;
-            }
-
-            .home-petal {
-                animation: petal-fall 82s linear infinite;
-            }
-
-            .home-petal::before {
-                animation: petal-spin 6.4s ease-in-out infinite;
-            }
-        }
-
-        @keyframes wind-near {
-            0% { transform: skewX(-0.85deg); translate: 0 0; }
-            43% { transform: skewX(1.15deg); translate: -7px 0; }
-            100% { transform: skewX(-0.85deg); translate: 0 0; }
-        }
-
-        @keyframes wind-far {
-            0% { transform: skewX(0.6deg); translate: 4px 0; }
-            52% { transform: skewX(-0.75deg); translate: -3px 0; }
-            100% { transform: skewX(0.6deg); translate: 4px 0; }
-        }
-
-        /* Down and sideways at once, on air that keeps changing its mind. */
-        @keyframes petal-fall {
-            0% { translate: 0 -6%; opacity: 0; }
-            3% { translate: 0.9vw -2%; opacity: 0.5; }
-            8% { translate: -0.3vw 10%; opacity: 0.5; }
-            13% { translate: 1.8vw 24%; opacity: 0.5; }
-            18% { translate: 0.3vw 40%; opacity: 0.45; }
-            23% { translate: 2.4vw 57%; opacity: 0.25; }
-            27% { translate: 1.5vw 69%; opacity: 0; }
-            100% { translate: 1.5vw 69%; opacity: 0; }
-        }
-
-        /* A phone has no margin -- the column IS the screen -- so the petal
-           falls down the 1rem of body padding instead, and its drift is cut
-           to a couple of pixels to keep it there. Measured: it spans x 1..17
-           at 412px, and the text starts at 16. */
-        @keyframes petal-fall-narrow {
-            0% { translate: 0 -6%; opacity: 0; }
-            3% { translate: 0.3vw -2%; opacity: 0.45; }
-            8% { translate: -0.1vw 10%; opacity: 0.45; }
-            13% { translate: 0.6vw 24%; opacity: 0.45; }
-            18% { translate: 0.1vw 40%; opacity: 0.4; }
-            23% { translate: 0.7vw 57%; opacity: 0.22; }
-            27% { translate: 0.4vw 69%; opacity: 0; }
-            100% { translate: 0.4vw 69%; opacity: 0; }
-        }
-
-        @keyframes petal-spin {
-            0% { rotate: -20deg; }
-            50% { rotate: 26deg; }
-            100% { rotate: -20deg; }
-        }
-
-        /* A phone is a tall narrow strip of page: the sky keeps its share of
-           it, the woods drop to a low band at the foot, and both thin out,
-           because at this width every one of them is behind running text
-           rather than beside it. */
-        @media (max-width: 700px) {
-            .home-sky {
-                height: 58%;
-            }
-
-            .home-woods {
-                height: 190px;
-            }
-
-            .home-woods::before {
-                height: 115px;
-                opacity: 0.07;
-                background-size: 560px 115px;
-            }
-
-            .home-woods::after {
-                height: 180px;
-                opacity: 0.1;
-                background-size: 740px 180px;
-            }
-
-            .home-petal::before {
-                left: 0;
-            }
-        }
-
-        @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
-            .home-petal {
-                animation-name: petal-fall-narrow;
-            }
-        }
-
         /* Home: the project lists are short-line content that just leaves the
            right half of a wide screen empty. Widen the page and let them run
            in two columns once there is actually room for two.
@@ -1889,169 +1623,6 @@
         .timeline-legend .leg-projects::before { background: #f39c12; }
         .timeline-legend .leg-education::before { background: #9b59b6; }
         .timeline-legend .leg-talks::before { background: #e74c3c; }
-
-        /* The timeline is a diagram -- a spine, five bar colours, connector
-           lines, cards at every height -- and the first version of this hung
-           weather behind it. It did not work: cloud between the cards read
-           as smudges rather than sky, and a full-width band of grass under
-           2005 read as a stock illustration with the chart sitting on top of
-           it. Scenery behind a diagram fights the diagram.
-
-           What the page carries instead is one flower at six stages of its
-           life, pressed and laid out across the background. They are ordered
-           bottom to top, which is the direction the years run: a seed head
-           down by 2005, then a sprout, a bud, a flower opening, a flower
-           open, and at the top -- this year -- a plant in full bloom with a
-           second flower off a side branch. Nobody has to notice the order
-           for the page to work, but it is the reason they are where they
-           are.
-
-           Two of the six sit inboard, behind the columns rather than beside
-           them, at about half the opacity of the ones in the margins. The
-           background is meant to be populated rather than framed, and
-           anything behind a card has to be fainter than anything that is
-           not.
-
-           The scene is an absolutely positioned first child of the grid
-           rather than a wrapper around it: wrapping would have let the
-           1200px grid out of the 700px container and quietly re-laid out the
-           page. `z-index: 0` gives it a stacking context of its own and
-           `pointer-events: none` keeps it clear of the hover targets; every
-           card and connector follows it in the DOM and so paints above it. */
-        .timeline-scene {
-            position: absolute;
-            z-index: 0;
-            top: -2.5rem;
-            bottom: -3rem;
-            left: calc(50% - 50vw);
-            width: 100vw;
-            overflow-x: clip;
-            pointer-events: none;
-        }
-
-        .timeline-specimen {
-            position: absolute;
-            width: 112px;
-            height: 235px;
-            opacity: 0.12;
-            background-repeat: no-repeat;
-            background-size: contain;
-            background-position: center;
-        }
-
-        /* The tilt is the standalone `rotate` property and the drift
-           animates `translate` and `scale`, so the two never overwrite each
-           other and one set of keyframes serves all six. */
-        .timeline-seed {
-            left: 3rem;
-            bottom: 1%;
-            rotate: -6deg;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q61 140 49 51' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='53' cy='167' rx='15' ry='5' fill='%237a9e72' transform='rotate%2834 53 167%29 translate%28-14 0%29'/%3E%3Cpath d='M49 51 L18 51' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='18' cy='51' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L20 45' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='20' cy='45' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L22 38' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='22' cy='38' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L29 35' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='29' cy='35' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L31 28' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='31' cy='28' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L38 26' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='38' cy='26' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L46 26' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='46' cy='26' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L53 27' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='53' cy='27' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L61 25' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='61' cy='25' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L64 32' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='64' cy='32' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L74 32' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='74' cy='32' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L74 40' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='74' cy='40' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L75 45' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='75' cy='45' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L78 51' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='78' cy='51' r='3' fill='%237a9e72' opacity='0.75'/%3E%3C/svg%3E");
-        }
-
-        .timeline-sprout {
-            right: 3.5rem;
-            bottom: 9%;
-            width: 96px;
-            height: 200px;
-            rotate: 5deg;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q63 186 62 143' fill='none' stroke='%237a9e72' stroke-width='1.8' stroke-linecap='round'/%3E%3Cellipse cx='62' cy='143' rx='16' ry='9' fill='%237a9e72' transform='rotate%2840 62 143%29 translate%28-15 0%29'/%3E%3Cellipse cx='62' cy='143' rx='16' ry='9' fill='%237a9e72' transform='rotate%28-40 62 143%29 translate%2815 0%29'/%3E%3C/svg%3E");
-        }
-
-        .timeline-bud {
-            left: 15%;
-            top: 47%;
-            rotate: 8deg;
-            opacity: 0.065;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q56 150 51 69' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='54' cy='174' rx='16' ry='6' fill='%237a9e72' transform='rotate%2834 54 174%29 translate%28-15 0%29'/%3E%3Cellipse cx='52' cy='132' rx='16' ry='6' fill='%237a9e72' transform='rotate%28-34 52 132%29 translate%2815 0%29'/%3E%3Cellipse cx='51' cy='69' rx='9' ry='16' fill='%23c58fa0'/%3E%3Cellipse cx='51' cy='81' rx='8' ry='7' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        .timeline-opening {
-            right: 6rem;
-            top: 36%;
-            rotate: -5deg;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q48 143 51 55' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='54' cy='169' rx='19' ry='7' fill='%237a9e72' transform='rotate%2834 54 169%29 translate%28-18 0%29'/%3E%3Cellipse cx='52' cy='123' rx='19' ry='7' fill='%237a9e72' transform='rotate%28-34 52 123%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-152 51 55%29 translate%2813 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-122 51 55%29 translate%2813 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-89 51 55%29 translate%2813 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-50 51 55%29 translate%2813 0%29'/%3E%3Ccircle cx='51' cy='55' r='6' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        .timeline-open {
-            left: 2.5rem;
-            top: 14%;
-            rotate: 4deg;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q59 138 57 46' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='56' cy='166' rx='19' ry='7' fill='%237a9e72' transform='rotate%2834 56 166%29 translate%28-18 0%29'/%3E%3Cellipse cx='56' cy='118' rx='19' ry='7' fill='%237a9e72' transform='rotate%28-34 56 118%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%2846 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%2897 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28148 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28200 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28251 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28303 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28354 57 46%29 translate%2818 0%29'/%3E%3Ccircle cx='57' cy='46' r='6' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        .timeline-full {
-            right: 15%;
-            top: 2%;
-            width: 124px;
-            height: 258px;
-            rotate: -7deg;
-            opacity: 0.07;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q61 137 60 44' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='57' cy='165' rx='20' ry='7' fill='%237a9e72' transform='rotate%2834 57 165%29 translate%28-18 0%29'/%3E%3Cellipse cx='58' cy='116' rx='20' ry='7' fill='%237a9e72' transform='rotate%28-34 58 116%29 translate%2818 0%29'/%3E%3Cellipse cx='59' cy='68' rx='20' ry='7' fill='%237a9e72' transform='rotate%2834 59 68%29 translate%28-18 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%2828 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%2868 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28108 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28148 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28188 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28228 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28268 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28308 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28348 60 44%29 translate%2821 0%29'/%3E%3Ccircle cx='60' cy='44' r='8' fill='%237a9e72'/%3E%3Cpath d='M55 133 Q29 104 29 80' fill='none' stroke='%237a9e72' stroke-width='1.7'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%2815 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%2866 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28118 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28169 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28221 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28272 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28324 29 80%29 translate%2812 0%29'/%3E%3Ccircle cx='29' cy='80' r='4' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        @media (prefers-reduced-motion: no-preference) {
-            .timeline-seed { animation: specimen-drift 117s ease-in-out infinite; }
-            .timeline-sprout { animation: specimen-drift 143s ease-in-out infinite reverse; }
-            .timeline-bud { animation: specimen-drift 96s ease-in-out infinite; }
-            .timeline-opening { animation: specimen-drift 131s ease-in-out infinite reverse; }
-            .timeline-open { animation: specimen-drift 108s ease-in-out infinite; }
-            .timeline-full { animation: specimen-drift 154s ease-in-out infinite reverse; }
-        }
-
-        /* Barely anything: a few pixels and a per cent of scale over two
-           minutes. A pressed flower should look like it is settling onto the
-           page, not growing out of it. */
-        @keyframes specimen-drift {
-            0% { translate: 0 0; scale: 1; }
-            50% { translate: 4px -6px; scale: 1.015; }
-            100% { translate: 0 0; scale: 1; }
-        }
-
-        /* Between 700 and 1100px the margins are too thin to hold the ones
-           that sit in them, so the page keeps only the two inboard stages.
-           Under 700px the Gantt is full width and twice as tall: three
-           survive, spread down the page so the sequence still reads, and
-           every one of them is behind a card, so they drop to a whisper. */
-        @media (max-width: 1100px) and (min-width: 701px) {
-            .timeline-sprout,
-            .timeline-opening,
-            .timeline-open {
-                display: none;
-            }
-        }
-
-        @media (max-width: 700px) {
-            .timeline-sprout,
-            .timeline-opening,
-            .timeline-open {
-                display: none;
-            }
-
-            .timeline-specimen {
-                width: 84px;
-                height: 176px;
-                opacity: 0.075;
-            }
-
-            .timeline-seed {
-                left: auto;
-                right: 0.5rem;
-                bottom: 1%;
-            }
-
-            .timeline-bud {
-                left: 0.5rem;
-                top: 46%;
-            }
-
-            .timeline-full {
-                right: 0.75rem;
-                top: 2%;
-                width: 92px;
-                height: 192px;
-            }
-        }
 
         /* Gantt Timeline - 6 column grid: Education | Employment | Timeline | Projects | Civic | Talks */
         .gantt-timeline {

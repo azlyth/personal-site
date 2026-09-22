@@ -3,15 +3,6 @@
 {% block container_class %} home-container{% endblock container_class %}
 
 {% block content %}
-{# The page stands out of doors: the blog index's sky overhead, a
-   treeline along the foot moving in the same wind, and a petal that
-   comes down now and then. Order here is back to front; see
-   `.home-scene` in base.html. #}
-<div class="home-scene">
-<span class="home-sky sky-layers" aria-hidden="true"></span>
-<span class="home-woods" aria-hidden="true"></span>
-<span class="home-petalpath" aria-hidden="true"><span class="home-petal"></span></span>
-
 <div class="home-intro">
     <a class="home-photo" href="{{ get_url(path='home.jpg') }}" target="_blank">
         <img src="{{ get_url(path='home-small.jpg') }}" alt="Peter's cat, plants, and keyboard" class="home-image" width="440" height="440" decoding="async">
@@ -61,7 +52,6 @@
         <li>Crate - <a href="https://crate.ubbe.nyc" target="_blank">crate.ubbe.nyc</a><br>
             <span class="project-description">Keeps an ear on a shared Spotify playlist and tells you when somebody else drops a track</span></li>
     </ul>
-</div>
 </div>
 </div>
 
