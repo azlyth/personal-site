@@ -39,15 +39,28 @@ I also started doing little litter patrols in the neighborhood.
 
 <div class="img-row">
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-1.jpg" alt="An overflowing public trash can on the sidewalk, full of litter">
-<img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-bag.jpg" alt="A bag stuffed full of collected litter next to a public trash can">
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-2.jpg" alt="A trash can next to another full public bin during a litter patrol">
+<img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-bag.jpg" alt="A bag stuffed full of collected litter next to a public trash can">
 </div>
+
+<div class="pair pair-left size-small justify-evenly">
+<div class="pair-media">
+<div class="video-row size-small">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night-loop-32c89139.mp4" type="video/mp4">
+</video>
+</div>
+</div>
+<div class="pair-text">
 
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass.
 
 So I swept it all up.
 
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
+
+</div>
+</div>
 
 <div class="post-spacer"></div>
 
