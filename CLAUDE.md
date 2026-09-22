@@ -179,9 +179,24 @@ The timeline page (`templates/timeline.html`) displays work history, projects, t
 - `templates/index.html` - Homepage
 - `templates/section.html` - Blog listing
 - `templates/page.html` - Individual blog post
-- `templates/projects.html` - Timeline/Projects page with work history
+- `templates/timeline.html` - Timeline page with work history
 - `templates/lab.html` - Lab index (embeds all experiments inline)
 - `templates/experiment-*.html` - Individual experiment pages
+- `templates/404.html` - Not-found page (see below)
+
+**The site is called "Peter @ WWW" and every `<title>` says so** (settled
+2026-09-21). `base.html` defines the default; every other template overrides
+`{% block title %}` as `<page name> - Peter @ WWW`. Half the templates used to
+end in `- Peter Valdez`, which is the *author*, not the site. `config.toml`'s
+root `title` is the same string because the feed template reads it; `author`
+stays `Peter Valdez`.
+
+**`404.html` exists because Zola's built-in fallback is a two-line page** with
+no nav, no CSS and a bare `404 Not Found` title. Adding it forced one change in
+`base.html`: the nav's active-link checks are `{% if current_path is defined
+and … %}`, because **Zola renders `404.html` without `current_path` in the
+context** and an unguarded `current_path == "/"` hard-fails the whole build.
+Any new `base.html` use of a page-scoped variable needs the same guard.
 
 ### Typography (added 2026-09-21)
 
@@ -296,6 +311,16 @@ drifts off-center everywhere else.
   That bucket (`personal-cloud-infra modules/personal-site-pages`) still exists
   but is **no longer written to, so its contents are stale**; don't treat it as a
   live rollback without re-syncing `public/` first.
+- **`web` runs a custom nginx conf, `nginx/site.conf`** (added 2026-09-21),
+  bind-mounted over `conf.d/default.conf`. It is the stock `nginx:alpine`
+  server block plus `error_page 404 /404.html` — without that, a missing path
+  gets nginx's own plain page and the site's 404 template is unreachable
+  (GitHub Pages picks up `404.html` on its own; nginx does not). There is
+  deliberately **no `internal;`** on the `/404.html` location, so the page is
+  also directly fetchable with a 200, matching Pages. ⚠ It is a **single-file
+  bind mount**: editing it and reloading serves the stale inode, so changes
+  need `docker compose up -d --force-recreate web` (same trap as
+  `http-routing`'s Caddyfile).
 - **Blog post images live in S3, not this repo** (added 2026-09-20, first post:
   `guerilla-gardening.md`) — public-read bucket (`personal-cloud-infra`
   `modules/personal-site-images`), served at `img.cloudy.nyc` and edge-cached

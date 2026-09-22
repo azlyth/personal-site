@@ -1591,10 +1591,10 @@
     <div class="container{% block container_class %}{% endblock container_class %}">
         <nav>
             <div class="nav-links">
-                <a href="{{ get_url(path='/') }}"{% if current_path == "/" %} class="active"{% endif %}>Home</a>
-                <a href="{{ get_url(path='/timeline/') }}"{% if current_path is starting_with("/timeline") %} class="active"{% endif %}>Timeline</a>
-                <a href="{{ get_url(path='/blog/') }}"{% if current_path is starting_with("/blog") %} class="active"{% endif %}>Blog</a>
-                <a href="{{ get_url(path='/lab/') }}"{% if current_path is starting_with("/lab") %} class="active"{% endif %}>Lab</a>
+                <a href="{{ get_url(path='/') }}"{% if current_path is defined and current_path == "/" %} class="active"{% endif %}>Home</a>
+                <a href="{{ get_url(path='/timeline/') }}"{% if current_path is defined and current_path is starting_with("/timeline") %} class="active"{% endif %}>Timeline</a>
+                <a href="{{ get_url(path='/blog/') }}"{% if current_path is defined and current_path is starting_with("/blog") %} class="active"{% endif %}>Blog</a>
+                <a href="{{ get_url(path='/lab/') }}"{% if current_path is defined and current_path is starting_with("/lab") %} class="active"{% endif %}>Lab</a>
             </div>
             <div class="site-title">
                 <div class="marquee-container">

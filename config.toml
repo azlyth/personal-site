@@ -6,7 +6,7 @@ author = "Peter Valdez"
 
 # Root-level title/description: the feed template reads these, NOT the
 # [extra] copies below, so without them rss.xml ships untitled.
-title = "Peter Valdez"
+title = "Peter @ WWW"
 description = "Personal blog and technical writings"
 
 # Whether to automatically compile all Sass files in the sass directory
