@@ -23,6 +23,37 @@
 
         html {
             scrollbar-gutter: stable;
+
+            /* THE WHOLE SITE SCALES UP ON A BIG DISPLAY (added 2026-09-22).
+               Past ~1600px the page used to just float in a growing white
+               field -- a 700px reading column is 27% of a 2560px screen.
+               Everything below is already sized in `rem`, so moving the root
+               is a zoom rather than a re-layout: type, spacing and the column
+               caps all grow together, which means THE MEASURE IN CHARACTERS
+               NEVER CHANGES. It reads exactly as it does now, only larger.
+               That is the reason to scale rather than widen -- a wider column
+               at the same type size is a worse line to read, not a better
+               one.
+
+               `rem` on `html` resolves against the BROWSER's default size,
+               not this rule's own output (no recursion), so someone running a
+               20px default keeps their 1.25x on top of this instead of having
+               it stomped by a px value. With a normal 16px default the middle
+               term is flat 16px up to 1600px wide, ramps linearly, and tops
+               out at 22px from 2560px on.
+
+               The caps that had to become rem for this to work each carry a
+               "scales" note. A px value left behind among them is not a style
+               nit -- it pins that element at laptop size while the text
+               around it grows past it.
+
+               Do not write a nested comment in here. CSS comments DO NOT
+               NEST, so an inner close-marker ends this block early and the
+               rest of the prose is parsed as a declaration -- which swallows
+               the font-size below it and silently disables the whole
+               feature. That is exactly how this shipped broken the first
+               time. */
+            font-size: clamp(1rem, calc(0.375rem + 0.625vw), 1.375rem);
         }
 
         /* Switzer carries running text and UI; Sentient carries headings and
@@ -59,7 +90,7 @@
            too, at the cost of clipping the photo rows that spill sideways on
            purpose. */
         .container {
-            max-width: 700px;
+            max-width: 43.75rem;  /* scales -- was 700px */
             margin: 0 auto;
             display: flow-root;
         }
@@ -85,7 +116,7 @@
         }
 
         .bleed-inner {
-            max-width: 1200px;
+            max-width: 75rem;  /* scales -- was 1200px */
             margin: 0 auto;
         }
 
@@ -153,8 +184,8 @@
 
         .img-row img {
             margin: 0;
-            flex: 1 1 140px;
-            min-width: 140px;
+            flex: 1 1 8.75rem;  /* scales -- was 140px */
+            min-width: 8.75rem;
             max-width: calc(50% - 0.375rem);
             height: 100%;
             object-fit: cover;
@@ -173,8 +204,8 @@
            see editor/images.py's markdown_for -- so a plain, unsized
            `.img-row` (every row written before this feature existed) is the
            same as `.img-row.size-full` here. */
-        .img-row.size-small { max-width: 240px; }
-        .img-row.size-medium { max-width: 420px; }
+        .img-row.size-small { max-width: 15rem; }  /* scales -- was 240px */
+        .img-row.size-medium { max-width: 26.25rem; }  /* scales -- was 420px */
         .img-row.size-full { max-width: 100%; }
 
         .container video {
@@ -206,8 +237,8 @@
 
         .video-row video {
             margin: 0;
-            flex: 1 1 140px;
-            min-width: 140px;
+            flex: 1 1 8.75rem;  /* scales -- was 140px */
+            min-width: 8.75rem;
             max-width: calc(50% - 0.375rem);
             height: auto;
             display: block;
@@ -224,8 +255,8 @@
            tall) is close to a normal inline photo's footprint. Full keeps
            the old full-bleed behavior for landscape clips or when that's
            deliberately wanted. */
-        .video-row.size-small { max-width: 240px; }
-        .video-row.size-medium { max-width: 420px; }
+        .video-row.size-small { max-width: 15rem; }  /* scales -- was 240px */
+        .video-row.size-medium { max-width: 26.25rem; }  /* scales -- was 420px */
         .video-row.size-full { max-width: 100%; }
 
         /* A row floated beside the text that follows it -- the answer to "a
@@ -310,8 +341,8 @@
 
         /* The size names mean the same thing they do on a row -- the width of the
            picture -- and the prose takes what's left. */
-        .pair.size-small .pair-media { width: 240px; }
-        .pair.size-medium .pair-media { width: 420px; }
+        .pair.size-small .pair-media { width: 15rem; }  /* scales -- was 240px */
+        .pair.size-medium .pair-media { width: 26.25rem; }  /* scales -- was 420px */
 
         /* The row inside the media column is just a carrier: the pair owns the
            width and the placement, so the row must not also cap or centre itself. */
@@ -587,7 +618,7 @@
            700px measure as every other page despite the border-box reset. */
         .archive {
             list-style: none;
-            max-width: calc(700px + 2rem);
+            max-width: calc(43.75rem + 2rem);  /* scales -- was 700px */
             /* The negative top margin cancels the first row's own top
                padding, so the first post title's LINE BOX starts at exactly
                the y every other page's <h1> does -- the page has to begin
@@ -930,7 +961,7 @@
            tuned against. nav and footer stay at 700px, matching how the home
            page handles its own wider container. */
         .container.post-container {
-            max-width: min(900px, 94vw);
+            max-width: min(56.25rem, 94vw);  /* scales -- was 900px */
         }
 
         /* The prev/next pair at the end of a post: one row, older on the
@@ -1160,14 +1191,14 @@
            left edge and the site title shares the photo's right edge. */
         @media (min-width: 1000px) {
             .container.home-container {
-                max-width: min(1080px, 92vw);
+                max-width: min(67.5rem, 92vw);  /* scales -- was 1080px */
             }
 
             /* Intro spans the full width so its left edge lines up with the
                columns below and the photo can sit at the far right, but the
                prose itself stays at a readable measure. */
             .home-intro p {
-                max-width: 640px;
+                max-width: 40rem;  /* scales -- was 640px */
             }
 
             /* column-count rather than a grid: the browser balances the
@@ -1227,9 +1258,9 @@
            there is no wrapper to bleed and nothing to re-cap inside it. */
         .container > nav:not(.post-nav),
         .container > footer {
-            width: min(1080px, 92vw);
-            margin-left: calc(50% - min(540px, 46vw));
-            margin-right: calc(50% - min(540px, 46vw));
+            width: min(67.5rem, 92vw);  /* scales -- was 1080px */
+            margin-left: calc(50% - min(33.75rem, 46vw));
+            margin-right: calc(50% - min(33.75rem, 46vw));
         }
 
         nav {
@@ -1265,20 +1296,20 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            min-width: 250px;
+            min-width: 15.625rem;  /* scales -- was 250px */
         }
 
         .marquee-container {
             display: flex;
             align-items: center;
-            width: 250px;
+            width: 15.625rem;  /* scales -- was 250px */
             position: relative;
             background: white;
         }
 
         .marquee-line {
-            width: 2px;
-            height: 20px;
+            width: 2px;  /* a hairline rule stays a hairline */
+            height: 1.25rem;  /* scales -- was 20px */
             background: #000;
             flex-shrink: 0;
             z-index: 2;
@@ -1288,7 +1319,7 @@
         .marquee-scroll-area {
             flex: 1;
             overflow: hidden;
-            height: 20px;
+            height: 1.25rem;  /* scales -- was 20px; px here CLIPS scaled text */
             display: flex;
             align-items: center;
         }
@@ -1483,8 +1514,8 @@
         .home-photo .home-image {
             display: block;
             margin: 0;
-            width: 220px;
-            height: 220px;
+            width: 13.75rem;  /* scales -- was 220px */
+            height: 13.75rem;
             object-fit: cover;
             border-radius: 18px;
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
@@ -1627,11 +1658,11 @@
         /* Gantt Timeline - 6 column grid: Education | Employment | Timeline | Projects | Civic | Talks */
         .gantt-timeline {
             display: grid;
-            grid-template-columns: auto auto 200px auto auto auto;
+            grid-template-columns: auto auto 12.5rem auto auto auto;
             gap: 0;
-            max-width: 1200px;
+            max-width: 75rem;
             margin: 2rem auto 0;
-            height: 550px;
+            height: 34.375rem;
             position: relative;
         }
 
@@ -1654,38 +1685,38 @@
 
         /* Left side columns need min-width for absolute children */
         .gantt-education, .gantt-employment {
-            min-width: 120px;
+            min-width: 7.5rem;
         }
 
         .gantt-talks-left {
-            min-width: 100px;
-            padding-right: 10px;
+            min-width: 6.25rem;
+            padding-right: 0.625rem;
         }
 
         .gantt-education {
-            padding-right: 15px;
+            padding-right: 0.9375rem;
         }
 
         .gantt-employment {
-            padding-right: 20px;
+            padding-right: 1.25rem;
         }
 
         /* Right side columns need min-width for absolute children */
         .gantt-projects, .gantt-civic {
-            min-width: 120px;
+            min-width: 7.5rem;
         }
 
         .gantt-talks-right {
-            min-width: 70px;
-            padding-left: 4px;
+            min-width: 4.375rem;
+            padding-left: 0.25rem;
         }
 
         .gantt-projects {
-            padding-left: 20px;
+            padding-left: 1.25rem;
         }
 
         .gantt-civic {
-            padding-left: 15px;
+            padding-left: 0.9375rem;
         }
 
         /* Card styling - absolute positioned to match bar locations */
@@ -1703,7 +1734,7 @@
         }
 
         .gantt-card-content {
-            max-width: 200px;
+            max-width: 12.5rem;
         }
 
         .gantt-education .gantt-card-content,
@@ -1771,7 +1802,7 @@
         /* Info Panel - hover tooltip for timeline items */
         .info-panel {
             position: fixed;
-            width: 320px;
+            width: 20rem;
             max-height: 80vh;
             background: rgba(255, 255, 255, 0.97);
             backdrop-filter: blur(8px);
@@ -1878,7 +1909,7 @@
         .info-panel-site {
             position: relative;
             width: 100%;
-            height: 180px;
+            height: 11.25rem;
             margin-bottom: 0.75rem;
             border-radius: 4px;
             overflow: hidden;

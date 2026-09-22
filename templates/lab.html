@@ -46,7 +46,7 @@
 
 .game-menu {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));  /* scales -- was 200px */
     gap: 1rem;
     margin: 0 0 2rem 0;
 }
@@ -213,7 +213,9 @@
 
 .game-panel[hidden] { display: none; }
 
-/* Boards want more room than the 700px prose column on a wide screen. */
+/* Boards want more room than the prose column on a wide screen. rem, so the
+   board grows with the root scale set in base.html rather than staying at
+   laptop size while the text around it grows past it. */
 .game-stage {
     width: 100vw;
     margin-left: calc(50% - 50vw);
@@ -221,7 +223,7 @@
 }
 
 .game-stage-inner {
-    max-width: 1000px;
+    max-width: 62.5rem;  /* scales -- was 1000px */
     margin: 0 auto;
     padding: 0 1rem;
 }
