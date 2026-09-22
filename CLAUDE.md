@@ -32,6 +32,23 @@ just the apex**. A hand-run `docker compose down` also leaves systemd
 reporting the unit `active` while the containers are gone, so the restart is
 what re-syncs it.
 
+⚠ **`make dev` takes the lab backend down with it** (2026-09-22).
+`compose.dev.yaml` publishes lab-backend on `3001:3001`, and **ig-parser**, a
+native systemd service, already owns `127.0.0.1:3001` — so compose removes the
+running prod container, fails to bind its replacement, and leaves
+`lab.cloudy.nyc` dead while `cloudy.nyc` keeps answering 200. Start only the
+service you actually want:
+
+```bash
+docker compose -f compose.dev.yaml up -d zola   # dev server on :1111, nothing else touched
+docker rm -f personal-site-zola-1               # and that is the whole teardown
+```
+
+If `make dev` has already done it, restore prod with `docker compose -f
+compose.yaml up -d lab-backend` and verify with `curl -s -o /dev/null -w '%{http_code}'
+http://127.0.0.1:8803/games` — the backend answers **404 at `/`** even when healthy,
+so the apex tells you nothing.
+
 `make dev` passes `HOST_UID`/`HOST_GID` so the dev container writes `public/`
 as you. Without it the dev server ran as root, and any file only it had
 produced (a newly added static asset) was left root-owned — which then failed
@@ -408,6 +425,68 @@ drifts off-center everywhere else.
   `display: none` on candidates and re-reading, remembering that hiding tall
   content removes the *vertical* scrollbar and grows `clientWidth` by ~15px,
   which shows up as a misleading negative.
+- **Two more pages stand in a scene** (2026-09-22). The **home page** is a
+  clearing: light from the top right in the site's blue, two trees standing
+  partly off the sides of the screen, a cluster of flowers at the foot of
+  each margin, and one petal that falls every 82s. The **timeline** is a
+  herbarium sheet: three plants lying pressed in the margins either side of
+  the Gantt, tilted the way a specimen is laid down, with the middle of the
+  page left alone. Both follow the blog list's rules — no JS, no image files
+  (every plant is inline SVG), everything inside
+  `@media (prefers-reduced-motion: no-preference)`, periods that are not
+  multiples of each other, and no hard edges. Depth on the home page is the
+  z-index order: light furthest back, then trees (palest, slowest, least
+  movement), then flowers, then the petal in front.
+- **The timeline got scenery first, and scenery behind a diagram does not
+  work.** The first version hung the blog's cloud layers over the recent
+  years and a full-width band of grass under 2005. Cloud between the cards
+  read as smudges rather than sky, and the grass read as a stock
+  illustration with the chart sitting on top of it. The page is a spine,
+  five bar colours and connector lines — it is already carrying a lot, and
+  the fix was to get out of its way rather than to tune the opacity. The
+  specimens live in the margins and the diagram is untouched. (That attempt
+  also briefly factored the cloud layers out into a shared `.sky-layers`
+  class; with the timeline no longer wearing it, they are back on
+  `.archive-sky` where they started.)
+- ⚠ **`overflow-x: clip` clips the OTHER axis too.** When one axis is `clip`
+  a `visible` axis computes to `clip`, so the first `.home-scene` — which
+  clipped x to contain the plants' sway — cropped its own full-bleed children
+  back to the reading column. The plants disappeared entirely and the light
+  gained a hard horizontal edge under the nav. **A scene that contains
+  bleeding layers must not clip; each layer clips itself.** `.archive-sky`
+  does not hit this because it IS the full-bleed box and its children are
+  `inset: 0`.
+- ⚠ **`overflow` does not contain an element's OWN movement**, only its
+  children's. `.home-petal` is a 100vw runner that translates sideways as it
+  falls, and with `overflow: clip` on the runner itself the home page still
+  gained 17px of real horizontal scroll at 1280px and 5px at 412px, drifting
+  in and out as the petal fell. It now sits inside `.home-petalpath`, which
+  is exactly what `.archive-flightpath` does for the gull: **anything that
+  translates needs a clipping ANCESTOR.** `hidden` rather than `clip` there,
+  because the fall would otherwise extend the page's scrollable height too.
+- **A radial gradient centred on its box's edge draws a straight line.**
+  `.home-light` had its ellipse centred at 4% and was still at full strength
+  where the box stopped, which read as a panel under the nav. Both centres
+  now sit far enough inside that the wash reaches zero before the edges —
+  the same rule as the sky's stops ending in an explicit `rgba(…, 0)`.
+- **Percentage translate resolves against the element's own box.** A 19px
+  petal animated to `translate: … 69%` moves 13px and reads as a twitch,
+  which is why the runner is full height and the graphic hangs off it as a
+  pseudo-element — and why the petal's spin is on the pseudo-element, since
+  a second `animation` shorthand on one element replaces the first.
+- **A phone has no margin, so the petal gets its own fall.** Under 700px the
+  column is the screen; `petal-fall-narrow` drops it down the 1rem of body
+  padding with a couple of pixels of drift. Measured at 412px it spans
+  x 1..17 against text starting at 16. Same reasoning as the gull keeping to
+  the gaps between rows: a small shape crossing a line of text reads as a
+  stray diacritic.
+- **Verifying any of this:** `window.scrollTo(400, 0)` then read `scrollX`,
+  at 1280px and 412px, on home, timeline AND blog — and sample it repeatedly,
+  because the worst moment is mid-animation. Note that a `--screenshot` run
+  renders at animation time zero, so anything that starts at `opacity: 0`
+  (the petal, the gull) is invisible in it; drive CDP and inject
+  `animation-delay: -6s` to see it in flight. The timeline's hover panel
+  needs a real `Input.dispatchMouseEvent`, not a synthetic `mouseenter`.
 - **Date left, title right, and the title is what hangs.** The row was
   `justify-content: space-between`, which actively pushed the pair apart —
   "Back online" left a 600px void before its date and nothing read as one
