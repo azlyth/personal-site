@@ -12,7 +12,7 @@ from pathlib import Path
 
 import boto3
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -900,13 +900,90 @@ def rename_post(slug: str, rename: Rename):
     }
 
 
+# Rewrites /static/<stem>.<ext> in the page to /static/<stem>-<content hash>.<ext>,
+# same "stem-<8 hex sha256>.ext" shape editor/images.py uses for S3 keys --
+# one hashing convention in the repo rather than a second, query-string one.
+_ASSET_REF = re.compile(r'(?P<attr>href|src)="/static/(?P<stem>[\w.-]+?)\.(?P<ext>\w+)"')
+
+# Matches a path RevalidatedStaticFiles.get_response produced by the stamping
+# above -- used to recognise a hashed request and strip it back to the real
+# on-disk filename.
+_HASHED_ASSET = re.compile(r"^(?P<stem>[\w.-]+?)-(?P<hash>[0-9a-f]{8})\.(?P<ext>\w+)$")
+
+
 @app.get("/")
 @app.get("/edit/{slug}")
 def editor_page(slug: str | None = None):
-    return FileResponse(config.WEB_DIR / "index.html")
+    """Serve the shell with content-addressed asset paths.
+
+    `RevalidatedStaticFiles` only governs responses served from now on; it
+    cannot reach a copy the browser already holds under an earlier heuristic
+    freshness window, which is how a tablet keeps running last week's
+    editor.js after a deploy. Stamping the content hash into the PATH
+    sidesteps that: the page names a URL the browser has never seen, so there
+    is nothing cached to reuse. The two mechanisms are complementary -- the
+    hash fixes the changeover, no-cache keeps steady-state loads honest.
+
+    The page itself is `no-cache` for the same bootstrap reason: a
+    heuristically cached shell would keep naming the OLD hashes and defeat
+    the whole scheme.
+    """
+    html = (config.WEB_DIR / "index.html").read_text(encoding="utf-8")
+
+    def stamp(match: re.Match) -> str:
+        stem, ext = match.group("stem"), match.group("ext")
+        asset = config.WEB_DIR / f"{stem}.{ext}"
+        if not asset.exists():
+            return match.group(0)
+        digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:8]
+        return f'{match.group("attr")}="/static/{stem}-{digest}.{ext}"'
+
+    return HTMLResponse(
+        _ASSET_REF.sub(stamp, html),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+class RevalidatedStaticFiles(StaticFiles):
+    """Serves /static, resolving a hashed filename back to the real asset.
+
+    A hashed request (`editor-38d62b2d.js`, produced by `editor_page`'s
+    `stamp`) gets a far-future `immutable` Cache-Control, same as the
+    content-hashed S3 objects `editor/images.py`/`editor/videos.py` upload --
+    the URL changes whenever the bytes do, so nothing stale can ever be
+    addressed. The hash in the request is NOT verified against the current
+    file's hash before serving: unlike the S3 objects, only one copy of
+    editor.js exists on disk, so there is no "version" to look up by hash --
+    it is purely a cache-busting token on top of the single current file. A
+    request naming a now-stale hash (e.g. a bfcache'd tab reloading after a
+    deploy) simply gets today's file, which is correct: that tab was going to
+    end up on the current editor either way, and it never had that hash's
+    bytes cached under that exact URL to begin with.
+
+    A request for the plain, unhashed name (`editor.js` — a browser tab still
+    holding an old page that never got the hashed URL) still resolves, but
+    with StaticFiles' base ETag/Last-Modified plus `no-cache`. StaticFiles
+    sends no Cache-Control of its own, and with none a browser falls back to
+    *heuristic* freshness -- commonly 10% of the file's age since
+    Last-Modified, which is how a long-unchanged editor.js earns itself a
+    multi-hour window and a just-shipped feature looks "cached" and missing.
+    `no-cache` means "revalidate", not "don't store": the ETag still does the
+    work and an unchanged file costs one 304 over the LAN. Set in
+    `get_response` rather than `file_response` so it lands on that 304 too.
+    """
+
+    async def get_response(self, path, scope):
+        hashed = _HASHED_ASSET.match(path)
+        real_path = f'{hashed.group("stem")}.{hashed.group("ext")}' if hashed else path
+        response = await super().get_response(real_path, scope)
+        if hashed:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 # Mounted last, and not at "/", so it can't shadow the routes above (a
 # StaticFiles mount at the same prefix as a decorated route wins by
 # registration order in Starlette, so this has to come after them).
-app.mount("/static", StaticFiles(directory=config.WEB_DIR), name="static")
+app.mount("/static", RevalidatedStaticFiles(directory=config.WEB_DIR), name="static")

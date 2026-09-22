@@ -342,12 +342,13 @@ drifts off-center everywhere else.
   re-check it). `editor/tests/test_images.py` and `test_videos.py` each have
   a `test_cli_upload_path_shares_the_content_addressed_key` guarding this,
   same pattern as `test_both_upload_paths_share_one_encoder_definition` in
-  `test_video_encoding.py`. **The handful of images/videos already published
-  under the old unhashed scheme** (most of `guerilla-gardening.md`, e.g.
-  `flowers-in-trunk.jpg`, all six `*-loop.mp4`) were left as-is — rekeying
-  them would mean re-editing a live post's URLs for no behavior change, since
-  they were never actually re-uploaded. Only the two images uploaded through
-  the tablet editor before this fix already carry a hash suffix.
+  `test_video_encoding.py`. **All seven `guerilla-gardening` clips were
+  rekeyed** (2026-09-22, by copying each object's existing bytes to its
+  `video_key` under the same bucket, repointing the post, publishing, then
+  deleting the old unhashed key — no re-encode, so the bytes and their SDR
+  tags are byte-identical to before). `flowers-in-trunk.jpg` is the one asset
+  still on the old unhashed scheme; the two images uploaded through the
+  tablet editor before this fix already carry a hash suffix.
   **Several photos in a row in the source material (e.g. a litter-patrol
   sequence, before/after pairs) render as a row, not stacked** — wrap them in
   `<div class="img-row">...</div>` with raw `<img src="..." alt="...">` tags
@@ -468,6 +469,32 @@ adjacent same-family block.
   44px touch target the other controls are sized to. Unlike them it commits
   immediately, because it changes the block list and the local `clips` array
   can't represent a clip that now lives in a different block.
+
+- **`editor.js`/`editor.css` are served at content-hashed paths, same
+  `stem-<8 hex sha256>.ext` shape `editor/images.py::image_key` uses for S3
+  keys — one hashing convention rather than two.** `editor_page`
+  (`editor/app.py`) rewrites `/static/editor.js` to `/static/editor-<hash>.js`
+  when it serves `index.html`; `RevalidatedStaticFiles.get_response` resolves
+  a hashed request back to the real file and answers with
+  `public, max-age=31536000, immutable`. This exists because `StaticFiles`
+  sends an ETag/Last-Modified but no `Cache-Control`, and with none a browser
+  falls back to *heuristic* freshness (commonly 10% of the file's age since
+  Last-Modified) — a long-unchanged `editor.js` earns a multi-hour window, so
+  a just-shipped feature looks "cached" and missing on the tablet, and
+  **that window can't be revoked after the fact**: a later `no-cache` header
+  only governs responses served from then on, it can't reach a copy the
+  browser is already holding. The hashed path sidesteps the whole problem —
+  the page names a URL the browser has never seen, so there's nothing stale
+  to reuse. A plain unhashed request (`/static/editor.js` — a tab still on an
+  old page) still resolves, but only with `no-cache`, so it costs one 304 per
+  load instead of serving silently stale for hours. The hash in a hashed
+  request is **not** verified against the current file's hash before
+  serving — unlike S3, only one copy of `editor.js` exists on disk, so a
+  stale hash has no older version to look up; it just gets today's file,
+  which is correct since that tab was headed for the current editor either
+  way. `editor_page` itself answers `no-cache` for the same bootstrap
+  reason: a heuristically cached shell would keep naming the OLD hashes
+  forever.
 
 - **Sizing a standalone image is opt-in by design.** Markdown has nowhere to
   hang a class, so a lone photo at default size stays `![alt](url)`; choosing a
