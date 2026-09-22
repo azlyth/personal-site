@@ -38,12 +38,6 @@ I also started doing little litter patrols in the neighborhood.
 
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass. So I swept it all up.
 
-<div class="video-row size-small">
-<video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-1-loop.mp4" type="video/mp4">
-</video>
-</div>
-
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
 
 ## Make it pretty, with bricks
@@ -98,6 +92,9 @@ After another Saturday afternoon of manual labor, with the help of my lovely gir
 <div class="video-row size-full">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1-loop.mp4" type="video/mp4">
+</video>
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-1-loop.mp4" type="video/mp4">
 </video>
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2-loop.mp4" type="video/mp4">
