@@ -39,8 +39,8 @@ I also started doing little litter patrols in the neighborhood.
 
 <div class="img-row">
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-1.jpg" alt="An overflowing public trash can on the sidewalk, full of litter">
-<img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-2.jpg" alt="A trash can next to another full public bin during a litter patrol">
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-bag.jpg" alt="A bag stuffed full of collected litter next to a public trash can">
+<img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-2.jpg" alt="A trash can next to another full public bin during a litter patrol">
 </div>
 
 <div class="pair pair-left size-small justify-evenly">
@@ -62,7 +62,7 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 </div>
 </div>
 
-<div class="post-spacer"></div>
+<div class="post-spacer desktop-only"></div>
 
 <div class="pair pair-right size-medium">
 <div class="pair-media">
@@ -92,7 +92,7 @@ Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work la
 
 <div class="clear-beside"></div>
 
-<div class="post-spacer"></div>
+<div class="post-spacer desktop-only"></div>
 
 <div class="pair pair-left size-small justify-spread">
 <div class="pair-media">
@@ -121,7 +121,7 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
  
 
-<div class="post-spacer"></div>
+<div class="post-spacer desktop-only"></div>
 
 <div class="pair pair-right size-medium">
 <div class="pair-media">
