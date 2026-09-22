@@ -332,6 +332,22 @@ drifts off-center everywhere else.
   (gitignored) — `make sync-personal-site-images` in `personal-cloud-infra`
   writes it. `templates/base.html`'s `.container img` rule makes embedded
   images responsive (didn't exist before this post; no prior post had images).
+  **The S3 key is content-hashed** (`editor/images.py::image_key`,
+  `editor/videos.py::video_key`) — `scripts/upload-image.py` and
+  `scripts/upload-video.py` import those same functions rather than building
+  their own `<slug>/<name>.ext` key (fixed 2026-09-21; the original CLI
+  scripts didn't hash, which is dangerous specifically *because* the
+  Cache-Control is `immutable`: re-uploading a corrected file under the same
+  `NAME` reused the URL, and immutable tells every cache to never even
+  re-check it). `editor/tests/test_images.py` and `test_videos.py` each have
+  a `test_cli_upload_path_shares_the_content_addressed_key` guarding this,
+  same pattern as `test_both_upload_paths_share_one_encoder_definition` in
+  `test_video_encoding.py`. **The handful of images/videos already published
+  under the old unhashed scheme** (most of `guerilla-gardening.md`, e.g.
+  `flowers-in-trunk.jpg`, all six `*-loop.mp4`) were left as-is — rekeying
+  them would mean re-editing a live post's URLs for no behavior change, since
+  they were never actually re-uploaded. Only the two images uploaded through
+  the tablet editor before this fix already carry a hash suffix.
   **Several photos in a row in the source material (e.g. a litter-patrol
   sequence, before/after pairs) render as a row, not stacked** — wrap them in
   `<div class="img-row">...</div>` with raw `<img src="..." alt="...">` tags
