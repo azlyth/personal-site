@@ -55,11 +55,7 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 
 ## Make it pretty, with bricks
 
-After a few weeks of this cleaning, it occurred to me that the tree beds were a form of public space. Public gardens that often weren't tended to.
-
-<div class="pair pair-right size-medium">
-<div class="pair-media">
-<div class="video-row size-medium">
+<div class="video-row size-medium beside-right">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop-c31c0f9f.mp4" type="video/mp4">
 </video>
@@ -67,8 +63,8 @@ After a few weeks of this cleaning, it occurred to me that the tree beds were a 
 <source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop-68edd3a2.mp4" type="video/mp4">
 </video>
 </div>
-</div>
-<div class="pair-text">
+
+After a few weeks of this cleaning, it occurred to me that the tree beds were a form of public space. Public gardens that often weren't tended to.
 
 So I thought, why not make them prettier? Have them spark a little joy.
 
@@ -76,8 +72,7 @@ I took a walk around the neighborhood for some inspiration, looked at a few diff
 
 Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work later, we had a pretty red brick border on the two tree beds framing my apartment courtyard entrance.
 
-</div>
-</div>
+<div class="clear-beside"></div>
 
 <div class="pair pair-left size-small">
 <div class="pair-media">
@@ -118,10 +113,10 @@ This left one thing: pretty flowers.
 
 I rented a Toyota 4Runner through Zipcar and made another visit to Home Depot.
 
-</div>
-</div>
-
 Bought twelve lilyturf, four orange aster, four light purple aster. To be split between the two tree beds.
+
+</div>
+</div>
 
 After another Saturday afternoon of manual labor, with the help of my lovely girlfriend Anne and my friend David, the plants were planted.
 
