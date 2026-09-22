@@ -4,19 +4,21 @@ date = 2026-09-20
 draft = false
 +++
 
-This summer, my hobby has been cleaning and beautifying my corner in Astoria.
-
-It began with a mourning dove nest under my AC.
-
 <div class="img-row size-medium">
 <img src="https://img.cloudy.nyc/guerilla-gardening/cat-and-chicks-a623affb.jpg" alt="Cat and chicks">
 </div>
+
+This summer, my hobby has been cleaning and beautifying my corner in Astoria.
+
+It began with a mourning dove nest under my AC.
 
 ## Dove nest, bird mites
 
 The doves had a couple rounds of babies a few weeks apart. After they abandoned it, a bunch of bird mites invaded my AC. It was creepy, but they don't feed on humans or cats, so we were safe.
 
 I got rid of the abandoned nest, which made a mess of twigs in my apartment courtyard. A week passed, and the twigs were still there on the side of the footpath.
+
+<div class="clear-beside"></div>
 
 I created the mess, so I needed to clean it up. I bought a broom and dustpan, and swept it up.
 
