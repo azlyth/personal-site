@@ -1,0 +1,178 @@
+<section class="game-panel" data-game="go" hidden>
+    <div class="go-panel">
+        <div class="go-board-wrap">
+            <svg class="go-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Go board"></svg>
+        </div>
+        <p class="go-captures">Captures — Black 0 &middot; White 0</p>
+    </div>
+</section>
+
+<style>
+.go-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+}
+
+.go-board-wrap {
+    width: min(100%, 480px);
+}
+
+.go-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: manipulation;
+    cursor: pointer;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.go-bg { fill: #dcb35c; }
+
+.go-line {
+    stroke: #8B4513;
+    stroke-width: 0.3;
+    stroke-linecap: round;
+}
+
+.go-star { fill: #8B4513; }
+
+.go-stone {
+    stroke-width: 0.2;
+}
+
+.go-stone-black {
+    fill: #2b2b2b;
+    stroke: #000;
+}
+
+.go-stone-white {
+    fill: #fdfdfd;
+    stroke: #c9c3b6;
+}
+
+.go-last-move {
+    pointer-events: none;
+}
+
+.go-last-move-black { fill: #fdfdfd; }
+.go-last-move-white { fill: #2b2b2b; }
+
+.go-captures {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+@media (min-width: 700px) {
+    .go-board-wrap { width: min(100%, 520px); }
+}
+</style>
+
+<script>
+(function () {
+    var SIZE = 9;
+    var CELL = 100 / (SIZE + 1);
+    var NS = 'http://www.w3.org/2000/svg';
+    // Standard 9x9 star points, in 0-indexed [row, col].
+    var STAR_POINTS = [[2, 2], [2, 6], [4, 4], [6, 2], [6, 6]];
+
+    var stoneLayer = null;
+    var captureEl = null;
+
+    function coord(i) { return (i + 1) * CELL; }
+
+    function el(tag, attrs) {
+        var node = document.createElementNS(NS, tag);
+        for (var key in attrs) node.setAttribute(key, attrs[key]);
+        return node;
+    }
+
+    // Builds the static grid + star points once and returns the stone layer
+    // that render() repaints on every state update.
+    function buildBoard(svg) {
+        svg.appendChild(el('rect', { x: 0, y: 0, width: 100, height: 100, 'class': 'go-bg' }));
+
+        var grid = el('g', { 'class': 'go-grid' });
+        for (var i = 0; i < SIZE; i++) {
+            var pos = coord(i);
+            grid.appendChild(el('line', {
+                x1: coord(0), y1: pos, x2: coord(SIZE - 1), y2: pos, 'class': 'go-line'
+            }));
+            grid.appendChild(el('line', {
+                x1: pos, y1: coord(0), x2: pos, y2: coord(SIZE - 1), 'class': 'go-line'
+            }));
+        }
+        svg.appendChild(grid);
+
+        STAR_POINTS.forEach(function (point) {
+            svg.appendChild(el('circle', {
+                cx: coord(point[1]), cy: coord(point[0]), r: 0.8, 'class': 'go-star'
+            }));
+        });
+
+        var stones = el('g', { 'class': 'go-stones' });
+        svg.appendChild(stones);
+
+        svg.addEventListener('click', function (evt) { handleClick(evt, svg); });
+
+        return stones;
+    }
+
+    // The SVG has a percentage width and a viewBox, so its rendered size can
+    // be anything -- translate the click into viewBox units via the ratio of
+    // client position to the element's actual box, not a hardcoded pixel size.
+    function handleClick(evt, svg) {
+        var rect = svg.getBoundingClientRect();
+        var xPct = (evt.clientX - rect.left) / rect.width;
+        var yPct = (evt.clientY - rect.top) / rect.height;
+        var col = Math.round((xPct * 100) / CELL) - 1;
+        var row = Math.round((yPct * 100) / CELL) - 1;
+        if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;
+        LabGames.move('go', { row: row, col: col });
+    }
+
+    function render(state) {
+        if (!stoneLayer || !state || !state.board) return;
+
+        while (stoneLayer.firstChild) stoneLayer.removeChild(stoneLayer.firstChild);
+
+        for (var row = 0; row < SIZE; row++) {
+            for (var col = 0; col < SIZE; col++) {
+                var stone = state.board[row][col];
+                if (!stone) continue;
+
+                stoneLayer.appendChild(el('circle', {
+                    cx: coord(col), cy: coord(row), r: (CELL * 0.42).toFixed(2),
+                    'class': 'go-stone go-stone-' + stone
+                }));
+
+                if (state.lastMove && state.lastMove.row === row && state.lastMove.col === col) {
+                    stoneLayer.appendChild(el('circle', {
+                        cx: coord(col), cy: coord(row), r: (CELL * 0.12).toFixed(2),
+                        'class': 'go-last-move go-last-move-' + stone
+                    }));
+                }
+            }
+        }
+
+        if (captureEl && state.captures) {
+            captureEl.textContent = 'Captures — Black ' + (state.captures.black || 0) +
+                ' · White ' + (state.captures.white || 0);
+        }
+    }
+
+    LabGames.register('go', {
+        labels: { black: 'Black', white: 'White' },
+        mount: function (root) {
+            var svg = root.querySelector('.go-svg');
+            captureEl = root.querySelector('.go-captures');
+            stoneLayer = buildBoard(svg);
+        },
+        render: render
+    });
+})();
+</script>

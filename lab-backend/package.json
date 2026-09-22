@@ -6,14 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js test/games/*.test.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2",
+    "chess.js": "^1.4.0",
     "cors": "^2.8.5",
-    "uuid": "^9.0.0",
-    "redis": "^4.6.10"
+    "express": "^4.18.2",
+    "redis": "^4.6.10",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.0"
   },
   "engines": {
     "node": "18.x"

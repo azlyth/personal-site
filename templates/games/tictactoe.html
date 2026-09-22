@@ -1,0 +1,258 @@
+<section class="game-panel" data-game="tictactoe" hidden>
+    <div class="ttt-wrap">
+        <svg class="ttt-board" id="ttt-board" viewBox="0 0 300 300" role="grid" aria-label="Tic-tac-toe board">
+            <g class="ttt-grid" stroke="#2b2b2b" stroke-width="4" stroke-linecap="round">
+                <line x1="100" y1="14" x2="100" y2="286"></line>
+                <line x1="200" y1="14" x2="200" y2="286"></line>
+                <line x1="14" y1="100" x2="286" y2="100"></line>
+                <line x1="14" y1="200" x2="286" y2="200"></line>
+            </g>
+            <g class="ttt-marks" id="ttt-marks"></g>
+            <line class="ttt-strike" id="ttt-strike" x1="0" y1="0" x2="0" y2="0" stroke="#b2402f" stroke-width="6" stroke-linecap="round" opacity="0"></line>
+            <g class="ttt-cells" id="ttt-cells"></g>
+        </svg>
+    </div>
+</section>
+
+<style>
+.ttt-wrap {
+    width: 100%;
+    max-width: 340px;
+    margin: 0 auto;
+}
+
+.ttt-board {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: manipulation;
+    user-select: none;
+}
+
+.ttt-cell {
+    fill: transparent;
+    cursor: pointer;
+}
+
+.ttt-board.ttt-over .ttt-cell {
+    cursor: not-allowed;
+}
+
+.ttt-cell:hover rect.ttt-hover,
+.ttt-cell.ttt-press rect.ttt-hover {
+    opacity: 1;
+}
+
+rect.ttt-hover {
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    fill: #f2efe9;
+}
+
+.ttt-mark {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ttt-mark-x {
+    stroke: #2b2b2b;
+    stroke-width: 9;
+}
+
+.ttt-mark-o {
+    stroke: #b2402f;
+    stroke-width: 9;
+}
+
+.ttt-mark path,
+.ttt-mark circle {
+    stroke-dasharray: 140;
+    stroke-dashoffset: 140;
+    animation: ttt-draw 0.28s ease forwards;
+}
+
+@keyframes ttt-draw {
+    to { stroke-dashoffset: 0; }
+}
+
+.ttt-win rect.ttt-winmark {
+    opacity: 1;
+}
+
+rect.ttt-winmark {
+    opacity: 0;
+    fill: rgba(217, 162, 38, 0.16);
+    transition: opacity 0.15s ease;
+}
+
+.ttt-strike {
+    transition: opacity 0.15s ease 0.1s;
+}
+
+.ttt-board.ttt-over .ttt-grid {
+    opacity: 0.55;
+}
+
+.ttt-board.ttt-over .ttt-mark {
+    opacity: 0.75;
+}
+</style>
+
+<script>
+LabGames.register('tictactoe', {
+    labels: { x: 'X', o: 'O' },
+
+    mount(root) {
+        const svg = root.querySelector('#ttt-board');
+        const cellsLayer = root.querySelector('#ttt-cells');
+        const SIZE = 3;
+        const CELL = 100;
+
+        const cells = [];
+        for (let r = 0; r < SIZE; r++) {
+            for (let c = 0; c < SIZE; c++) {
+                const x = c * CELL;
+                const y = r * CELL;
+
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', 'ttt-cell');
+                g.dataset.row = String(r);
+                g.dataset.col = String(c);
+
+                const winmark = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                winmark.setAttribute('class', 'ttt-winmark');
+                winmark.setAttribute('x', String(x + 2));
+                winmark.setAttribute('y', String(y + 2));
+                winmark.setAttribute('width', String(CELL - 4));
+                winmark.setAttribute('height', String(CELL - 4));
+                winmark.setAttribute('rx', '6');
+                g.appendChild(winmark);
+
+                const hover = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                hover.setAttribute('class', 'ttt-hover');
+                hover.setAttribute('x', String(x + 6));
+                hover.setAttribute('y', String(y + 6));
+                hover.setAttribute('width', String(CELL - 12));
+                hover.setAttribute('height', String(CELL - 12));
+                hover.setAttribute('rx', '8');
+                g.appendChild(hover);
+
+                const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                hit.setAttribute('x', String(x));
+                hit.setAttribute('y', String(y));
+                hit.setAttribute('width', String(CELL));
+                hit.setAttribute('height', String(CELL));
+                hit.setAttribute('fill', 'transparent');
+                g.appendChild(hit);
+
+                g.addEventListener('click', () => {
+                    if (svg.classList.contains('ttt-over')) return;
+                    LabGames.move('tictactoe', { row: r, col: c });
+                });
+                g.addEventListener('pointerdown', () => g.classList.add('ttt-press'));
+                g.addEventListener('pointerup', () => g.classList.remove('ttt-press'));
+                g.addEventListener('pointerleave', () => g.classList.remove('ttt-press'));
+                g.addEventListener('pointercancel', () => g.classList.remove('ttt-press'));
+
+                cellsLayer.appendChild(g);
+                cells.push({ el: g, winmark, row: r, col: c });
+            }
+        }
+
+        root._ttt = { svg, cells, CELL };
+    },
+
+    render(state) {
+        const panel = document.querySelector('.game-panel[data-game="tictactoe"]');
+        const { svg, cells, CELL } = panel._ttt;
+        const marksLayer = panel.querySelector('#ttt-marks');
+        const strike = panel.querySelector('#ttt-strike');
+
+        svg.classList.toggle('ttt-over', Boolean(state.over));
+
+        const winSet = new Set();
+        if (state.winningCells) {
+            for (const { row, col } of state.winningCells) winSet.add(`${row},${col}`);
+        }
+
+        marksLayer.innerHTML = '';
+        for (const { row, col } of iterCells(state.board)) {
+            const value = state.board[row][col];
+            if (!value) continue;
+            const cx = col * CELL + CELL / 2;
+            const cy = row * CELL + CELL / 2;
+            const isLast = state.lastMove && state.lastMove.row === row && state.lastMove.col === col;
+            marksLayer.appendChild(drawMark(value, cx, cy, isLast));
+        }
+
+        for (const cell of cells) {
+            const win = winSet.has(`${cell.row},${cell.col}`);
+            cell.el.classList.toggle('ttt-win', win);
+        }
+
+        if (state.winningCells && state.winningCells.length >= 2) {
+            const first = state.winningCells[0];
+            const last = state.winningCells[state.winningCells.length - 1];
+            strike.setAttribute('x1', String(first.col * CELL + CELL / 2));
+            strike.setAttribute('y1', String(first.row * CELL + CELL / 2));
+            strike.setAttribute('x2', String(last.col * CELL + CELL / 2));
+            strike.setAttribute('y2', String(last.row * CELL + CELL / 2));
+            strike.setAttribute('opacity', '1');
+        } else {
+            strike.setAttribute('opacity', '0');
+        }
+    }
+});
+
+function* iterCells(board) {
+    for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+            yield { row: r, col: c };
+        }
+    }
+}
+
+function drawMark(value, cx, cy, animate) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const g = document.createElementNS(ns, 'g');
+    g.setAttribute('class', `ttt-mark ttt-mark-${value}`);
+    if (!animate) {
+        // Skip the draw-in animation for marks that already existed before
+        // this render (a state we didn't just cause).
+        g.style.setProperty('--skip', '1');
+    }
+
+    if (value === 'x') {
+        const r = 26;
+        const p1 = document.createElementNS(ns, 'path');
+        p1.setAttribute('d', `M ${cx - r + jitter(1)} ${cy - r + jitter(2)} L ${cx + r + jitter(3)} ${cy + r + jitter(4)}`);
+        const p2 = document.createElementNS(ns, 'path');
+        p2.setAttribute('d', `M ${cx + r + jitter(5)} ${cy - r + jitter(6)} L ${cx - r + jitter(7)} ${cy + r + jitter(8)}`);
+        g.appendChild(p1);
+        g.appendChild(p2);
+    } else {
+        const circle = document.createElementNS(ns, 'circle');
+        circle.setAttribute('cx', String(cx + jitter(9) * 0.4));
+        circle.setAttribute('cy', String(cy + jitter(10) * 0.4));
+        circle.setAttribute('r', '27');
+        g.appendChild(circle);
+    }
+
+    if (!animate) {
+        g.querySelectorAll('path, circle').forEach((el) => {
+            el.style.animation = 'none';
+            el.style.strokeDashoffset = '0';
+        });
+    }
+
+    return g;
+}
+
+// A tiny deterministic wobble so marks read as drawn by hand rather than
+// ruled with a straightedge, without needing per-cell random state.
+function jitter(seed) {
+    const v = Math.sin(seed * 12.9898) * 43758.5453;
+    return (v - Math.floor(v) - 0.5) * 2.2;
+}
+</script>

@@ -1,0 +1,526 @@
+<section class="game-panel" data-game="chess" hidden>
+    <div class="chess-wrap">
+        <div class="chess-stage">
+            <div class="chess-check-banner" id="chess-check-banner" hidden>Check</div>
+            <div class="chess-frame" id="chess-frame">
+                <div class="chess-corner"></div>
+                <div class="chess-ranks" id="chess-ranks"></div>
+                <div class="chess-board" id="chess-board" role="grid" aria-label="Chess board"></div>
+                <div class="chess-files" id="chess-files"></div>
+            </div>
+            <div class="chess-promo" id="chess-promo" hidden>
+                <div class="chess-promo-inner">
+                    <div class="chess-promo-title">Promote to</div>
+                    <div class="chess-promo-choices" id="chess-promo-choices"></div>
+                    <button type="button" class="chess-promo-cancel" id="chess-promo-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <div class="chess-side">
+            <div class="chess-moves-title">Moves</div>
+            <div class="chess-moves-list" id="chess-moves-list"></div>
+        </div>
+    </div>
+</section>
+
+<style>
+.chess-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    width: 100%;
+    font-family: var(--font-text);
+}
+
+.chess-stage {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+@media (min-width: 700px) {
+    .chess-wrap {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: center;
+    }
+    .chess-stage { margin: 0; flex: 0 1 520px; }
+    .chess-side { flex: 1 1 260px; max-width: 300px; }
+}
+
+/* ---- Board frame ------------------------------------------------------ */
+
+.chess-frame {
+    display: grid;
+    grid-template-columns: 1.3em 1fr;
+    grid-template-rows: 1fr 1.3em;
+    gap: 2px;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.chess-frame.chess-frame--over {
+    opacity: 0.55;
+    filter: grayscale(55%);
+}
+
+.chess-corner { grid-row: 2; grid-column: 1; }
+
+.chess-ranks {
+    grid-row: 1;
+    grid-column: 1;
+    display: grid;
+    grid-template-rows: repeat(8, 1fr);
+    align-items: center;
+    justify-items: center;
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.chess-files {
+    grid-row: 2;
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    align-items: center;
+    justify-items: center;
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.chess-board {
+    grid-row: 1;
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    aspect-ratio: 1 / 1;
+    border: 1px solid #e3e6e8;
+    font-size: min(9vw, 3.4rem);
+}
+
+.chess-frame.chess-frame--over .chess-board { pointer-events: none; }
+
+/* ---- Squares ------------------------------------------------------------ */
+
+.chess-sq {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.chess-sq--light { background-color: #f2efe9; }
+.chess-sq--dark { background-color: #d8d2c6; }
+
+@media (hover: hover) {
+    .chess-sq:hover::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: rgba(47, 111, 179, 0.12);
+    }
+}
+
+.chess-sq--from,
+.chess-sq--to {
+    background-image: linear-gradient(rgba(47, 111, 179, 0.28), rgba(47, 111, 179, 0.28));
+}
+
+.chess-sq--selected {
+    box-shadow: inset 0 0 0 3px #2f6fb3;
+}
+
+.chess-sq--check {
+    background-image: linear-gradient(rgba(178, 64, 47, 0.3), rgba(178, 64, 47, 0.3));
+    box-shadow: inset 0 0 0 3px rgba(178, 64, 47, 0.85);
+}
+
+/* ---- Pieces ------------------------------------------------------------- */
+
+.chess-piece {
+    line-height: 1;
+    font-size: 0.86em;
+    pointer-events: none;
+}
+
+.chess-piece--black { color: #2b2b2b; }
+
+.chess-piece--white {
+    color: #fdfdfd;
+    -webkit-text-stroke: 1px #2b2b2b;
+    text-shadow:
+        -1px -1px 0 #2b2b2b,
+        1px -1px 0 #2b2b2b,
+        -1px 1px 0 #2b2b2b,
+        1px 1px 0 #2b2b2b;
+}
+
+/* ---- Check banner --------------------------------------------------------- */
+
+.chess-check-banner {
+    text-align: center;
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    color: #b2402f;
+    margin-bottom: 0.4rem;
+}
+
+/* ---- Promotion picker ------------------------------------------------- */
+
+.chess-promo {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(253, 253, 253, 0.9);
+    z-index: 5;
+}
+
+.chess-promo[hidden] { display: none; }
+
+.chess-promo-inner {
+    background: #fff;
+    border: 1px solid #e3e6e8;
+    border-radius: 10px;
+    padding: 1rem;
+    box-shadow: 0 8px 24px rgba(20, 40, 60, 0.12);
+    text-align: center;
+}
+
+.chess-promo-title {
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.6rem;
+}
+
+.chess-promo-choices {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.chess-promo-btn {
+    width: 2.6rem;
+    height: 2.6rem;
+    font-size: 1.7rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f2efe9;
+    border: 1px solid #d8d2c6;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.chess-promo-btn:hover { border-color: #2f6fb3; }
+
+.chess-promo-cancel {
+    font: inherit;
+    font-size: 0.8rem;
+    color: #666;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.2rem;
+}
+
+.chess-promo-cancel:hover { text-decoration: underline; }
+
+/* ---- Move list ---------------------------------------------------------- */
+
+.chess-side {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.chess-moves-title {
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.4rem;
+}
+
+.chess-moves-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid #e3e6e8;
+    border-radius: 8px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+@media (min-width: 700px) {
+    .chess-moves-list { max-height: 460px; }
+}
+
+.chess-move-row {
+    display: grid;
+    grid-template-columns: 2em 1fr 1fr;
+    gap: 0.4rem;
+    padding: 0.15rem 0;
+}
+
+.chess-move-row:not(:last-child) { border-bottom: 1px solid #e3e6e8; }
+
+.chess-move-num { color: #666; }
+</style>
+
+<script>
+(function () {
+    const PIECE_UNICODE = {
+        w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
+        b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' },
+    };
+
+    const els = {};
+    let selected = null;
+    let pendingPromotion = null;
+    let lastFen = null;
+    let disabled = false;
+    let currentPieces = {};
+    let currentTurnColor = null;
+
+    function parsePlacement(placement) {
+        const pieces = {};
+        const rows = (placement || '').split('/');
+        rows.forEach((row, i) => {
+            const rank = 8 - i;
+            let file = 0;
+            for (const ch of row) {
+                if (/[1-8]/.test(ch)) {
+                    file += Number(ch);
+                } else {
+                    const color = ch === ch.toUpperCase() ? 'w' : 'b';
+                    const type = ch.toLowerCase();
+                    const square = String.fromCharCode(97 + file) + rank;
+                    pieces[square] = { type, color };
+                    file += 1;
+                }
+            }
+        });
+        return pieces;
+    }
+
+    function refreshSelectionHighlights() {
+        Object.keys(els.squares).forEach((sq) => {
+            els.squares[sq].sq.classList.toggle('chess-sq--selected', sq === selected);
+        });
+    }
+
+    function hidePromotionPicker() {
+        els.promo.hidden = true;
+        els.promoChoices.innerHTML = '';
+    }
+
+    function showPromotionPicker(color) {
+        els.promoChoices.innerHTML = '';
+        ['q', 'r', 'b', 'n'].forEach((type) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'chess-promo-btn ' + (color === 'w' ? 'chess-piece--white' : 'chess-piece--black');
+            btn.dataset.piece = type;
+            btn.textContent = PIECE_UNICODE[color][type];
+            els.promoChoices.appendChild(btn);
+        });
+        els.promo.hidden = false;
+    }
+
+    function cancelPromotion() {
+        pendingPromotion = null;
+        hidePromotionPicker();
+    }
+
+    function onSquareClick(square) {
+        if (disabled || pendingPromotion) return;
+
+        const piece = currentPieces[square];
+
+        if (selected === square) {
+            selected = null;
+            refreshSelectionHighlights();
+            return;
+        }
+
+        if (selected) {
+            const from = selected;
+            const movingPiece = currentPieces[from];
+            const toRank = square[1];
+            const isPromotion = movingPiece && movingPiece.type === 'p' &&
+                ((movingPiece.color === 'w' && toRank === '8') || (movingPiece.color === 'b' && toRank === '1'));
+
+            if (isPromotion) {
+                pendingPromotion = { from, to: square };
+                selected = null;
+                refreshSelectionHighlights();
+                showPromotionPicker(movingPiece.color);
+                return;
+            }
+
+            window.LabGames.move('chess', { from, to: square });
+            selected = null;
+            refreshSelectionHighlights();
+            return;
+        }
+
+        if (piece && currentTurnColor && piece.color === currentTurnColor) {
+            selected = square;
+            refreshSelectionHighlights();
+        }
+    }
+
+    function renderMoveList(history) {
+        els.movesList.innerHTML = '';
+        for (let i = 0; i < history.length; i += 2) {
+            const num = i / 2 + 1;
+            const white = history[i] || '';
+            const black = history[i + 1] || '';
+
+            const row = document.createElement('div');
+            row.className = 'chess-move-row';
+
+            const numEl = document.createElement('span');
+            numEl.className = 'chess-move-num';
+            numEl.textContent = num + '.';
+
+            const whiteEl = document.createElement('span');
+            whiteEl.textContent = white;
+
+            const blackEl = document.createElement('span');
+            blackEl.textContent = black;
+
+            row.append(numEl, whiteEl, blackEl);
+            els.movesList.appendChild(row);
+        }
+        els.movesList.scrollTop = els.movesList.scrollHeight;
+    }
+
+    function mount(root) {
+        els.frame = root.querySelector('#chess-frame');
+        els.board = root.querySelector('#chess-board');
+        els.ranks = root.querySelector('#chess-ranks');
+        els.files = root.querySelector('#chess-files');
+        els.promo = root.querySelector('#chess-promo');
+        els.promoChoices = root.querySelector('#chess-promo-choices');
+        els.promoCancel = root.querySelector('#chess-promo-cancel');
+        els.movesList = root.querySelector('#chess-moves-list');
+        els.checkBanner = root.querySelector('#chess-check-banner');
+        els.squares = {};
+
+        for (let r = 0; r < 8; r++) {
+            const rank = 8 - r;
+            for (let f = 0; f < 8; f++) {
+                const file = String.fromCharCode(97 + f);
+                const square = file + rank;
+                const isDark = (f + (rank - 1)) % 2 === 0;
+
+                const sq = document.createElement('div');
+                sq.className = 'chess-sq ' + (isDark ? 'chess-sq--dark' : 'chess-sq--light');
+                sq.dataset.square = square;
+                sq.setAttribute('role', 'gridcell');
+
+                const pieceSpan = document.createElement('span');
+                pieceSpan.className = 'chess-piece';
+                sq.appendChild(pieceSpan);
+
+                els.board.appendChild(sq);
+                els.squares[square] = { sq, pieceSpan };
+            }
+        }
+
+        for (let rank = 8; rank >= 1; rank--) {
+            const label = document.createElement('span');
+            label.textContent = rank;
+            els.ranks.appendChild(label);
+        }
+        for (let f = 0; f < 8; f++) {
+            const label = document.createElement('span');
+            label.textContent = String.fromCharCode(97 + f);
+            els.files.appendChild(label);
+        }
+
+        els.board.addEventListener('click', (e) => {
+            const sqEl = e.target.closest('.chess-sq');
+            if (!sqEl) return;
+            onSquareClick(sqEl.dataset.square);
+        });
+
+        els.promoCancel.addEventListener('click', cancelPromotion);
+
+        els.promoChoices.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-piece]');
+            if (!btn || !pendingPromotion) return;
+            const { from, to } = pendingPromotion;
+            const promotion = btn.dataset.piece;
+            pendingPromotion = null;
+            hidePromotionPicker();
+            window.LabGames.move('chess', { from, to, promotion });
+        });
+    }
+
+    function render(state) {
+        const fen = (state && state.fen) || '';
+        const fields = fen.split(' ');
+        const placement = fields[0] || '';
+        const activeColor = fields[1] || null;
+
+        if (fen !== lastFen) {
+            selected = null;
+            pendingPromotion = null;
+            hidePromotionPicker();
+        }
+        lastFen = fen;
+
+        currentPieces = parsePlacement(placement);
+        disabled = Boolean(state && state.over);
+        currentTurnColor = disabled ? null : activeColor;
+
+        let checkSquare = null;
+        if (state && state.check && activeColor) {
+            for (const sq in currentPieces) {
+                const p = currentPieces[sq];
+                if (p.type === 'k' && p.color === activeColor) {
+                    checkSquare = sq;
+                    break;
+                }
+            }
+        }
+
+        const lastMove = (state && state.lastMove) || null;
+
+        Object.keys(els.squares).forEach((sq) => {
+            const { sq: sqEl, pieceSpan } = els.squares[sq];
+            const piece = currentPieces[sq];
+
+            pieceSpan.textContent = piece ? PIECE_UNICODE[piece.color][piece.type] : '';
+            pieceSpan.className = 'chess-piece' + (piece ? (piece.color === 'w' ? ' chess-piece--white' : ' chess-piece--black') : '');
+
+            sqEl.classList.toggle('chess-sq--selected', sq === selected);
+            sqEl.classList.toggle('chess-sq--from', Boolean(lastMove) && lastMove.from === sq);
+            sqEl.classList.toggle('chess-sq--to', Boolean(lastMove) && lastMove.to === sq);
+            sqEl.classList.toggle('chess-sq--check', sq === checkSquare);
+        });
+
+        els.frame.classList.toggle('chess-frame--over', disabled);
+        els.checkBanner.hidden = !(state && state.check);
+
+        renderMoveList((state && state.history) || []);
+    }
+
+    window.LabGames.register('chess', {
+        mount,
+        render,
+        labels: { white: 'White', black: 'Black' },
+    });
+})();
+</script>

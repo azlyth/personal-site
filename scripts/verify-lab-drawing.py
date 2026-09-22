@@ -22,19 +22,17 @@ BASE = sys.argv[1] if len(sys.argv) > 1 else "https://cloudy.nyc"
 MOVES = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 PORT = 9222
 
-# Both pages carry their own copy of the drawing client, so both get checked.
+# There is one drawing client now -- the games page renders it at the #drawing
+# hash rather than on its own /lab/experiment-3 page, which no longer exists.
 PAGES = [
     {
-        "url": "/lab/experiment-3/?mobile=true",
-        "canvas": "mobile-drawing-canvas",
-        "ready": "(() => { const w = document.getElementById('mobile-canvas-wrapper');"
-                 " return !!w && w.style.display === 'block'; })()",
-    },
-    {
-        "url": "/lab/",
-        "canvas": "drawing-canvas",
-        "ready": "(() => { try { return !!document.getElementById('drawing-canvas')"
-                 " && !!drawingSocket && drawingSocket.connected; } catch (e) { return false; } })()",
+        "url": "/lab/#drawing",
+        "canvas": ".draw-canvas",
+        "ready": "(() => { try { const p = document.querySelector("
+                 "'.game-panel[data-game=\"drawing\"]');"
+                 " return !!p && !p.hidden && !!document.querySelector('.draw-canvas')"
+                 " && !!LabGames.socket && LabGames.socket.connected; }"
+                 " catch (e) { return false; } })()",
     },
 ]
 
@@ -112,7 +110,7 @@ def main():
                 continue
 
             rect = json.loads(dev.eval(
-                "(() => { const r = document.getElementById('" + spec["canvas"] + "')"
+                "(() => { const r = document.querySelector('" + spec["canvas"] + "')"
                 ".getBoundingClientRect();"
                 " return JSON.stringify({x: r.x, y: r.y, w: r.width, h: r.height}); })()"))
 

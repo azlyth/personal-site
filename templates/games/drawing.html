@@ -1,0 +1,307 @@
+<section class="game-panel" data-game="drawing" hidden>
+    <div class="draw-panel">
+        <div class="draw-toolbar">
+            <button type="button" class="draw-swatch draw-swatch-active" data-color="#2b2b2b" style="background: #2b2b2b;" aria-label="Charcoal"></button>
+            <button type="button" class="draw-swatch" data-color="#b2402f" style="background: #b2402f;" aria-label="Red"></button>
+            <button type="button" class="draw-swatch" data-color="#d9822b" style="background: #d9822b;" aria-label="Orange"></button>
+            <button type="button" class="draw-swatch" data-color="#d9a226" style="background: #d9a226;" aria-label="Yellow"></button>
+            <button type="button" class="draw-swatch" data-color="#2f8f4e" style="background: #2f8f4e;" aria-label="Green"></button>
+            <button type="button" class="draw-swatch" data-color="#2f6fb3" style="background: #2f6fb3;" aria-label="Blue"></button>
+            <button type="button" class="draw-swatch" data-color="#6f42c1" style="background: #6f42c1;" aria-label="Purple"></button>
+            <button type="button" class="draw-swatch draw-swatch-white" data-color="#fdfdfd" style="background: #fdfdfd;" aria-label="White"></button>
+            <button type="button" class="draw-clear-btn">Clear</button>
+        </div>
+        <div class="draw-canvas-wrap">
+            <canvas class="draw-canvas" width="900" height="900"></canvas>
+        </div>
+    </div>
+</section>
+
+<style>
+.draw-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.draw-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: min(100%, 520px);
+    padding: 0.6rem;
+    background: #fff;
+    border: 1px solid #e3e6e8;
+    border-radius: 10px;
+}
+
+.draw-swatch {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.draw-swatch:hover { transform: scale(1.08); }
+
+.draw-swatch-active {
+    border-color: #2b2b2b;
+    transform: scale(1.08);
+}
+
+.draw-swatch-white { border-color: #c9c3b6; }
+.draw-swatch-white.draw-swatch-active { border-color: #2b2b2b; }
+
+.draw-clear-btn {
+    margin-left: auto;
+    font: inherit;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #b2402f;
+    border-radius: 8px;
+    background: #fff;
+    color: #b2402f;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.draw-clear-btn:hover {
+    background: #b2402f;
+    color: #fff;
+}
+
+.draw-canvas-wrap {
+    width: min(100%, 520px);
+}
+
+.draw-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    touch-action: none;
+    background: #fdfdfd;
+    border: 1px solid #c9c3b6;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    cursor: crosshair;
+}
+
+@media (min-width: 700px) {
+    .draw-toolbar, .draw-canvas-wrap { width: min(100%, 520px); }
+}
+</style>
+
+<script>
+(function () {
+    var SESSION_ID = 'global-drawing-canvas';
+    // 1% of the buffer, matching how the old 3px pen felt on the old 300px
+    // canvas. A literal 3 here would be a hairline in a 900x900 space.
+    var LINE_WIDTH = 9;
+    var BG = '#fdfdfd';
+
+    var canvas = null;
+    var ctx = null;
+    var color = '#2b2b2b';
+    var drawing = false;
+    var lastX = 0;
+    var lastY = 0;
+
+    // Points are queued and flushed once per animation frame: a pointer
+    // moving fast fires more events than one round trip can carry, and a
+    // packet per event would arrive at the server as a burst it then has to
+    // unpick. See lab-backend/drawing-store.js for the server-side half of
+    // this (it also can't read-modify-write per packet, for the same reason).
+    var pending = [];
+    var flushHandle = null;
+    var listenersBound = false;
+
+    // The canvas is displayed at whatever CSS size fits the viewport, but the
+    // drawing buffer (canvas.width/height) is a fixed constant -- strokes are
+    // shared between everyone's browsers, so the coordinate space they're
+    // recorded in has to be the same for every screen size. Converting a
+    // pointer position back into buffer space means scaling by the ratio of
+    // the buffer size to the *rendered* box (getBoundingClientRect()), not
+    // assuming the two are equal.
+    function bufferPos(clientX, clientY) {
+        var rect = canvas.getBoundingClientRect();
+        var scaleX = canvas.width / rect.width;
+        var scaleY = canvas.height / rect.height;
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }
+
+    function paintSegment(fromX, fromY, toX, toY, strokeColor, lineWidth) {
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = lineWidth || LINE_WIDTH;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
+
+    function queueSegment(fromX, fromY, toX, toY) {
+        pending.push({ fromX: fromX, fromY: fromY, toX: toX, toY: toY });
+        if (flushHandle !== null) return;
+        flushHandle = requestAnimationFrame(function () {
+            flushHandle = null;
+            flushSegments();
+        });
+    }
+
+    function flushSegments() {
+        if (flushHandle !== null) {
+            cancelAnimationFrame(flushHandle);
+            flushHandle = null;
+        }
+        if (pending.length === 0 || !LabGames.socket) return;
+
+        var segments = pending;
+        pending = [];
+
+        LabGames.socket.emit('drawing-data', {
+            sessionId: SESSION_ID,
+            segments: segments,
+            color: color,
+            lineWidth: LINE_WIDTH
+        });
+    }
+
+    function clearLocally() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = BG;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function redraw(strokes) {
+        clearLocally();
+        if (!Array.isArray(strokes)) return;
+        strokes.forEach(function (stroke) {
+            paintSegment(stroke.fromX, stroke.fromY, stroke.toX, stroke.toY, stroke.color, stroke.lineWidth);
+        });
+    }
+
+    function appendStrokes(strokes) {
+        if (!Array.isArray(strokes)) return;
+        strokes.forEach(function (stroke) {
+            paintSegment(stroke.fromX, stroke.fromY, stroke.toX, stroke.toY, stroke.color, stroke.lineWidth);
+        });
+    }
+
+    function eventPoint(evt) {
+        return (evt.touches && evt.touches[0]) ? evt.touches[0] : evt;
+    }
+
+    function pointerDown(evt) {
+        evt.preventDefault();
+        var point = eventPoint(evt);
+        var pos = bufferPos(point.clientX, point.clientY);
+        drawing = true;
+        lastX = pos.x;
+        lastY = pos.y;
+    }
+
+    function pointerMove(evt) {
+        if (!drawing) return;
+        evt.preventDefault();
+        var point = eventPoint(evt);
+        var pos = bufferPos(point.clientX, point.clientY);
+        paintSegment(lastX, lastY, pos.x, pos.y, color, LINE_WIDTH);
+        queueSegment(lastX, lastY, pos.x, pos.y);
+        lastX = pos.x;
+        lastY = pos.y;
+    }
+
+    function pointerUp() {
+        if (!drawing) return;
+        drawing = false;
+        flushSegments();
+    }
+
+    function selectColor(root, btn) {
+        root.querySelectorAll('.draw-swatch').forEach(function (swatch) {
+            swatch.classList.remove('draw-swatch-active');
+        });
+        btn.classList.add('draw-swatch-active');
+        // The queued points so far belong to the previous colour.
+        flushSegments();
+        color = btn.dataset.color;
+    }
+
+    function bindSocketListeners() {
+        var socket = LabGames.socket;
+        if (!socket || listenersBound) return;
+        listenersBound = true;
+
+        socket.on('drawing-session-created', function (data) {
+            socket.emit('join-drawing-session', { sessionId: SESSION_ID });
+            if (data && data.drawingState) redraw(data.drawingState);
+        });
+
+        socket.on('drawing-session-joined', function (data) {
+            if (data && data.drawingState) redraw(data.drawingState);
+        });
+
+        socket.on('drawing-append', function (data) {
+            appendStrokes(data && data.strokes);
+        });
+
+        socket.on('drawing-cleared', function (data) {
+            redraw((data && data.drawingState) || []);
+        });
+    }
+
+    LabGames.register('drawing', {
+        turnBased: false,
+
+        mount: function (root) {
+            canvas = root.querySelector('.draw-canvas');
+            ctx = canvas.getContext('2d');
+            clearLocally();
+
+            canvas.addEventListener('mousedown', pointerDown);
+            canvas.addEventListener('mousemove', pointerMove);
+            canvas.addEventListener('mouseup', pointerUp);
+            canvas.addEventListener('mouseout', pointerUp);
+
+            canvas.addEventListener('touchstart', pointerDown, { passive: false });
+            canvas.addEventListener('touchmove', pointerMove, { passive: false });
+            canvas.addEventListener('touchend', pointerUp);
+            canvas.addEventListener('touchcancel', pointerUp);
+
+            root.querySelectorAll('.draw-swatch').forEach(function (btn) {
+                btn.addEventListener('click', function () { selectColor(root, btn); });
+            });
+
+            root.querySelector('.draw-clear-btn').addEventListener('click', function () {
+                if (!confirm('Clear the canvas? This affects everyone.')) return;
+                if (LabGames.socket) LabGames.socket.emit('clear-drawing-canvas', { sessionId: SESSION_ID });
+            });
+
+            bindSocketListeners();
+        },
+
+        onOpen: function () {
+            bindSocketListeners();
+            if (LabGames.socket) LabGames.socket.emit('create-drawing-session');
+        },
+
+        onClose: function () {
+            drawing = false;
+            flushSegments();
+        }
+    });
+})();
+</script>

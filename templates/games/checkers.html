@@ -1,0 +1,377 @@
+<section class="game-panel" data-game="checkers" hidden>
+    <div class="checkers-wrap">
+        <div class="checkers-counts">
+            <span class="checkers-count" data-checkers-count="red">
+                <span class="checkers-count-dot checkers-count-dot-red"></span>
+                <span data-checkers-count-value="red">12</span>
+            </span>
+            <span class="checkers-chain-note" data-checkers-chain hidden>Still jumping &mdash; finish the chain</span>
+            <span class="checkers-count" data-checkers-count="black">
+                <span class="checkers-count-dot checkers-count-dot-black"></span>
+                <span data-checkers-count-value="black">12</span>
+            </span>
+        </div>
+        <div class="checkers-board" data-checkers-board role="grid" aria-label="Checkers board"></div>
+    </div>
+</section>
+
+<style>
+.checkers-wrap {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.checkers-counts {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.checkers-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.checkers-count-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.checkers-count-dot-red { background: #b2402f; }
+.checkers-count-dot-black { background: #2b2b2b; }
+
+.checkers-chain-note {
+    flex: 1;
+    text-align: center;
+    color: #2f6fb3;
+    font-weight: 500;
+    font-size: 0.8rem;
+}
+
+.checkers-board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border: 2px solid #c9c3b6;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f2efe9;
+    touch-action: manipulation;
+    user-select: none;
+    transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.checkers-board.checkers-over {
+    filter: grayscale(0.6);
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+.checkers-square {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f2efe9;
+    min-width: 0;
+    min-height: 0;
+}
+
+.checkers-square-dark { background: #d8d2c6; }
+
+.checkers-square-movable { cursor: pointer; }
+
+.checkers-square-selected::before {
+    content: '';
+    position: absolute;
+    inset: 4%;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px #2f6fb3 inset;
+}
+
+.checkers-square-dest {
+    cursor: pointer;
+}
+
+.checkers-square-dest::after {
+    content: '';
+    position: absolute;
+    width: 26%;
+    height: 26%;
+    border-radius: 50%;
+    background: rgba(47, 111, 179, 0.55);
+}
+
+.checkers-square-last {
+    box-shadow: inset 0 0 0 3px rgba(47, 111, 179, 0.55);
+}
+
+.checkers-square-captured::after {
+    content: '';
+    position: absolute;
+    inset: 18%;
+    border-radius: 50%;
+    background: rgba(178, 64, 47, 0.35);
+    animation: checkers-fade-capture 1.1s ease-out forwards;
+}
+
+@keyframes checkers-fade-capture {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.checkers-piece {
+    position: relative;
+    width: 78%;
+    height: 78%;
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+}
+
+.checkers-piece-red {
+    background: #b2402f;
+    border: 2px solid #8f3325;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.checkers-piece-black {
+    background: #2b2b2b;
+    border: 2px solid #141414;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.checkers-piece-movable {
+    box-shadow: 0 0 0 2px rgba(47, 111, 179, 0.55), 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.checkers-piece-selected {
+    box-shadow: 0 0 0 3px #2f6fb3, 0 2px 4px rgba(0, 0, 0, 0.4);
+    transform: scale(1.06);
+}
+
+.checkers-piece-chain {
+    box-shadow: 0 0 0 3px #2f6fb3, 0 0 9px 3px rgba(47, 111, 179, 0.8);
+    animation: checkers-chain-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes checkers-chain-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px #2f6fb3, 0 0 6px 2px rgba(47, 111, 179, 0.6); }
+    50% { box-shadow: 0 0 0 3px #2f6fb3, 0 0 12px 4px rgba(47, 111, 179, 0.9); }
+}
+
+.checkers-crown {
+    width: 46%;
+    height: 46%;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.checkers-crown svg { width: 100%; height: 100%; display: block; }
+
+@media (min-width: 700px) {
+    .checkers-wrap { max-width: 620px; }
+}
+</style>
+
+<script>
+(function () {
+    let paint = null; // set by mount(); the live render function for the mounted panel
+
+    LabGames.register('checkers', {
+        labels: { red: 'Red', black: 'Black' },
+        mount,
+        render(state) { if (paint) paint(state); },
+    });
+
+    function mount(root) {
+        const boardEl = root.querySelector('[data-checkers-board]');
+        const chainNote = root.querySelector('[data-checkers-chain]');
+        const countEls = {
+            red: root.querySelector('[data-checkers-count-value="red"]'),
+            black: root.querySelector('[data-checkers-count-value="black"]'),
+        };
+
+        // Build the 64 squares once; only their classes/contents change on render.
+        const squares = [];
+        for (let row = 0; row < 8; row += 1) {
+            const rowSquares = [];
+            for (let col = 0; col < 8; col += 1) {
+                const dark = (row + col) % 2 === 1;
+                const sq = document.createElement('div');
+                sq.className = 'checkers-square' + (dark ? ' checkers-square-dark' : '');
+                sq.dataset.row = String(row);
+                sq.dataset.col = String(col);
+                boardEl.appendChild(sq);
+                rowSquares.push(sq);
+            }
+            squares.push(rowSquares);
+        }
+
+        let selected = null; // {row, col} | null
+        let lastState = null;
+
+        function pieceAt(state, row, col) {
+            return state.board[row][col];
+        }
+
+        function movableFroms(state) {
+            const set = new Set();
+            (state.legalMoves || []).forEach((m) => set.add(`${m.from.row},${m.from.col}`));
+            return set;
+        }
+
+        function destsFor(state, square) {
+            if (!square) return [];
+            return (state.legalMoves || [])
+                .filter((m) => m.from.row === square.row && m.from.col === square.col)
+                .map((m) => m.to);
+        }
+
+        function crownSvg() {
+            return '<span class="checkers-crown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 8l4 4 5-7 5 7 4-4-2 10H5L3 8z"/></svg></span>';
+        }
+
+        function render(state) {
+            lastState = state;
+
+            // A state change from outside invalidates any local selection that
+            // no longer makes sense (piece moved/captured, turn changed, etc).
+            if (selected) {
+                const stillLegal = destsFor(state, selected).length > 0;
+                const isMustContinue = state.mustContinueFrom
+                    && state.mustContinueFrom.row === selected.row
+                    && state.mustContinueFrom.col === selected.col;
+                if (!stillLegal && !isMustContinue) selected = null;
+            }
+
+            // Mid multi-jump: the continuing piece is selected automatically
+            // and nothing else may be picked up.
+            if (state.mustContinueFrom) {
+                selected = { row: state.mustContinueFrom.row, col: state.mustContinueFrom.col };
+            }
+
+            const movable = movableFroms(state);
+            const dests = destsFor(state, selected);
+            const destSet = new Set(dests.map((d) => `${d.row},${d.col}`));
+
+            const lastMove = state.lastMove;
+            const lastFrom = lastMove ? `${lastMove.from.row},${lastMove.from.col}` : null;
+            const lastTo = lastMove ? `${lastMove.to.row},${lastMove.to.col}` : null;
+            const lastCaptured = lastMove && lastMove.captured
+                ? `${lastMove.captured.row},${lastMove.captured.col}`
+                : null;
+
+            let redCount = 0;
+            let blackCount = 0;
+
+            for (let row = 0; row < 8; row += 1) {
+                for (let col = 0; col < 8; col += 1) {
+                    const sq = squares[row][col];
+                    const key = `${row},${col}`;
+                    const piece = pieceAt(state, row, col);
+                    const dark = (row + col) % 2 === 1;
+
+                    let cls = 'checkers-square' + (dark ? ' checkers-square-dark' : '');
+                    if (key === lastFrom || key === lastTo) cls += ' checkers-square-last';
+                    if (key === lastCaptured) cls += ' checkers-square-captured';
+
+                    const isSelected = selected && selected.row === row && selected.col === col;
+                    const isMovableSource = movable.has(key) && !state.mustContinueFrom;
+                    const isDest = destSet.has(key);
+
+                    if (isDest) cls += ' checkers-square-dest';
+                    if ((isMovableSource || isDest) && !state.over) cls += ' checkers-square-movable';
+
+                    sq.className = cls;
+                    if (isSelected && dark) {
+                        sq.classList.add('checkers-square-selected');
+                    }
+
+                    sq.innerHTML = '';
+                    if (piece) {
+                        if (piece.color === 'red') redCount += 1;
+                        else blackCount += 1;
+
+                        const disc = document.createElement('div');
+                        let pieceCls = 'checkers-piece checkers-piece-' + piece.color;
+                        if (isSelected) {
+                            pieceCls += state.mustContinueFrom ? ' checkers-piece-chain' : ' checkers-piece-selected';
+                        } else if (isMovableSource) {
+                            pieceCls += ' checkers-piece-movable';
+                        }
+                        disc.className = pieceCls;
+                        if (piece.king) disc.innerHTML = crownSvg();
+                        sq.appendChild(disc);
+                    }
+                }
+            }
+
+            countEls.red.textContent = String(redCount);
+            countEls.black.textContent = String(blackCount);
+
+            chainNote.hidden = !state.mustContinueFrom;
+
+            boardEl.classList.toggle('checkers-over', Boolean(state.over));
+        }
+
+        boardEl.addEventListener('click', (event) => {
+            const sq = event.target.closest('.checkers-square');
+            if (!sq || !lastState || lastState.over) return;
+
+            const row = Number(sq.dataset.row);
+            const col = Number(sq.dataset.col);
+
+            // Mid multi-jump: only the locked piece can act, and only as a move.
+            if (lastState.mustContinueFrom) {
+                const dests = destsFor(lastState, lastState.mustContinueFrom);
+                const isDest = dests.some((d) => d.row === row && d.col === col);
+                if (isDest) {
+                    LabGames.move('checkers', {
+                        from: { row: lastState.mustContinueFrom.row, col: lastState.mustContinueFrom.col },
+                        to: { row, col },
+                    });
+                }
+                return;
+            }
+
+            if (selected) {
+                const dests = destsFor(lastState, selected);
+                const isDest = dests.some((d) => d.row === row && d.col === col);
+                if (isDest) {
+                    LabGames.move('checkers', { from: { row: selected.row, col: selected.col }, to: { row, col } });
+                    selected = null;
+                    render(lastState);
+                    return;
+                }
+            }
+
+            const movable = movableFroms(lastState);
+            if (movable.has(`${row},${col}`)) {
+                selected = { row, col };
+            } else {
+                selected = null;
+            }
+            render(lastState);
+        });
+
+        paint = render;
+    }
+})();
+</script>

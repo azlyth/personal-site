@@ -58,42 +58,127 @@ lab-backend` (socket server); `make deploy-restart` does both plus nginx.
 
 ### Content Structure
 - `content/blog/*.md` - Blog posts with TOML frontmatter (`+++` delimiters)
-- `content/lab/*.md` - Lab experiments, each references a template via `template = "experiment-*.html"`
+- `content/lab/_index.md` - the games page; there are no per-game content files (see The Lab below)
 
-### Lab Experiments (WebSocket)
-The `/lab` section contains real-time collaborative experiments using Socket.IO:
+### The Lab (`/lab`)
 
-- **Backend**: `lab-backend/server.js` - Express + Socket.IO server with Redis persistence (fallback to in-memory)
-- **Session pattern**: Global sessions (`GLOBAL_GO_SESSION`, `GLOBAL_DRAWING_SESSION`) for persistence across reloads
-- **UI pattern**: Desktop shows QR code + preview, mobile shows controller (use `?mobile=true` to test)
+`/lab` is **one page holding six games** — chess, checkers, Connect Four,
+tic-tac-toe, Go and the finger-painting canvas — behind a menu of tiles.
+Picking a tile sets `location.hash` (`/lab/#chess`), so a game is a link you
+can send someone and the back button walks out to the menu. Rebuilt
+2026-09-21; before that the page rendered three experiments live side by side
+and each also had its own `/lab/experiment-N` page.
 
-**The drawing canvas does not read-modify-write per packet** (fixed 2026-09-20).
-Pointer events arrive faster than a Redis round trip, so the old handler — load
-the stroke array, push one stroke, save it back, all with `await`s — let two
-packets load the same version and each save over the other. Every stroke in a
-batch but the last was dropped, which is why fast straight lines came back
-broken. Now:
+Every game is **one global board shared by everyone on the internet**. There
+are no rooms and no accounts. That is the point, and it is what the Go board
+and the canvas already did.
+
+**Adding a game is two files.** Nothing else should need to change:
+
+1. `lab-backend/games/<id>.js` — the rules, as pure functions. `initialState()`
+   and `applyMove(state, move)` returning `{state}` or `{error}`, no sockets,
+   no Redis, no clock, and **no mutation of the state it is handed**. Register
+   it in `games/index.js`, which documents the contract in full. Being pure is
+   the only reason a chess engine is testable here at all.
+2. `templates/games/<id>.html` — the renderer. A `<section class="game-panel"
+   data-game="<id>" hidden>`, scoped CSS, and a `LabGames.register(...)` call.
+   Then one `{% include %}` line in `lab.html`.
+
+**Chess delegates to `chess.js`** (1.4.0, BSD-2, zero deps). Castling, en
+passant, promotion, check, checkmate, stalemate, threefold and the fifty-move
+rule are all its job. Note 1.4.0's `move()` **throws** on an illegal move
+rather than returning null, and it throws on a promoting move with no
+`promotion` field — `games/chess.js` passes `promotion: 'q'` unconditionally,
+which chess.js ignores on non-promoting moves. Do not hand-roll any of this.
+
+⚠ **The framework `<script>` must come before the `{% include %}`s in
+`lab.html`.** Partials call `LabGames.register()` as they parse, so with the
+framework below them every one of the six throws `LabGames is not defined` and
+the page renders a menu whose tiles open empty panels. Cost an hour.
+
+**Client contract** (`window.LabGames`, documented at length in `lab.html`):
+the shell owns routing, the socket, the title, the whose-turn line, the player
+count, the reset button and the error line. A renderer owns its board and
+nothing else, gets `render(state)` on every update, and must paint **from the
+state alone** — a state can arrive that this browser did not cause, so a
+shadow copy of the board will drift. Non-turn-based games (the canvas)
+register `turnBased: false` and get `onOpen()`/`onClose()` instead of
+join/move/reset.
+
+**Backend** (`lab-backend/server.js`, ~370 lines, down from 777):
+
+- Four generic socket events cover every turn-based game: `game-join`,
+  `game-move`, `game-reset`, `game-list`, answered by `game-state`,
+  `game-error` and `game-catalog`. One Socket.IO room per game id; the room
+  size IS the player count. `game-counts` broadcasts to everyone on any join
+  or leave, because the menu shows a live count on every tile.
+- `lab-backend/game-store.js` holds boards in memory, loads from Redis once at
+  boot and writes back on a coalescing timer — the same discipline
+  `drawing-store.js` documents below, for the same reason. **`applyMove` is
+  synchronous on purpose**: nothing may interleave between reading the current
+  board and installing the next one.
+- Persisted under `game:<id>` with **no TTL** (a half-played game should still
+  be there tomorrow) and a `STATE_VERSION`; a board stored under an older
+  version is discarded rather than fed to a rule module that has moved on.
+- `GET /games` returns every board's full state — the fastest way to check
+  what the server actually thinks is on the board.
+
+**What was removed in the rebuild:** the shared counter (experiment #1) and
+its `create-session`/`increment`/`decrement` handlers, the `sessions` and
+`goSessions` maps, `updateGlobalCounter`, and the whole `session:`/`go:`/
+`global:counter` half of `persistence.js`. Also `templates/experiment*.html`
+and `content/lab/experiment-*.md` — which means **the QR-code
+phone-as-controller pairing is gone**. It only ever existed on those two
+pages, and keeping them meant maintaining Go and the canvas twice.
+
+**The drawing canvas does not read-modify-write per packet** (fixed
+2026-09-20). Pointer events arrive faster than a Redis round trip, so the old
+handler — load the stroke array, push one stroke, save it back, all with
+`await`s — let two packets load the same version and each save over the other.
+Every stroke in a batch but the last was dropped, which is why fast straight
+lines came back broken. Now:
 
 - `lab-backend/drawing-store.js` holds the canvas in memory as the source of
-  truth: loaded from Redis once, mutated **synchronously** (nothing can
-  interleave mid-update), written back on a 250ms coalescing timer that loops
-  while the session is dirty. Strokes are capped at 20k per session, and
-  SIGTERM/SIGINT flush before Redis disconnects.
-- The client (`templates/experiment-drawing.html`) queues points and flushes
-  once per animation frame as `drawing-data { segments: [...] }`, also flushing
-  on pointer-up and on colour change. A single `{fromX, ...}` segment is still
+  truth: loaded from Redis once, mutated **synchronously**, written back on a
+  250ms coalescing timer that loops while the session is dirty. Strokes are
+  capped at 20k, and SIGTERM/SIGINT flush before Redis disconnects.
+- The client (`templates/games/drawing.html`) queues points and flushes once
+  per animation frame as `drawing-data { segments: [...] }`, also flushing on
+  pointer-up and on colour change. A single `{fromX, ...}` segment is still
   accepted so older open tabs keep working.
 - The server broadcasts **only the new strokes** (`drawing-append`), not the
-  whole canvas on every packet; clients draw them incrementally instead of
-  clearing and repainting everything.
-- Tests: `cd lab-backend && npm test` (needs Docker for the Redis-backed
-  integration test). `scripts/verify-lab-drawing.py` drives real Chromium over
-  CDP against the deployed page and checks a fast drag stores every point.
+  whole canvas on every packet.
+- The canvas keeps its own socket events, unchanged by the rebuild.
 
-Current experiments:
-1. `experiment.html` - Shared counter (increment/decrement)
-2. `experiment-go.html` - Collaborative 9x9 Go board
-3. `experiment-drawing.html` - Real-time drawing canvas
+⚠ **The canvas's drawing buffer is a fixed 900x900 and must stay a constant.**
+Stroke coordinates are shared between everybody's browsers, so display scaling
+is **CSS only** and pointer coordinates convert back through
+`canvas.width / rect.width`. Before the rebuild the buffer was 220x280 on a
+phone and 300x380 on a desktop — two people on different screens genuinely saw
+each other's strokes in different places. `LINE_WIDTH` is 9 rather than 3
+because 1% of the buffer is what the old 3px pen felt like on the old canvas.
+The 247 strokes already stored were in the old space and would have rendered
+squashed into a corner, so the canvas was **cleared** at the rebuild rather
+than rescaled (Peter's call, 2026-09-21). If a future change moves the buffer
+again, note that the canvas is held in memory by `drawing-store.js`: editing
+the Redis key under a running `lab-backend` just gets overwritten on its next
+flush, so stop the backend first.
+
+**Verifying the lab:**
+
+- `cd lab-backend && npm test` — 73 tests. Rule modules are unit-tested
+  per-game; the drawing store has a Redis-backed integration test that needs
+  Docker and **binds port 6399**, so nothing else may be holding it.
+- `scripts/verify-lab-drawing.py` drives real Chromium over CDP against the
+  deployed page and checks a fast drag stores every point.
+- For UI work, a page-level CDP harness beats the one-shot `--screenshot`
+  flag: the page holds a websocket open, so `--virtual-time-budget` never
+  settles and the flag just hangs.
+- `templates/lab.html`'s `backendUrl()` accepts a `?backend=<url>` override
+  **only when the page is served from localhost**, which is how a dev page
+  gets pointed at a throwaway backend instead of playing on the live boards.
+  Deliberately localhost-gated: on the public site that parameter would let a
+  link hand your browser to somebody else's socket server.
 
 ### Timeline Page (`/timeline`)
 The timeline page (`templates/timeline.html`) displays work history, projects, talks, and education using a Gantt-style layout.
@@ -180,8 +265,8 @@ The timeline page (`templates/timeline.html`) displays work history, projects, t
 - `templates/section.html` - Blog listing
 - `templates/page.html` - Individual blog post
 - `templates/timeline.html` - Timeline page with work history
-- `templates/lab.html` - Lab index (embeds all experiments inline)
-- `templates/experiment-*.html` - Individual experiment pages
+- `templates/lab.html` - The games page: menu, client framework, game includes
+- `templates/games/*.html` - One board renderer per game
 - `templates/404.html` - Not-found page (see below)
 
 **The site is called "Peter @ WWW" and every `<title>` says so** (settled
@@ -392,13 +477,14 @@ drifts off-center everywhere else.
   and only things that are actually publicly reachable — check
   `http-routing/cloudflared/config.yml` for that, not a curl from the Pi, since
   LAN-only hosts answer 200 from here and would be dead links for visitors.
-- **`/lab` (`lab.html`)** uses the same bleed pattern for the experiments grid.
-  The Go board and drawing canvas size up on `(min-width: 700px)` via JS, not
-  CSS: both compute geometry from a pixel size (the board's `boardSize`, the
-  canvas's `width`/`height` **attributes**), and pointer/touch coordinates come
-  from `getBoundingClientRect()`. Scaling the canvas with CSS instead would
-  leave the drawing buffer at the old resolution and put every stroke off from
-  the finger.
+- **`/lab` (`lab.html`)** uses the same bleed pattern for `.game-stage`, so a
+  board can be wider than the 700px reading column. Boards no longer switch
+  between hardcoded pixel sizes at a breakpoint the way the old Go board and
+  canvas did: each scales with the viewport (SVG `viewBox`, CSS grid, or
+  `aspect-ratio`) and caps around 520px, so switching games doesn't lurch.
+  Pointer coordinates therefore always convert through
+  `getBoundingClientRect()` rather than assuming a fixed size — see the canvas
+  warning in The Lab above, which is the one place that is genuinely subtle.
 
 ### Deployment
 - GitHub Pages via `.github/workflows/deploy.yml` — builds with
@@ -415,8 +501,8 @@ drifts off-center everywhere else.
   `lab-backend` on loopback `:8803` (container-internal port stays 3001 —
   ig-parser already owns `:3001` on the Pi, so only the host-side mapping
   changed), `redis` has no host port at all. `lab.cloudy.nyc` is a separate
-  Caddy/tunnel host for the Socket.IO backend (`getBackendUrl()` in
-  `templates/lab.html` + the three `experiment-*.html` files, and CORS in
+  Caddy/tunnel host for the Socket.IO backend (`backendUrl()` in
+  `templates/lab.html`, and CORS in
   `lab-backend/server.js`, both special-case `cloudy.nyc`/`www.cloudy.nyc`
   hostnames — same pattern as the existing `peter.direct` case, don't remove
   it when touching that logic). `www.cloudy.nyc` 301s to the apex. Full routing
@@ -573,9 +659,11 @@ Block kinds and their editors: `image` (standalone markdown), `img_row` and
 `video` (side-by-side grids) get thumbnail strips with add/remove/reorder,
 alt text, and Small/Medium/Full size presets; everything else gets a markdown
 textarea. Any block can be moved (pick it up, tap a gap) or merged with an
-adjacent same-family block. A media row adjacent to a paragraph or list gets
-a different pair control instead -- "put the row beside this text", which
-floats it (see below).
+adjacent same-family block. A media row also carries a "beside" control that
+picks up the row and lets you tap the paragraph it should sit next to, and a
+single photo or clip can be split out of its row into one of its own. The
+editor bar has Undo (walks back through the post's edits) and Discard (back
+to the last published version).
 
 - **"Split out" is how a clip escapes its row.** `move_block` moves blocks, not
   clips, so a clip sharing a `video` row had no way to reach a distant part of
@@ -624,6 +712,33 @@ floats it (see below).
   reason: a heuristically cached shell would keep naming the OLD hashes
   forever.
 
+- **Undo is one hook, not a hook per route.** Every body write funnels
+  through `_write_body`, so `history.snapshot()` sits there and covers every
+  block route at once. The meta route (title/date/draft) writes by a
+  different path and carries its own call -- an Undo that silently skipped
+  a title edit would be a trap. `editor/history.py` keeps whole numbered
+  copies of the post under a gitignored `editor/.history/<slug>/`, capped at
+  25:
+  - **Snapshots must not live under `content/`** -- Zola renders every `.md`
+    in that tree, so one parked there becomes a ghost post on the live site.
+  - **Undo deliberately does not snapshot what it replaces.** If it did, undo
+    would be its own inverse: the first tap records the current text and the
+    second restores it, ping-ponging between two versions instead of walking
+    backwards. A test pins this.
+  - **`can_undo` rides on every post payload**, not just the initial load,
+    because the client re-renders from each write's own response -- otherwise
+    the button stays disabled until the next full page load.
+- **Discard restores from git, because Publish is what commits.** `publish.py`
+  stages exactly the post's path, so "since the last publish" and "since the
+  last commit" are the same line and Discard can be a plain
+  `git checkout HEAD -- <post>`. Two details are load-bearing:
+  - **It snapshots first**, so the one big destructive button is reachable by
+    Undo. Otherwise it's the only action with no way back.
+  - **The tracked-ness check is `git cat-file -e HEAD:<path>`, not
+    `git ls-files`.** `ls-files` also succeeds for a merely *staged* post --
+    `rename_post` stages exactly like that -- and `git checkout HEAD --` on
+    one of those fails, surfacing as a 500 instead of the clear "never been
+    committed" refusal. A brand-new draft is refused rather than deleted.
 - **"Beside text" is a float, not a two-column block.** Putting a vertical
   clip next to a paragraph is a third class on the row (`<div class="video-row
   size-medium beside-right">`) plus `float: right` -- deliberately NOT a new
@@ -654,13 +769,20 @@ floats it (see below).
     escapes the post and overlaps the footer); and a `max-width: 700px`
     unfloat (below the reading column's own width even the 240px preset
     leaves an unreadable measure).
-  - **`POST .../blocks/{index}/beside` floats AND moves in one write.** A
-    float only wraps what follows it, so when the row sits below its
-    paragraph the row has to be lifted above it too -- one `_write_body`
-    transform, same reasoning as the clip split: as two requests the second
-    could 409 and strand the post with a floated row in the wrong place.
-    `index` names the UPPER block of the pair, the convention `/merge` uses,
-    because the control that drives it sits in the gap between the two.
+  - **`POST .../blocks/{index}/beside` names the row AND the text**
+    (`text_index`), and floats plus moves in one write. Naming the target
+    outright rather than inferring it from adjacency is what lets a row reach
+    writing anywhere in the post without being moved there first -- the UI is
+    a pick-the-destination mode mirroring move mode, not a strip between two
+    neighbours. A float only wraps what follows it, so "beside this text"
+    always means "immediately above it", and `move_block`'s gap convention
+    already means gap `text_index` is exactly that slot in both directions.
+    Both halves run in one `_write_body` transform, same reasoning as the
+    clip split: as two requests the second could 409 and strand the post with
+    a floated row in the wrong place.
+  - **Splitting a pair apart has no route of its own.** It's the ordinary row
+    save with the side cleared, which is why the control has to send the
+    row's current contents back rather than just a flag.
   - **The editor lets the float escape its own `.block`** (`#blocks` carries
     the `flow-root` instead). Each block is a separate div, so a float
     contained inside its own box would sit beside an empty strip and the

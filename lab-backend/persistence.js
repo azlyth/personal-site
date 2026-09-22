@@ -108,86 +108,19 @@ class PersistenceLayer {
 
   // Experiment-specific persistence methods
   
-  // Global counter
-  async saveGlobalCounter(counter) {
-    return await this.set('global:counter', counter);
+  // Turn-based games (chess, checkers, connect4, tictactoe, go).
+  // One global board per game id, and deliberately no TTL: a game left
+  // half-played should still be there tomorrow.
+  async saveGameState(gameId, payload) {
+    return await this.set(`game:${gameId}`, payload);
   }
 
-  async loadGlobalCounter() {
-    const counter = await this.get('global:counter');
-    return counter !== null ? counter : 0;
+  async loadGameState(gameId) {
+    return await this.get(`game:${gameId}`);
   }
 
-  // Regular sessions
-  async saveSession(sessionId, session) {
-    return await this.set(`session:${sessionId}`, session, 86400); // 24 hours TTL
-  }
-
-  async loadSession(sessionId) {
-    return await this.get(`session:${sessionId}`);
-  }
-
-  async deleteSession(sessionId) {
-    return await this.delete(`session:${sessionId}`);
-  }
-
-  async getAllSessions() {
-    if (!this.isConnected) return new Map();
-    try {
-      const keys = await this.client.keys('session:*');
-      const sessions = new Map();
-      
-      if (keys.length > 0) {
-        const values = await this.client.mGet(keys);
-        keys.forEach((key, index) => {
-          if (values[index]) {
-            const sessionId = key.replace('session:', '');
-            sessions.set(sessionId, JSON.parse(values[index]));
-          }
-        });
-      }
-      
-      return sessions;
-    } catch (error) {
-      console.error('Error loading all sessions:', error);
-      return new Map();
-    }
-  }
-
-  // Go sessions
-  async saveGoSession(sessionId, gameState) {
-    return await this.set(`go:${sessionId}`, gameState, 86400); // 24 hours TTL
-  }
-
-  async loadGoSession(sessionId) {
-    return await this.get(`go:${sessionId}`);
-  }
-
-  async deleteGoSession(sessionId) {
-    return await this.delete(`go:${sessionId}`);
-  }
-
-  async getAllGoSessions() {
-    if (!this.isConnected) return new Map();
-    try {
-      const keys = await this.client.keys('go:*');
-      const sessions = new Map();
-      
-      if (keys.length > 0) {
-        const values = await this.client.mGet(keys);
-        keys.forEach((key, index) => {
-          if (values[index]) {
-            const sessionId = key.replace('go:', '');
-            sessions.set(sessionId, JSON.parse(values[index]));
-          }
-        });
-      }
-      
-      return sessions;
-    } catch (error) {
-      console.error('Error loading all go sessions:', error);
-      return new Map();
-    }
+  async deleteGameState(gameId) {
+    return await this.delete(`game:${gameId}`);
   }
 
   // Drawing sessions
