@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from editor import config
 from editor.videos import markdown_for, parse_videos, process_video, upload, video_key
 
 
@@ -292,3 +293,15 @@ def test_upload_sets_immutable_cache_headers_and_video_content_type():
     assert call["ContentType"] == "video/mp4"
     assert call["CacheControl"] == "public, max-age=31536000, immutable"
     assert url == "https://img.cloudy.nyc/p/a.mp4"
+
+
+def test_cli_upload_path_shares_the_content_addressed_key():
+    """scripts/upload-video.py used to build its own `<slug>/<name>.mp4` key
+    with no content hash, while still setting an immutable Cache-Control --
+    re-uploading a fixed clip under the same name reused the URL, so
+    Cloudflare's edge and every browser kept serving the old bytes forever.
+    It must go through `video_key`, the same as the tablet editor."""
+    script = (config.REPO / "scripts" / "upload-video.py").read_text(encoding="utf-8")
+
+    assert "video_key(" in script, "upload-video.py must use the shared content-addressed key"
+    assert "f\"{post_slug}/{name}.mp4\"" not in script, "upload-video.py still builds an unhashed key"

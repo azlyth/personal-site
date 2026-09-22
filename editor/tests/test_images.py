@@ -3,6 +3,7 @@ import io
 import pytest
 from PIL import Image
 
+from editor import config
 from editor.images import process_image, image_key, markdown_for, parse_images, upload
 
 
@@ -338,3 +339,15 @@ def test_upload_sets_immutable_cache_headers():
     assert call["ContentType"] == "image/jpeg"
     assert call["CacheControl"] == "public, max-age=31536000, immutable"
     assert url == "https://img.cloudy.nyc/p/a.jpg"
+
+
+def test_cli_upload_path_shares_the_content_addressed_key():
+    """scripts/upload-image.py used to build its own `<slug>/<name>.jpg` key
+    with no content hash, while still setting an immutable Cache-Control --
+    re-uploading a corrected photo under the same name reused the URL, so
+    Cloudflare's edge and every browser kept serving the old bytes forever.
+    It must go through `image_key`, the same as the tablet editor."""
+    script = (config.REPO / "scripts" / "upload-image.py").read_text(encoding="utf-8")
+
+    assert "image_key(" in script, "upload-image.py must use the shared content-addressed key"
+    assert "f\"{post_slug}/{name}.jpg\"" not in script, "upload-image.py still builds an unhashed key"

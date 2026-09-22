@@ -3,9 +3,15 @@
 
 Strips EXIF (re-encoding drops it; also drops GPS data from phone photos),
 caps the longest edge at 1600px, and re-encodes as JPEG. Uploads to
-s3://$PERSONAL_SITE_IMAGES_BUCKET/<post-slug>/<name>.jpg with a far-future
-Cache-Control, since Cloudflare (img.cloudy.nyc, via Caddy) edge-caches by
-that header and the key is unique per post.
+s3://$PERSONAL_SITE_IMAGES_BUCKET/<key> with a far-future, immutable
+Cache-Control -- safe only because `image_key` (shared with the tablet
+editor's upload path, see editor/images.py) content-hashes the bytes into
+the key. Re-running this with a corrected photo under the same <name> still
+gets a *different* key, so the old bytes don't stay stuck behind Cloudflare's
+edge cache and a browser's "immutable" forever. A plain `<post-slug>/<name>`
+key -- what this script used before -- can't make that promise: the same
+name re-uploaded reuses the URL, and an immutable Cache-Control means caches
+never even re-check.
 
 Usage: scripts/upload-image.py <post-slug> <name> <source-image>
 Prints the final https://img.cloudy.nyc/... URL on success.
@@ -17,10 +23,11 @@ import os
 import subprocess
 import sys
 
-from PIL import Image, ImageOps
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-MAX_EDGE = 1600
-JPEG_QUALITY = 85
+# Shared with the tablet editor's upload path so a fix (or the key scheme)
+# reaches both instead of drifting -- see editor/images.py.
+from editor.images import CACHE_CONTROL, image_key, process_image  # noqa: E402
 
 
 def load_env():
@@ -42,19 +49,6 @@ def load_env():
     return env
 
 
-def process(src_path, out_path):
-    img = Image.open(src_path)
-    img = ImageOps.exif_transpose(img)  # apply rotation before dropping EXIF
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
-    w, h = img.size
-    longest = max(w, h)
-    if longest > MAX_EDGE:
-        scale = MAX_EDGE / longest
-        img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
-    img.save(out_path, "JPEG", quality=JPEG_QUALITY, optimize=True)
-
-
 def main():
     if len(sys.argv) != 4:
         sys.exit(f"usage: {sys.argv[0]} <post-slug> <name> <source-image>")
@@ -64,10 +58,13 @@ def main():
 
     env = load_env()
     bucket = env["PERSONAL_SITE_IMAGES_BUCKET"]
-    key = f"{post_slug}/{name}.jpg"
-    out_path = f"/tmp/{name}.upload.jpg"
 
-    process(src_path, out_path)
+    with open(src_path, "rb") as fh:
+        processed = process_image(fh.read())
+    key = image_key(post_slug, name, processed)
+    out_path = f"/tmp/{os.path.basename(key).replace('/', '_')}.upload.jpg"
+    with open(out_path, "wb") as fh:
+        fh.write(processed)
 
     aws_env = dict(env)
     aws_env["AWS_ACCESS_KEY_ID"] = env["PERSONAL_SITE_IMAGES_ACCESS_KEY_ID"]
@@ -78,7 +75,7 @@ def main():
         [
             "aws", "s3", "cp", out_path, f"s3://{bucket}/{key}",
             "--content-type", "image/jpeg",
-            "--cache-control", "public, max-age=31536000, immutable",
+            "--cache-control", CACHE_CONTROL,
             "--no-progress",
         ],
         env=aws_env,
