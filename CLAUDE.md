@@ -425,50 +425,69 @@ drifts off-center everywhere else.
   `display: none` on candidates and re-reading, remembering that hiding tall
   content removes the *vertical* scrollbar and grows `clientWidth` by ~15px,
   which shows up as a misleading negative.
-- **Two more pages stand in a scene** (2026-09-22). The **home page** is a
-  clearing: light from the top right in the site's blue, two trees standing
-  partly off the sides of the screen, a cluster of flowers at the foot of
-  each margin, and one petal that falls every 82s. The **timeline** is a
-  herbarium sheet: three plants lying pressed in the margins either side of
-  the Gantt, tilted the way a specimen is laid down, with the middle of the
-  page left alone. Both follow the blog list's rules — no JS, no image files
-  (every plant is inline SVG), everything inside
-  `@media (prefers-reduced-motion: no-preference)`, periods that are not
-  multiples of each other, and no hard edges. Depth on the home page is the
-  z-index order: light furthest back, then trees (palest, slowest, least
-  movement), then flowers, then the petal in front.
-- **The timeline got scenery first, and scenery behind a diagram does not
-  work.** The first version hung the blog's cloud layers over the recent
-  years and a full-width band of grass under 2005. Cloud between the cards
-  read as smudges rather than sky, and the grass read as a stock
-  illustration with the chart sitting on top of it. The page is a spine,
-  five bar colours and connector lines — it is already carrying a lot, and
-  the fix was to get out of its way rather than to tune the opacity. The
-  specimens live in the margins and the diagram is untouched. (That attempt
-  also briefly factored the cloud layers out into a shared `.sky-layers`
-  class; with the timeline no longer wearing it, they are back on
-  `.archive-sky` where they started.)
+- **Two more pages stand in a scene** (2026-09-22). The **home page** is out
+  of doors: the blog index's sky overhead — literally the same
+  `.sky-layers` class, the same two parallax layers at the same two speeds —
+  and a treeline along the foot leaning in the same wind, with one petal
+  coming down every 82s. The **timeline** carries one flower at six stages
+  of its life, pressed across the background and ordered bottom to top the
+  way the years run: a seed head by 2005, then sprout, bud, opening, open,
+  and a plant in full bloom at this year. Nobody has to notice the order for
+  the page to work, but it is why they are where they are.
+- **Two earlier versions were built and thrown away, and the reasons are
+  worth keeping.** (1) Ferns in the margins plus a full-width band of grass
+  under the timeline's 2005: the grass read as a stock illustration with the
+  chart sitting on top of it, and cloud between the cards read as smudges.
+  **Scenery behind a diagram fights the diagram.** (2) Two trees and flower
+  clusters standing in the home page's margins: it framed the page rather
+  than filling it, and every plant was furniture. What works on home is a
+  sky and a horizon and nothing else; what works on the timeline is to stay
+  out of the middle and let the margins carry it.
+- **Depth is z-index order, and it is most of the effect.** Home: sky
+  furthest back, then the far treeline (smaller tile, paler, leaning less),
+  then the near one, then the petal in front of everything. Timeline: the
+  two stages that sit inboard behind the columns run at about half the
+  opacity of the four in the margins — **anything behind a card has to be
+  fainter than anything that is not.**
+- **The treelines are the only FILES on the site** (`static/trees-*-1.svg`,
+  referenced root-relative as `/trees-near-1.svg`). Everything else
+  decorative is an inline data URI, but all CSS is inlined into every page,
+  so 40KB of trees would have ridden along on the blog index and the lab,
+  which never draw them. A CSS background is only fetched by a page that has
+  the element. **The `-1` is a manual version**: the edge caches these by
+  name, so a redraw needs a new number rather than an overwrite. Net weight
+  after moving them out and dropping the discarded flowers: `base.html` is
+  25.6KB → 30.9KB gzipped per page, plus 4.4KB of trees on the home page
+  alone.
 - ⚠ **`overflow-x: clip` clips the OTHER axis too.** When one axis is `clip`
-  a `visible` axis computes to `clip`, so the first `.home-scene` — which
-  clipped x to contain the plants' sway — cropped its own full-bleed children
-  back to the reading column. The plants disappeared entirely and the light
-  gained a hard horizontal edge under the nav. **A scene that contains
-  bleeding layers must not clip; each layer clips itself.** `.archive-sky`
-  does not hit this because it IS the full-bleed box and its children are
-  `inset: 0`.
+  a `visible` axis computes to `clip`, so an early `.home-scene` — which
+  clipped x to contain its plants' sway — cropped its own full-bleed children
+  back to the reading column. They disappeared entirely and the wash gained
+  a hard horizontal edge under the nav. **A scene that contains bleeding
+  layers must not clip; each layer clips itself.** `.archive-sky` and
+  `.home-sky` can both clip safely because they ARE the full-bleed box and
+  their children are `inset: 0`.
 - ⚠ **`overflow` does not contain an element's OWN movement**, only its
-  children's. `.home-petal` is a 100vw runner that translates sideways as it
+  children's. `.home-petal` is a runner that translates sideways as it
   falls, and with `overflow: clip` on the runner itself the home page still
   gained 17px of real horizontal scroll at 1280px and 5px at 412px, drifting
-  in and out as the petal fell. It now sits inside `.home-petalpath`, which
+  in and out as the petal fell. It sits inside `.home-petalpath` now, which
   is exactly what `.archive-flightpath` does for the gull: **anything that
   translates needs a clipping ANCESTOR.** `hidden` rather than `clip` there,
   because the fall would otherwise extend the page's scrollable height too.
-- **A radial gradient centred on its box's edge draws a straight line.**
-  `.home-light` had its ellipse centred at 4% and was still at full strength
-  where the box stopped, which read as a panel under the nav. Both centres
-  now sit far enough inside that the wash reaches zero before the edges —
-  the same rule as the sky's stops ending in an explicit `rgba(…, 0)`.
+- **Wind is a skew about the bottom edge, not a slide.** Each treeline is
+  one wide SVG tile repeated across the viewport rather than N positioned
+  trees, because the whole line has to lean as one thing; two tiles of
+  different widths also hide each other's repeat. The pseudo-elements are
+  inset past both edges (`left/right: -4%`) because a skew anchored at x=0
+  pulls the line away from the left of the screen as it leans.
+- **A radial gradient centred on its box's edge draws a straight line.** An
+  earlier `.home-light` had its ellipse centred at 4% and was still at full
+  strength where the box stopped, which read as a panel under the nav. Any
+  wash has to reach zero before its edges — the same rule as the sky's stops
+  ending in an explicit `rgba(…, 0)`. `.home-sky` uses a `mask-image` to the
+  same end: cloud thins out downward until the woods take over, so the page
+  has no horizon line anywhere.
 - **Percentage translate resolves against the element's own box.** A 19px
   petal animated to `translate: … 69%` moves 13px and reads as a twitch,
   which is why the runner is full height and the graphic hangs off it as a
@@ -481,7 +500,7 @@ drifts off-center everywhere else.
   the gaps between rows: a small shape crossing a line of text reads as a
   stray diacritic.
 - **Verifying any of this:** `window.scrollTo(400, 0)` then read `scrollX`,
-  at 1280px and 412px, on home, timeline AND blog — and sample it repeatedly,
+  at 1280px and 412px, on home, timeline AND blog — sampled repeatedly,
   because the worst moment is mid-animation. Note that a `--screenshot` run
   renders at animation time zero, so anything that starts at `opacity: 0`
   (the petal, the gull) is invisible in it; drive CDP and inject

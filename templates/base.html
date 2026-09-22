@@ -600,14 +600,22 @@
             padding: 0 1rem;
         }
 
-        /* The two cloud layers. Percentages resolve against the
-           full-viewport sky, so the forms spread across the whole screen
-           and only some of them pass behind the column. Every stop ends in
-           an explicit `rgba(..., 0)` and never in `transparent`: engines
-           interpolate `transparent` through transparent *black* and leave a
-           grey fringe across the fade. */
-        .archive-sky::before,
-        .archive-sky::after {
+        /* The two cloud layers, as a class, because the blog list and the
+           home page both wear them (`.archive-sky` and `.home-sky`) and one
+           sky drifting at one pair of speeds is what makes the two pages
+           feel like the same afternoon. Anything wearing it must be
+           positioned and must establish a stacking context of its own, or
+           these negative z-indexes escape to the root and paint behind the
+           page.
+
+           Percentages resolve against the element, so the forms spread
+           across whatever box they are given and only some of them pass
+           behind the column. Every stop ends in an explicit `rgba(..., 0)`
+           and never in `transparent`: engines interpolate `transparent`
+           through transparent *black* and leave a grey fringe across the
+           fade. */
+        .sky-layers::before,
+        .sky-layers::after {
             content: '';
             position: absolute;
             inset: 0;
@@ -617,7 +625,7 @@
         /* Near layer: fewer, larger, a shade stronger, each with an
            underside in a deeper blue -- a cloud is denser where it sits in
            its own shade, and without that it has no weight. */
-        .archive-sky::before {
+        .sky-layers::before {
             z-index: -2;
             background:
                 radial-gradient(14% 9% at 16% 14%, rgba(116, 196, 231, 0.30), rgba(116, 196, 231, 0) 70%),
@@ -633,7 +641,7 @@
         /* Far layer: more of them, smaller, fainter, drifting the other way
            at two thirds the speed. Two layers moving independently is what
            makes this read as depth rather than as one sliding texture. */
-        .archive-sky::after {
+        .sky-layers::after {
             z-index: -3;
             background:
                 radial-gradient(7% 5% at 8% 30%, rgba(116, 196, 231, 0.16), rgba(116, 196, 231, 0) 74%),
@@ -649,11 +657,11 @@
            here fights anything else. The two durations are deliberately not
            multiples of each other, so the layers never fall back into step. */
         @media (prefers-reduced-motion: no-preference) {
-            .archive-sky::before {
+            .sky-layers::before {
                 animation: sky-near 124s ease-in-out infinite;
             }
 
-            .archive-sky::after {
+            .sky-layers::after {
                 animation: sky-far 187s ease-in-out infinite reverse;
             }
         }
@@ -1146,22 +1154,20 @@
             display: flow-root;
         }
 
-        /* Home: a clearing, not a sky. The blog list is weather; this page
-           is the room the cat photo was taken in and the yard outside it.
-           Light comes from the top right where the photo hangs, two trees
-           stand beyond the reading column, flowers grow at the foot of the
-           page, and a petal comes down every minute or so.
+        /* Home: weather and woods. The page sits under the same sky the
+           blog index does -- literally the same class, the same two
+           parallax layers at the same two speeds -- with a treeline along
+           the bottom moving in the same wind. The light wash, the ferns and
+           the flower clusters that stood here before are gone: a sky and a
+           horizon carry the whole background, and anything else in the
+           margins was just furniture.
 
            Same idiom as `.archive-sky`: the scene bleeds to the viewport
-           while the words stay in the column, every layer sits behind the
-           text on a negative z-index inside this element's own stacking
-           context, and nothing here is an image file -- the trees, the
-           flowers and the petal are all inline SVG.
-
-           Depth is the z-index order: light furthest back, then trees (the
-           palest and the slowest), then flowers, then the petal in front of
-           all of it. Nearer things are smaller, stronger and quicker, which
-           is the whole of the effect. */
+           while the words stay in the column, and every layer sits behind
+           the text on a negative z-index inside this element's own stacking
+           context. Depth is that z-index order and it is the whole effect:
+           sky furthest back, then the far treeline (smaller, paler, moving
+           less), then the near one, then the petal in front of all of it. */
         .home-scene {
             position: relative;
             isolation: isolate;
@@ -1169,115 +1175,86 @@
                this element to the viewport, so a clip on the scene crops
                them back to the reading column -- and it crops on both axes,
                because `overflow-x: clip` makes a `visible` y axis compute
-               to `clip` as well. That cost an hour: the plants vanished
-               entirely and the light gained a hard horizontal edge under
-               the nav. Each layer clips itself instead. */
+               to `clip` as well. That cost an hour once: the plants
+               vanished entirely and the sky gained a hard horizontal edge
+               under the nav. Each layer clips itself instead. */
         }
 
-        .home-light,
-        .home-trees,
-        .home-flowers,
+        .home-sky,
+        .home-woods,
         .home-petalpath {
             position: absolute;
             left: calc(50% - 50vw);
             width: 100vw;
             pointer-events: none;
-            /* Everything here moves on `translate` or `rotate`, and a
-               transform contributes to scrollable overflow; each layer
-               contains its own. */
+        }
+
+        /* The sky owns the top three quarters of the page and fades out
+           before it reaches the trees, so there is no horizon line -- the
+           cloud simply thins until the woods take over. `isolation` is what
+           keeps `.sky-layers`' -2 and -3 inside this box, and the clip is
+           for their drift, which is a `translate` of up to 18px and would
+           otherwise widen the page. Clipping here is safe (and is what
+           `.archive-sky` does) because this element IS the full-bleed box
+           and its children are `inset: 0`. */
+        .home-sky {
+            top: -1.5rem;
+            height: 74%;
+            z-index: -4;
+            isolation: isolate;
+            overflow-x: clip;
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 56%, rgba(0, 0, 0, 0) 100%);
+            mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 56%, rgba(0, 0, 0, 0) 100%);
+        }
+
+        /* Two treelines, near and far. Each is one wide SVG tile repeated
+           across the viewport rather than N positioned trees, because the
+           whole line has to lean as one thing for the wind to read -- and
+           because two tiles of different widths hide each other's repeat.
+
+           These two are the only assets on the site that are FILES rather
+           than inline SVG (`static/trees-*-1.svg`). Everything else here is
+           a data URI, but all CSS is inlined into every page, so 40KB of
+           trees would have ridden along on the blog index and the lab,
+           which never draw them. A CSS background is only fetched by a page
+           that has the element. The `-1` is a manual version: the edge
+           caches these by name, so a redraw needs a new number, not an
+           overwrite. */
+        .home-woods {
+            bottom: -1rem;
+            height: 330px;
+            z-index: -3;
             overflow: clip;
         }
 
-        /* Morning light over the photo's shoulder, in the site's blue and
-           not the photo's amber: a warm cream wash is the one gradient
-           every generated page ships with. Both ellipses sit far enough
-           inside the box that they reach zero before its edges -- a radial
-           centred on an edge is still at full strength where the box stops,
-           which draws a straight line across the page. */
-        .home-light {
-            top: 0;
-            height: 62%;
-            z-index: -4;
-            background:
-                radial-gradient(44% 30% at 80% 26%, rgba(116, 196, 231, 0.20), rgba(116, 196, 231, 0) 70%),
-                radial-gradient(54% 34% at 16% 20%, rgba(116, 196, 231, 0.09), rgba(116, 196, 231, 0) 72%);
-        }
-
-        /* Two trees, each standing partly off the side of the screen so the
-           page reads as a clearing rather than as a picture of two trees.
-           They are different trees on purpose -- a mirrored copy of one is a
-           stencil -- and each canopy is a solid core with a broken rim,
-           because a rim alone reads as a dandelion clock. */
-        .home-trees {
-            bottom: -1rem;
-            height: 470px;
-            z-index: -3;
-        }
-
-        .home-trees::before,
-        .home-trees::after {
+        .home-woods::before,
+        .home-woods::after {
             content: '';
             position: absolute;
+            /* Past both edges, because a skew that starts at x=0 pulls the
+               line away from the left of the screen as it leans. */
+            left: -4%;
+            right: -4%;
             bottom: 0;
-            opacity: 0.085;
-            background-repeat: no-repeat;
-            background-size: contain;
-            /* Pivot at the root: a tree bends, it does not slide. */
+            background-repeat: repeat-x;
+            background-position: bottom center;
+            /* Trees bend from the ground, so the wind is a skew about the
+               bottom edge rather than a slide. */
             transform-origin: 50% 100%;
         }
 
-        .home-trees::before {
-            left: -3rem;
-            width: 250px;
-            height: 465px;
-            background-position: bottom left;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 560'%3E%3Cpath d='M135 560 Q143 448 149 336 L158 336 Q157 448 165 560Z' fill='%237a9e72'/%3E%3Cpath d='M150 394 Q119 361 99 327' fill='none' stroke='%237a9e72' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M150 372 Q186 338 210 305' fill='none' stroke='%237a9e72' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M150 354 Q128 320 114 287' fill='none' stroke='%237a9e72' stroke-width='6' stroke-linecap='round'/%3E%3Cellipse cx='157' cy='229' rx='68' ry='67' fill='%237a9e72'/%3E%3Cellipse cx='152' cy='199' rx='60' ry='72' fill='%237a9e72'/%3E%3Cellipse cx='154' cy='213' rx='81' ry='64' fill='%237a9e72'/%3E%3Cellipse cx='168' cy='181' rx='73' ry='57' fill='%237a9e72'/%3E%3Cellipse cx='122' cy='169' rx='71' ry='70' fill='%237a9e72'/%3E%3Cellipse cx='153' cy='199' rx='76' ry='66' fill='%237a9e72'/%3E%3Cellipse cx='154' cy='203' rx='78' ry='64' fill='%237a9e72'/%3E%3Cellipse cx='128' cy='72' rx='19' ry='18' fill='%237a9e72'/%3E%3Cellipse cx='48' cy='280' rx='16' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='221' cy='141' rx='12' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='264' cy='179' rx='18' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='46' cy='197' rx='15' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='33' cy='134' rx='19' ry='17' fill='%237a9e72'/%3E%3Cellipse cx='245' cy='92' rx='19' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='247' cy='96' rx='21' ry='18' fill='%237a9e72'/%3E%3Cellipse cx='132' cy='110' rx='20' ry='17' fill='%237a9e72'/%3E%3Cellipse cx='135' cy='285' rx='21' ry='20' fill='%237a9e72'/%3E%3Cellipse cx='268' cy='269' rx='15' ry='11' fill='%237a9e72'/%3E%3Cellipse cx='118' cy='323' rx='21' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='88' cy='146' rx='19' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='261' cy='108' rx='17' ry='16' fill='%237a9e72'/%3E%3Cellipse cx='122' cy='282' rx='18' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='190' cy='301' rx='18' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='288' cy='236' rx='14' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='241' cy='139' rx='16' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='79' cy='110' rx='17' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='263' cy='161' rx='16' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='163' cy='300' rx='22' ry='18' fill='%237a9e72'/%3E%3Cellipse cx='72' cy='177' rx='16' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='276' cy='216' rx='18' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='75' cy='124' rx='19' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='120' cy='82' rx='11' ry='8' fill='%237a9e72'/%3E%3Cellipse cx='90' cy='79' rx='14' ry='11' fill='%237a9e72'/%3E%3Cellipse cx='67' cy='146' rx='15' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='72' cy='287' rx='14' ry='11' fill='%237a9e72'/%3E%3Cellipse cx='167' cy='119' rx='17' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='118' cy='289' rx='20' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='197' cy='300' rx='19' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='108' cy='292' rx='20' ry='17' fill='%237a9e72'/%3E%3Cellipse cx='214' cy='130' rx='14' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='239' cy='130' rx='13' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='59' cy='184' rx='20' ry='18' fill='%237a9e72'/%3E%3Cellipse cx='196' cy='291' rx='20' ry='17' fill='%237a9e72'/%3E%3Cellipse cx='191' cy='106' rx='12' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='182' cy='108' rx='15' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='58' cy='252' rx='22' ry='16' fill='%237a9e72'/%3E%3Cellipse cx='297' cy='206' rx='21' ry='20' fill='%237a9e72'/%3E%3Cellipse cx='23' cy='256' rx='22' ry='16' fill='%237a9e72'/%3E%3Cellipse cx='151' cy='72' rx='18' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='129' cy='300' rx='13' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='67' cy='150' rx='20' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='260' cy='132' rx='22' ry='20' fill='%237a9e72'/%3E%3Cellipse cx='252' cy='134' rx='11' ry='9' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        .home-trees::after {
-            right: -2.5rem;
-            width: 215px;
-            height: 390px;
-            background-position: bottom right;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 260 470'%3E%3Cpath d='M117 470 Q124 376 121 282 L129 282 Q136 376 143 470Z' fill='%237a9e72'/%3E%3Cpath d='M130 331 Q104 303 86 274' fill='none' stroke='%237a9e72' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M130 312 Q161 284 182 256' fill='none' stroke='%237a9e72' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M130 297 Q111 269 99 241' fill='none' stroke='%237a9e72' stroke-width='5' stroke-linecap='round'/%3E%3Cellipse cx='130' cy='210' rx='54' ry='58' fill='%237a9e72'/%3E%3Cellipse cx='134' cy='174' rx='70' ry='49' fill='%237a9e72'/%3E%3Cellipse cx='109' cy='154' rx='60' ry='54' fill='%237a9e72'/%3E%3Cellipse cx='138' cy='202' rx='54' ry='49' fill='%237a9e72'/%3E%3Cellipse cx='136' cy='171' rx='59' ry='62' fill='%237a9e72'/%3E%3Cellipse cx='119' cy='172' rx='57' ry='63' fill='%237a9e72'/%3E%3Cellipse cx='152' cy='179' rx='59' ry='57' fill='%237a9e72'/%3E%3Cellipse cx='65' cy='256' rx='14' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='209' cy='113' rx='11' ry='8' fill='%237a9e72'/%3E%3Cellipse cx='218' cy='138' rx='11' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='25' cy='120' rx='18' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='49' cy='256' rx='10' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='214' cy='228' rx='16' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='179' cy='92' rx='11' ry='8' fill='%237a9e72'/%3E%3Cellipse cx='24' cy='152' rx='10' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='13' cy='164' rx='11' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='216' cy='176' rx='12' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='39' cy='245' rx='18' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='58' cy='216' rx='16' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='158' cy='270' rx='12' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='132' cy='84' rx='11' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='134' cy='257' rx='14' ry='11' fill='%237a9e72'/%3E%3Cellipse cx='48' cy='126' rx='10' ry='7' fill='%237a9e72'/%3E%3Cellipse cx='203' cy='227' rx='13' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='12' cy='166' rx='19' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='205' cy='177' rx='13' ry='11' fill='%237a9e72'/%3E%3Cellipse cx='120' cy='84' rx='19' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='167' cy='102' rx='18' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='235' cy='146' rx='19' ry='16' fill='%237a9e72'/%3E%3Cellipse cx='178' cy='273' rx='14' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='44' cy='112' rx='14' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='199' cy='236' rx='14' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='19' cy='208' rx='16' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='50' cy='222' rx='11' ry='9' fill='%237a9e72'/%3E%3Cellipse cx='48' cy='194' rx='17' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='66' cy='124' rx='13' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='228' cy='233' rx='17' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='100' cy='94' rx='12' ry='10' fill='%237a9e72'/%3E%3Cellipse cx='119' cy='69' rx='9' ry='8' fill='%237a9e72'/%3E%3Cellipse cx='219' cy='112' rx='19' ry='18' fill='%237a9e72'/%3E%3Cellipse cx='138' cy='251' rx='15' ry='14' fill='%237a9e72'/%3E%3Cellipse cx='39' cy='253' rx='18' ry='15' fill='%237a9e72'/%3E%3Cellipse cx='36' cy='88' rx='17' ry='13' fill='%237a9e72'/%3E%3Cellipse cx='171' cy='105' rx='13' ry='12' fill='%237a9e72'/%3E%3Cellipse cx='175' cy='101' rx='12' ry='10' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        /* Flowers stand nearer than the trees: smaller, stronger, quicker.
-           Each side is a cluster of several plants at different heights in
-           one SVG -- one bloom repeated is a stamp -- and the tallest plants
-           are at the outer end of each cluster, so the part that reaches
-           under the text is the short end. */
-        .home-flowers {
-            bottom: -2rem;
+        .home-woods::before {
             height: 200px;
-            z-index: -2;
+            opacity: 0.085;
+            background-image: url('/trees-far-1.svg');
+            background-size: 1000px 200px;
         }
 
-        .home-flowers::before,
-        .home-flowers::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            opacity: 0.17;
-            background-repeat: no-repeat;
-            background-size: contain;
-            transform-origin: 50% 100%;
-        }
-
-        .home-flowers::before {
-            left: -2rem;
-            width: 265px;
-            height: 186px;
-            background-position: bottom left;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 210'%3E%3Cg transform='translate%280 35%29 scale%280.92%29'%3E%3Cpath d='M35 190 Q39 104 38 19' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='35' cy='127' rx='7' ry='3' fill='%23c58fa0' transform='rotate%2858 35 127%29 translate%28-6 0%29'/%3E%3Cellipse cx='35' cy='127' rx='7' ry='3' fill='%23c58fa0' transform='rotate%28-58 35 127%29 translate%286 0%29'/%3E%3Cellipse cx='35' cy='118' rx='7' ry='3' fill='%23c58fa0' transform='rotate%2858 35 118%29 translate%28-6 0%29'/%3E%3Cellipse cx='35' cy='118' rx='7' ry='3' fill='%23c58fa0' transform='rotate%28-58 35 118%29 translate%286 0%29'/%3E%3Cellipse cx='36' cy='109' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 36 109%29 translate%28-6 0%29'/%3E%3Cellipse cx='36' cy='109' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 36 109%29 translate%286 0%29'/%3E%3Cellipse cx='36' cy='100' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 36 100%29 translate%28-5 0%29'/%3E%3Cellipse cx='36' cy='100' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 36 100%29 translate%285 0%29'/%3E%3Cellipse cx='36' cy='91' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 36 91%29 translate%28-5 0%29'/%3E%3Cellipse cx='36' cy='91' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 36 91%29 translate%285 0%29'/%3E%3Cellipse cx='36' cy='82' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 36 82%29 translate%28-5 0%29'/%3E%3Cellipse cx='36' cy='82' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 36 82%29 translate%285 0%29'/%3E%3Cellipse cx='36' cy='73' rx='5' ry='3' fill='%23c58fa0' transform='rotate%2858 36 73%29 translate%28-5 0%29'/%3E%3Cellipse cx='36' cy='73' rx='5' ry='3' fill='%23c58fa0' transform='rotate%28-58 36 73%29 translate%285 0%29'/%3E%3Cellipse cx='37' cy='64' rx='5' ry='2' fill='%23c58fa0' transform='rotate%2858 37 64%29 translate%28-4 0%29'/%3E%3Cellipse cx='37' cy='64' rx='5' ry='2' fill='%23c58fa0' transform='rotate%28-58 37 64%29 translate%284 0%29'/%3E%3Cellipse cx='37' cy='55' rx='5' ry='2' fill='%23c58fa0' transform='rotate%2858 37 55%29 translate%28-4 0%29'/%3E%3Cellipse cx='37' cy='55' rx='5' ry='2' fill='%23c58fa0' transform='rotate%28-58 37 55%29 translate%284 0%29'/%3E%3C/g%3E%3Cg transform='translate%2858 4%29 scale%281%29'%3E%3Cpath d='M45 200 Q55 110 39 36' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='42' cy='131' rx='14' ry='5' fill='%237a9e72' transform='rotate%2835 42 131%29 translate%28-14 0%29'/%3E%3Cellipse cx='43' cy='92' rx='14' ry='5' fill='%237a9e72' transform='rotate%28-35 43 92%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%2844 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%2889 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28134 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28179 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28224 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28269 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28314 39 36%29 translate%2814 0%29'/%3E%3Cellipse cx='39' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28359 39 36%29 translate%2814 0%29'/%3E%3Ccircle cx='39' cy='36' r='5' fill='%237a9e72'/%3E%3C/g%3E%3Cg transform='translate%28150 61%29 scale%280.9%29'%3E%3Cpath d='M50 170 Q59 102 56 41' fill='none' stroke='%237a9e72' stroke-width='1.9' stroke-linecap='round'/%3E%3Cpath d='M56 41 L30 41' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='30' cy='41' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L24 34' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='24' cy='34' r='3' fill='%237a9e72'/%3E%3Cpath d='M56 41 L29 27' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='29' cy='27' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L35 22' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='35' cy='22' r='3' fill='%237a9e72'/%3E%3Cpath d='M56 41 L43 19' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='43' cy='19' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L51 18' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='51' cy='18' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L60 16' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='60' cy='16' r='3' fill='%237a9e72'/%3E%3Cpath d='M56 41 L69 16' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='69' cy='16' r='3' fill='%237a9e72'/%3E%3Cpath d='M56 41 L75 23' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='75' cy='23' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L77 30' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='77' cy='30' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L84 34' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='84' cy='34' r='2' fill='%237a9e72'/%3E%3Cpath d='M56 41 L84 41' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='84' cy='41' r='3' fill='%237a9e72'/%3E%3C/g%3E%3Cg transform='translate%28232 76%29 scale%280.72%29'%3E%3Cpath d='M45 200 Q42 110 44 36' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='45' cy='131' rx='14' ry='5' fill='%237a9e72' transform='rotate%2835 45 131%29 translate%28-14 0%29'/%3E%3Cellipse cx='45' cy='92' rx='14' ry='5' fill='%237a9e72' transform='rotate%28-35 45 92%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%288 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%2853 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%2898 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28143 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28188 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28233 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28278 44 36%29 translate%2814 0%29'/%3E%3Cellipse cx='44' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28323 44 36%29 translate%2814 0%29'/%3E%3Ccircle cx='44' cy='36' r='5' fill='%237a9e72'/%3E%3C/g%3E%3C/svg%3E");
-        }
-
-        .home-flowers::after {
-            right: -1.5rem;
-            width: 215px;
-            height: 172px;
-            background-position: bottom right;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 230 185'%3E%3Cg transform='translate%280 52%29 scale%280.82%29'%3E%3Cpath d='M50 170 Q43 102 48 41' fill='none' stroke='%237a9e72' stroke-width='1.9' stroke-linecap='round'/%3E%3Cpath d='M48 41 L17 41' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='17' cy='41' r='2' fill='%237a9e72'/%3E%3Cpath d='M48 41 L19 33' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='19' cy='33' r='2' fill='%237a9e72'/%3E%3Cpath d='M48 41 L27 29' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='27' cy='29' r='3' fill='%237a9e72'/%3E%3Cpath d='M48 41 L33 24' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='33' cy='24' r='3' fill='%237a9e72'/%3E%3Cpath d='M48 41 L40 21' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='40' cy='21' r='2' fill='%237a9e72'/%3E%3Cpath d='M48 41 L48 18' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='48' cy='18' r='3' fill='%237a9e72'/%3E%3Cpath d='M48 41 L56 21' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='56' cy='21' r='2' fill='%237a9e72'/%3E%3Cpath d='M48 41 L66 21' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='66' cy='21' r='3' fill='%237a9e72'/%3E%3Cpath d='M48 41 L72 26' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='72' cy='26' r='2' fill='%237a9e72'/%3E%3Cpath d='M48 41 L80 32' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='80' cy='32' r='2' fill='%237a9e72'/%3E%3Cpath d='M48 41 L81 41' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='81' cy='41' r='2' fill='%237a9e72'/%3E%3C/g%3E%3Cg transform='translate%2878 9%29 scale%280.88%29'%3E%3Cpath d='M45 200 Q46 110 41 36' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='43' cy='131' rx='14' ry='5' fill='%237a9e72' transform='rotate%2835 43 131%29 translate%28-14 0%29'/%3E%3Cellipse cx='44' cy='92' rx='14' ry='5' fill='%237a9e72' transform='rotate%28-35 44 92%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%2821 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%2866 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28111 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28156 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28201 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28246 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28291 41 36%29 translate%2814 0%29'/%3E%3Cellipse cx='41' cy='36' rx='15' ry='6' fill='%23c58fa0' transform='rotate%28336 41 36%29 translate%2814 0%29'/%3E%3Ccircle cx='41' cy='36' r='5' fill='%237a9e72'/%3E%3C/g%3E%3Cg transform='translate%28160 41%29 scale%280.8%29'%3E%3Cpath d='M35 190 Q36 104 34 19' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='35' cy='127' rx='7' ry='3' fill='%23c58fa0' transform='rotate%2858 35 127%29 translate%28-6 0%29'/%3E%3Cellipse cx='35' cy='127' rx='7' ry='3' fill='%23c58fa0' transform='rotate%28-58 35 127%29 translate%286 0%29'/%3E%3Cellipse cx='35' cy='115' rx='7' ry='3' fill='%23c58fa0' transform='rotate%2858 35 115%29 translate%28-6 0%29'/%3E%3Cellipse cx='35' cy='115' rx='7' ry='3' fill='%23c58fa0' transform='rotate%28-58 35 115%29 translate%286 0%29'/%3E%3Cellipse cx='35' cy='103' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 35 103%29 translate%28-6 0%29'/%3E%3Cellipse cx='35' cy='103' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 35 103%29 translate%286 0%29'/%3E%3Cellipse cx='35' cy='91' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 35 91%29 translate%28-5 0%29'/%3E%3Cellipse cx='35' cy='91' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 35 91%29 translate%285 0%29'/%3E%3Cellipse cx='34' cy='79' rx='6' ry='3' fill='%23c58fa0' transform='rotate%2858 34 79%29 translate%28-5 0%29'/%3E%3Cellipse cx='34' cy='79' rx='6' ry='3' fill='%23c58fa0' transform='rotate%28-58 34 79%29 translate%285 0%29'/%3E%3Cellipse cx='34' cy='67' rx='5' ry='2' fill='%23c58fa0' transform='rotate%2858 34 67%29 translate%28-4 0%29'/%3E%3Cellipse cx='34' cy='67' rx='5' ry='2' fill='%23c58fa0' transform='rotate%28-58 34 67%29 translate%284 0%29'/%3E%3Cellipse cx='34' cy='55' rx='5' ry='2' fill='%23c58fa0' transform='rotate%2858 34 55%29 translate%28-4 0%29'/%3E%3Cellipse cx='34' cy='55' rx='5' ry='2' fill='%23c58fa0' transform='rotate%28-58 34 55%29 translate%284 0%29'/%3E%3C/g%3E%3C/svg%3E");
+        .home-woods::after {
+            height: 320px;
+            opacity: 0.12;
+            background-image: url('/trees-near-1.svg');
+            background-size: 1320px 320px;
         }
 
         /* One petal, built exactly like the blog list's gull, and for the
@@ -1291,8 +1268,8 @@
 
            The runner owns the fall, because a percentage translate resolves
            against the element's OWN box: a 19px petal translated to 69%
-           moves 13px and reads as a twitch. The runner is the full height of
-           the scene, so 69% of it is a descent.
+           moves 13px and reads as a twitch. The runner is the full height
+           of the scene, so 69% of it is a descent.
 
            The petal owns its spin, because two animations on one element
            means the second `animation` shorthand simply replaces the first.
@@ -1319,9 +1296,9 @@
         .home-petal::before {
             content: '';
             position: absolute;
-            /* Down the left margin, not through the column. The gull
-               keeps to the gaps between rows for the same reason: a small
-               shape crossing a line of text reads as a stray diacritic. */
+            /* Down the left margin, not through the column. The gull keeps
+               to the gaps between rows for the same reason: a small shape
+               crossing a line of text reads as a stray diacritic. */
             top: 0;
             left: 3%;
             width: 13px;
@@ -1331,28 +1308,18 @@
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 26'%3E%3Cpath d='M9 1 C18 8 17 20 9 25 C1.44 20 0.36 8 9 1Z' fill='%23c58fa0'/%3E%3C/svg%3E");
         }
 
-        /* Minutes per cycle, and no two periods here are multiples of each
-           other -- plants nodding in time read as a machine. The trees move
-           least and slowest because they are furthest away. */
+        /* Wind. The near line leans further and recovers sooner than the far
+           one, which is most of what sells the distance between them, and
+           the two periods are not multiples of each other so they never fall
+           into step. Both are slow enough that you have to sit and watch to
+           catch either of them moving. */
         @media (prefers-reduced-motion: no-preference) {
-            .home-trees::before {
-                animation: tree-sway 118s ease-in-out infinite;
+            .home-woods::before {
+                animation: wind-far 97s ease-in-out infinite;
             }
 
-            .home-trees::after {
-                animation: tree-sway-alt 149s ease-in-out infinite;
-            }
-
-            .home-flowers::before {
-                animation: flower-sway 53s ease-in-out infinite;
-            }
-
-            .home-flowers::after {
-                animation: flower-sway-alt 71s ease-in-out infinite;
-            }
-
-            .home-light {
-                animation: home-light-drift 143s ease-in-out infinite;
+            .home-woods::after {
+                animation: wind-near 61s ease-in-out infinite;
             }
 
             .home-petal {
@@ -1364,34 +1331,16 @@
             }
         }
 
-        @keyframes tree-sway {
-            0% { transform: rotate(-0.5deg); }
-            50% { transform: rotate(0.6deg); }
-            100% { transform: rotate(-0.5deg); }
+        @keyframes wind-near {
+            0% { transform: skewX(-0.85deg); translate: 0 0; }
+            43% { transform: skewX(1.15deg); translate: -7px 0; }
+            100% { transform: skewX(-0.85deg); translate: 0 0; }
         }
 
-        @keyframes tree-sway-alt {
-            0% { transform: rotate(0.55deg); }
-            50% { transform: rotate(-0.45deg); }
-            100% { transform: rotate(0.55deg); }
-        }
-
-        @keyframes flower-sway {
-            0% { transform: rotate(-1.4deg); }
-            50% { transform: rotate(1.7deg); }
-            100% { transform: rotate(-1.4deg); }
-        }
-
-        @keyframes flower-sway-alt {
-            0% { transform: rotate(1.6deg); }
-            48% { transform: rotate(-1.5deg); }
-            100% { transform: rotate(1.6deg); }
-        }
-
-        @keyframes home-light-drift {
-            0% { translate: 0 0; }
-            50% { translate: -14px 8px; }
-            100% { translate: 0 0; }
+        @keyframes wind-far {
+            0% { transform: skewX(0.6deg); translate: 4px 0; }
+            52% { transform: skewX(-0.75deg); translate: -3px 0; }
+            100% { transform: skewX(0.6deg); translate: 4px 0; }
         }
 
         /* Down and sideways at once, on air that keeps changing its mind. */
@@ -1406,10 +1355,10 @@
             100% { translate: 1.5vw 69%; opacity: 0; }
         }
 
-        /* A phone has no margin -- the column IS the screen -- so the
-           petal falls down the 1rem of body padding instead, and its drift
-           is cut to a couple of pixels to keep it there. Measured: it spans
-           x 0..16 at 412px, and the text starts at 16. */
+        /* A phone has no margin -- the column IS the screen -- so the petal
+           falls down the 1rem of body padding instead, and its drift is cut
+           to a couple of pixels to keep it there. Measured: it spans x 1..17
+           at 412px, and the text starts at 16. */
         @keyframes petal-fall-narrow {
             0% { translate: 0 -6%; opacity: 0; }
             3% { translate: 0.3vw -2%; opacity: 0.45; }
@@ -1427,48 +1376,29 @@
             100% { rotate: -20deg; }
         }
 
-        /* On a phone the column IS the screen, so there is no margin for a
-           tree to stand in: the right-hand tree goes, the left one shrinks
-           to a shoulder at the very bottom corner, and the flowers thin to a
-           fringe along the foot of the page. The petal stays -- it falls
-           through empty air either way. */
+        /* A phone is a tall narrow strip of page: the sky keeps its share of
+           it, the woods drop to a low band at the foot, and both thin out,
+           because at this width every one of them is behind running text
+           rather than beside it. */
         @media (max-width: 700px) {
-            .home-trees {
-                height: 230px;
+            .home-sky {
+                height: 58%;
             }
 
-            .home-trees::before {
-                left: -3.5rem;
-                width: 130px;
-                height: 225px;
+            .home-woods {
+                height: 190px;
+            }
+
+            .home-woods::before {
+                height: 115px;
                 opacity: 0.07;
+                background-size: 560px 115px;
             }
 
-            .home-trees::after {
-                display: none;
-            }
-
-            .home-flowers {
-                height: 130px;
-                bottom: -1.25rem;
-            }
-
-            .home-flowers::before {
-                left: -2.5rem;
-                width: 165px;
-                height: 118px;
-                opacity: 0.13;
-            }
-
-            .home-flowers::after {
-                right: -2rem;
-                width: 135px;
-                height: 108px;
-                opacity: 0.13;
-            }
-
-            .home-light {
-                height: 40%;
+            .home-woods::after {
+                height: 180px;
+                opacity: 0.1;
+                background-size: 740px 180px;
             }
 
             .home-petal::before {
@@ -1476,9 +1406,6 @@
             }
         }
 
-        /* Outside the width media query on purpose: the narrow fall is a
-           motion rule, and everything that animates on this page lives
-           inside one reduced-motion guard. */
         @media (max-width: 700px) and (prefers-reduced-motion: no-preference) {
             .home-petal {
                 animation-name: petal-fall-narrow;
@@ -1970,18 +1897,27 @@
            2005 read as a stock illustration with the chart sitting on top of
            it. Scenery behind a diagram fights the diagram.
 
-           What the page gets instead is a herbarium sheet. Three plants lie
-           pressed in the margins either side of the columns, tilted the way
-           a specimen is laid down, and the middle of the page -- where every
-           card, bar and connector actually is -- is left completely alone.
+           What the page carries instead is one flower at six stages of its
+           life, pressed and laid out across the background. They are ordered
+           bottom to top, which is the direction the years run: a seed head
+           down by 2005, then a sprout, a bud, a flower opening, a flower
+           open, and at the top -- this year -- a plant in full bloom with a
+           second flower off a side branch. Nobody has to notice the order
+           for the page to work, but it is the reason they are where they
+           are.
+
+           Two of the six sit inboard, behind the columns rather than beside
+           them, at about half the opacity of the ones in the margins. The
+           background is meant to be populated rather than framed, and
+           anything behind a card has to be fainter than anything that is
+           not.
 
            The scene is an absolutely positioned first child of the grid
            rather than a wrapper around it: wrapping would have let the
            1200px grid out of the 700px container and quietly re-laid out the
            page. `z-index: 0` gives it a stacking context of its own and
-           `pointer-events: none` keeps it out of the way of the hover
-           targets; every card and connector follows it in the DOM and so
-           paints above it. */
+           `pointer-events: none` keeps it clear of the hover targets; every
+           card and connector follows it in the DOM and so paints above it. */
         .timeline-scene {
             position: absolute;
             z-index: 0;
@@ -1995,6 +1931,8 @@
 
         .timeline-specimen {
             position: absolute;
+            width: 112px;
+            height: 235px;
             opacity: 0.12;
             background-repeat: no-repeat;
             background-size: contain;
@@ -2002,52 +1940,67 @@
         }
 
         /* The tilt is the standalone `rotate` property and the drift
-           animates `translate` and `scale`, so the three never overwrite
-           each other and one set of keyframes serves all three specimens. */
-        .timeline-specimen-a {
+           animates `translate` and `scale`, so the two never overwrite each
+           other and one set of keyframes serves all six. */
+        .timeline-seed {
+            left: 3rem;
+            bottom: 1%;
+            rotate: -6deg;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q61 140 49 51' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='53' cy='167' rx='15' ry='5' fill='%237a9e72' transform='rotate%2834 53 167%29 translate%28-14 0%29'/%3E%3Cpath d='M49 51 L18 51' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='18' cy='51' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L20 45' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='20' cy='45' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L22 38' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='22' cy='38' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L29 35' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='29' cy='35' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L31 28' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='31' cy='28' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L38 26' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='38' cy='26' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L46 26' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='46' cy='26' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L53 27' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='53' cy='27' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L61 25' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='61' cy='25' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L64 32' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='64' cy='32' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L74 32' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='74' cy='32' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L74 40' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='74' cy='40' r='3' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L75 45' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='75' cy='45' r='2' fill='%237a9e72' opacity='0.75'/%3E%3Cpath d='M49 51 L78 51' stroke='%237a9e72' stroke-width='1' opacity='0.8'/%3E%3Ccircle cx='78' cy='51' r='3' fill='%237a9e72' opacity='0.75'/%3E%3C/svg%3E");
+        }
+
+        .timeline-sprout {
+            right: 3.5rem;
+            bottom: 9%;
+            width: 96px;
+            height: 200px;
+            rotate: 5deg;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q63 186 62 143' fill='none' stroke='%237a9e72' stroke-width='1.8' stroke-linecap='round'/%3E%3Cellipse cx='62' cy='143' rx='16' ry='9' fill='%237a9e72' transform='rotate%2840 62 143%29 translate%28-15 0%29'/%3E%3Cellipse cx='62' cy='143' rx='16' ry='9' fill='%237a9e72' transform='rotate%28-40 62 143%29 translate%2815 0%29'/%3E%3C/svg%3E");
+        }
+
+        .timeline-bud {
+            left: 15%;
+            top: 47%;
+            rotate: 8deg;
+            opacity: 0.065;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q56 150 51 69' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='54' cy='174' rx='16' ry='6' fill='%237a9e72' transform='rotate%2834 54 174%29 translate%28-15 0%29'/%3E%3Cellipse cx='52' cy='132' rx='16' ry='6' fill='%237a9e72' transform='rotate%28-34 52 132%29 translate%2815 0%29'/%3E%3Cellipse cx='51' cy='69' rx='9' ry='16' fill='%23c58fa0'/%3E%3Cellipse cx='51' cy='81' rx='8' ry='7' fill='%237a9e72'/%3E%3C/svg%3E");
+        }
+
+        .timeline-opening {
+            right: 6rem;
+            top: 36%;
+            rotate: -5deg;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q48 143 51 55' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='54' cy='169' rx='19' ry='7' fill='%237a9e72' transform='rotate%2834 54 169%29 translate%28-18 0%29'/%3E%3Cellipse cx='52' cy='123' rx='19' ry='7' fill='%237a9e72' transform='rotate%28-34 52 123%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-152 51 55%29 translate%2813 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-122 51 55%29 translate%2813 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-89 51 55%29 translate%2813 0%29'/%3E%3Cellipse cx='51' cy='55' rx='15' ry='7' fill='%23c58fa0' transform='rotate%28-50 51 55%29 translate%2813 0%29'/%3E%3Ccircle cx='51' cy='55' r='6' fill='%237a9e72'/%3E%3C/svg%3E");
+        }
+
+        .timeline-open {
             left: 2.5rem;
-            top: 5%;
-            width: 150px;
-            height: 288px;
+            top: 14%;
+            rotate: 4deg;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q59 138 57 46' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='56' cy='166' rx='19' ry='7' fill='%237a9e72' transform='rotate%2834 56 166%29 translate%28-18 0%29'/%3E%3Cellipse cx='56' cy='118' rx='19' ry='7' fill='%237a9e72' transform='rotate%28-34 56 118%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%2846 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%2897 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28148 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28200 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28251 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28303 57 46%29 translate%2818 0%29'/%3E%3Cellipse cx='57' cy='46' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28354 57 46%29 translate%2818 0%29'/%3E%3Ccircle cx='57' cy='46' r='6' fill='%237a9e72'/%3E%3C/svg%3E");
+        }
+
+        .timeline-full {
+            right: 15%;
+            top: 2%;
+            width: 124px;
+            height: 258px;
             rotate: -7deg;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 130 250'%3E%3Cpath d='M52 245 C5 180 18 80 73 10 C112 80 99 180 52 245Z' fill='%237a9e72' fill-opacity='0.55'/%3E%3Cpath d='M52 245 Q57 115 73 10' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M55 212 Q44 208 34 202' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M55 212 Q66 208 76 202' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M57 188 Q42 184 28 174' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M57 188 Q72 184 86 174' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M59 164 Q42 160 25 147' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M59 164 Q77 160 94 147' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M61 140 Q43 136 25 122' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M61 140 Q80 136 98 122' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M64 115 Q45 112 28 98' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M64 115 Q82 112 99 98' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M66 91 Q50 88 35 76' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M66 91 Q82 88 96 76' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M68 67 Q56 63 44 56' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M68 67 Q80 63 91 56' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M70 43 Q64 39 58 37' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3Cpath d='M70 43 Q76 39 82 37' fill='none' stroke='%237a9e72' stroke-width='1.1' stroke-linecap='round' opacity='0.85'/%3E%3C/svg%3E");
-        }
-
-        .timeline-specimen-b {
-            right: 3rem;
-            top: 30%;
-            width: 140px;
-            height: 250px;
-            rotate: 6deg;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 250'%3E%3Cpath d='M70 250 Q76 150 74 60' fill='none' stroke='%237a9e72' stroke-width='1.9' stroke-linecap='round'/%3E%3Cpath d='M74 60 L32 60' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='32' cy='60' r='2' fill='%237a9e72'/%3E%3Cpath d='M74 60 L39 54' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='39' cy='54' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L36 46' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='36' cy='46' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L42 40' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='42' cy='40' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L49 36' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='49' cy='36' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L54 28' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='54' cy='28' r='2' fill='%237a9e72'/%3E%3Cpath d='M74 60 L64 27' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='64' cy='27' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L74 30' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='74' cy='30' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L84 25' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='84' cy='25' r='2' fill='%237a9e72'/%3E%3Cpath d='M74 60 L93 27' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='93' cy='27' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L102 31' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='102' cy='31' r='2' fill='%237a9e72'/%3E%3Cpath d='M74 60 L102 42' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='102' cy='42' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L114 44' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='114' cy='44' r='3' fill='%237a9e72'/%3E%3Cpath d='M74 60 L109 53' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='109' cy='53' r='2' fill='%237a9e72'/%3E%3Cpath d='M74 60 L117 60' stroke='%237a9e72' stroke-width='1.1'/%3E%3Ccircle cx='117' cy='60' r='2' fill='%237a9e72'/%3E%3C/svg%3E");
-        }
-
-        .timeline-specimen-c {
-            left: 7rem;
-            bottom: 3%;
-            width: 112px;
-            height: 238px;
-            rotate: -4deg;
-            opacity: 0.1;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 235'%3E%3Cpath d='M55 235 Q44 129 51 42' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='53' cy='154' rx='18' ry='6' fill='%237a9e72' transform='rotate%2835 53 154%29 translate%28-16 0%29'/%3E%3Cellipse cx='54' cy='108' rx='18' ry='6' fill='%237a9e72' transform='rotate%28-35 54 108%29 translate%2816 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%2823 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%2868 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28113 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28158 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28203 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28248 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28293 51 42%29 translate%2818 0%29'/%3E%3Cellipse cx='51' cy='42' rx='19' ry='8' fill='%23c58fa0' transform='rotate%28338 51 42%29 translate%2818 0%29'/%3E%3Ccircle cx='51' cy='42' r='6' fill='%237a9e72'/%3E%3C/svg%3E");
+            opacity: 0.07;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 230'%3E%3Cpath d='M55 230 Q61 137 60 44' fill='none' stroke='%237a9e72' stroke-width='2' stroke-linecap='round'/%3E%3Cellipse cx='57' cy='165' rx='20' ry='7' fill='%237a9e72' transform='rotate%2834 57 165%29 translate%28-18 0%29'/%3E%3Cellipse cx='58' cy='116' rx='20' ry='7' fill='%237a9e72' transform='rotate%28-34 58 116%29 translate%2818 0%29'/%3E%3Cellipse cx='59' cy='68' rx='20' ry='7' fill='%237a9e72' transform='rotate%2834 59 68%29 translate%28-18 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%2828 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%2868 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28108 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28148 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28188 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28228 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28268 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28308 60 44%29 translate%2821 0%29'/%3E%3Cellipse cx='60' cy='44' rx='22' ry='9' fill='%23c58fa0' transform='rotate%28348 60 44%29 translate%2821 0%29'/%3E%3Ccircle cx='60' cy='44' r='8' fill='%237a9e72'/%3E%3Cpath d='M55 133 Q29 104 29 80' fill='none' stroke='%237a9e72' stroke-width='1.7'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%2815 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%2866 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28118 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28169 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28221 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28272 29 80%29 translate%2812 0%29'/%3E%3Cellipse cx='29' cy='80' rx='13' ry='6' fill='%23c58fa0' transform='rotate%28324 29 80%29 translate%2812 0%29'/%3E%3Ccircle cx='29' cy='80' r='4' fill='%237a9e72'/%3E%3C/svg%3E");
         }
 
         @media (prefers-reduced-motion: no-preference) {
-            .timeline-specimen-a {
-                animation: specimen-drift 117s ease-in-out infinite;
-            }
-
-            .timeline-specimen-b {
-                animation: specimen-drift 143s ease-in-out infinite reverse;
-            }
-
-            .timeline-specimen-c {
-                animation: specimen-drift 96s ease-in-out infinite;
-            }
+            .timeline-seed { animation: specimen-drift 117s ease-in-out infinite; }
+            .timeline-sprout { animation: specimen-drift 143s ease-in-out infinite reverse; }
+            .timeline-bud { animation: specimen-drift 96s ease-in-out infinite; }
+            .timeline-opening { animation: specimen-drift 131s ease-in-out infinite reverse; }
+            .timeline-open { animation: specimen-drift 108s ease-in-out infinite; }
+            .timeline-full { animation: specimen-drift 154s ease-in-out infinite reverse; }
         }
 
         /* Barely anything: a few pixels and a per cent of scale over two
-           minutes. A pressed flower should look like it is settling on the
+           minutes. A pressed flower should look like it is settling onto the
            page, not growing out of it. */
         @keyframes specimen-drift {
             0% { translate: 0 0; scale: 1; }
@@ -2055,29 +2008,48 @@
             100% { translate: 0 0; scale: 1; }
         }
 
-        /* Between 700 and 1100px the margins are too narrow for three, so
-           the lowest one goes; under 700px the Gantt is full width and
-           twice as tall, and only one small specimen survives, tucked into
-           the bottom corner below the last card. */
+        /* Between 700 and 1100px the margins are too thin to hold the ones
+           that sit in them, so the page keeps only the two inboard stages.
+           Under 700px the Gantt is full width and twice as tall: three
+           survive, spread down the page so the sequence still reads, and
+           every one of them is behind a card, so they drop to a whisper. */
         @media (max-width: 1100px) and (min-width: 701px) {
-            .timeline-specimen-c {
+            .timeline-sprout,
+            .timeline-opening,
+            .timeline-open {
                 display: none;
             }
         }
 
         @media (max-width: 700px) {
-            .timeline-specimen-a,
-            .timeline-specimen-b {
+            .timeline-sprout,
+            .timeline-opening,
+            .timeline-open {
                 display: none;
             }
 
-            .timeline-specimen-c {
+            .timeline-specimen {
+                width: 84px;
+                height: 176px;
+                opacity: 0.075;
+            }
+
+            .timeline-seed {
                 left: auto;
                 right: 0.5rem;
                 bottom: 1%;
-                width: 82px;
-                height: 174px;
-                opacity: 0.09;
+            }
+
+            .timeline-bud {
+                left: 0.5rem;
+                top: 46%;
+            }
+
+            .timeline-full {
+                right: 0.75rem;
+                top: 2%;
+                width: 92px;
+                height: 192px;
             }
         }
 
