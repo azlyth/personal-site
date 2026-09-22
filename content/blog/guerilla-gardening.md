@@ -78,12 +78,10 @@ So I thought, why not make them prettier? Have them spark a little joy.
 
 I took a walk around the neighborhood for some inspiration, looked at a few different nice tree bed setups, and decided: a nice simple red brick border. If it didn't go higher than 2 inches, then I wouldn't even need a permit to do so. Perfect.
 
-</div>
-</div>
-
 Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work later, we had a pretty red brick border on the two tree beds framing my apartment courtyard entrance.
 
-<div class="clear-beside"></div>
+</div>
+</div>
 
 <div class="video-row size-small beside-left">
 <video autoplay loop muted playsinline data-sync-loop="4">

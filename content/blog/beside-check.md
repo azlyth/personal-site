@@ -4,6 +4,8 @@ date = 2026-09-22
 draft = true
 +++
 
+Closing paragraph.
+
 Intro paragraph.
 
 <div class="img-row size-medium beside-right">
@@ -17,5 +19,3 @@ More text still beside it.
 <div class="clear-beside"></div>
 
 A paragraph after the stop.
-
-Closing paragraph.
