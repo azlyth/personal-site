@@ -53,15 +53,11 @@ I also started doing little litter patrols in the neighborhood.
 </div>
 <div class="pair-text">
 
-<div class="post-spacer"></div>
-
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass.
 
 So I swept it all up.
 
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
-
-<div class="post-spacer"></div>
 
 </div>
 </div>
