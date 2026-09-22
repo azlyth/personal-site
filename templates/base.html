@@ -642,25 +642,14 @@
             opacity: 1;
         }
 
-        /* The horizon. A hairline invisible at both ends, so it separates
-           the rows without ruling them. */
-        .archive-row::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 1px;
-            background: linear-gradient(to right,
-                rgba(150, 182, 198, 0) 2%,
-                rgba(150, 182, 198, 0.22) 18%,
-                rgba(150, 182, 198, 0.22) 82%,
-                rgba(150, 182, 198, 0) 98%);
-        }
-
-        .archive-row:last-child::after {
-            display: none;
-        }
+        /* There is deliberately no row separator. There was one -- a
+           hairline faded to nothing at both ends -- and it stopped earning
+           its place once the titles gained a rest-state underline and the
+           list moved inside the sky: every row carried two horizontal
+           lines about 20px apart, which read as ruled paper, and a rule
+           that stops dead at the column edge inside a full-bleed scene
+           reads as a leftover table. The underline separates one title from
+           the next; the spacing and the sky do the rest. */
 
         /* Date left, title right, and the title is the part that hangs.
            The row was `justify-content: space-between`, which actively
