@@ -8,7 +8,7 @@ This summer, my hobby has been cleaning and beautifying my corner in Astoria.
 
 It began with a mourning dove nest under my AC.
 
-<div class="pair pair-right size-medium justify-spread">
+<div class="pair pair-right size-medium justify-evenly">
 <div class="pair-media">
 <div class="img-row size-medium">
 <img src="https://img.cloudy.nyc/guerilla-gardening/cat-and-chicks-a623affb.jpg" alt="Cat and chicks">
