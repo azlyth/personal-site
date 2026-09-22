@@ -964,6 +964,24 @@ function startEditingVideos(el, content, block) {
 
       controls.append(left, right, remove);
       thumb.appendChild(controls);
+
+      // Its own full-width row rather than a fourth button beside the other
+      // three: at 140px a fourth would squeeze each below the 44px touch
+      // target the rest of these controls are sized to.
+      const split = document.createElement('button');
+      split.type = 'button';
+      split.className = 'video-thumb-split';
+      split.textContent = 'Split out';
+      split.title = 'Move this clip into a row of its own, below';
+      // A one-clip row already is its own row, and the server rejects it --
+      // disable rather than let the tap fail.
+      split.disabled = clips.length < 2;
+      split.addEventListener('click', (e) => {
+        e.stopPropagation();
+        splitBlockVideo(block.index, clips, size, i);
+      });
+      thumb.appendChild(split);
+
       strip.appendChild(thumb);
     });
 
@@ -1084,6 +1102,28 @@ async function saveBlockVideos(index, clips, size) {
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
+  await applyWrite(res);
+}
+
+// Unlike the strip's other controls, splitting commits immediately instead of
+// waiting for Done: it changes the block LIST, and this editor's local `clips`
+// array has no way to represent a clip that now lives in a different block.
+// The row's current clips ride along so an unsaved reorder lands in the same
+// write rather than being discarded. applyWrite() then re-renders from server
+// state, which closes this editor -- the new row is already on screen below.
+async function splitBlockVideo(index, clips, size, split) {
+  setStatus('splitting…');
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}/blocks/${index}/videos/split`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videos: clips, size, split, hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`split failed — network error: ${err.message}`);
     return;
   }
   await applyWrite(res);

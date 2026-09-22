@@ -510,6 +510,56 @@ def edit_block_videos(slug: str, index: int, edit: BlockVideosEdit):
     return _write_body(slug, edit.hash, transform)
 
 
+class BlockVideoSplit(BlockVideosEdit):
+    split: int
+
+
+@app.post("/api/posts/{slug}/blocks/{index}/videos/split")
+def split_block_video(slug: str, index: int, edit: BlockVideoSplit):
+    """Lift one clip out of a `video` row into a row of its own directly below.
+
+    The whole point is to make a clip reachable by `move_block`, which moves
+    blocks and not clips -- so splitting is how a clip gets out of a row it
+    shares and into somewhere else entirely.
+
+    Takes the row's full clip list rather than just `split`, because the row
+    editor keeps a local working copy and only commits on Done: reordering and
+    then splitting has to land as a single write, not two that could interleave.
+    Both halves happen inside one `transform`, so `_write_body` gives them one
+    hash check and one atomic replace -- a two-request version could have its
+    second half 409 and strand the post half-split.
+
+    A one-clip row is rejected rather than treated as a no-op: it already *is*
+    its own row, and routing it through the usual "empty list deletes the
+    block" rule would silently delete it instead of splitting it.
+    """
+
+    if len(edit.videos) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="a row with fewer than two clips is already its own row",
+        )
+    if not 0 <= edit.split < len(edit.videos):
+        raise HTTPException(status_code=400, detail=f"no clip at index {edit.split}")
+
+    clips = [{"url": video.url, "sync_loop": video.sync_loop} for video in edit.videos]
+    moved = clips.pop(edit.split)
+
+    try:
+        remaining_source = videos.markdown_for(clips, edit.size)
+        moved_source = videos.markdown_for([moved], edit.size)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    def transform(body: str) -> str:
+        # replace_block leaves the block count unchanged, so index + 1 is
+        # still the gap immediately below this row when insert_block runs.
+        body = replace_block(body, index, remaining_source)
+        return insert_block(body, index + 1, moved_source)
+
+    return _write_body(slug, edit.hash, transform)
+
+
 def _s3():
     """Lazily build the client so tests can inject a fake before first use."""
     if not hasattr(app.state, "s3") or app.state.s3 is None:

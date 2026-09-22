@@ -312,3 +312,184 @@ def test_upload_only_rejects_non_video_file(temp_post):
     )
     assert res.status_code == 400
     assert not app.state.s3.calls
+
+
+# --- POST .../blocks/{index}/videos/split ----------------------------------
+#
+# Splitting lifts one clip out of a row into a row of its own directly below,
+# so the existing whole-block move can then put it anywhere. The request
+# carries the row's full clip list (not just the split index) because the row
+# editor holds a local working copy: reordering and then splitting has to land
+# as one write, not two.
+
+THREE_SLUG = "video-block-three-clip-post"
+
+THREE_POST = """+++
+title = "Three Clip Row"
+date = 2026-01-01
+draft = true
++++
+
+Intro.
+
+<div class="video-row size-full">
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/p/a.mp4" type="video/mp4">
+</video>
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/p/b.mp4" type="video/mp4">
+</video>
+<video autoplay loop muted playsinline>
+<source src="https://img.cloudy.nyc/p/c.mp4" type="video/mp4">
+</video>
+</div>
+
+Outro.
+"""
+
+
+@pytest.fixture
+def three_clip_post():
+    path = config.BLOG_DIR / f"{THREE_SLUG}.md"
+    path.write_text(THREE_POST, encoding="utf-8")
+    yield path
+    path.unlink(missing_ok=True)
+
+
+def _three():
+    return client.get(f"/api/posts/{THREE_SLUG}").json()
+
+
+def _clips(block):
+    return [v["url"] for v in block["videos"]]
+
+
+def _split(slug, index, data, split, videos=None, size=None):
+    block = data["blocks"][index]
+    return client.post(
+        f"/api/posts/{slug}/blocks/{index}/videos/split",
+        json={
+            "videos": videos if videos is not None else block["videos"],
+            "size": size if size is not None else block["size"],
+            "split": split,
+            "hash": data["hash"],
+        },
+    )
+
+
+def test_split_middle_clip_leaves_the_others_in_order(three_clip_post):
+    data = _three()
+    res = _split(THREE_SLUG, 1, data, 1)
+
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert _clips(blocks[1]) == ["https://img.cloudy.nyc/p/a.mp4", "https://img.cloudy.nyc/p/c.mp4"]
+
+
+def test_split_puts_the_clip_in_a_new_row_directly_below(three_clip_post):
+    data = _three()
+    res = _split(THREE_SLUG, 1, data, 1)
+
+    blocks = res.json()["blocks"]
+    assert len(blocks) == len(data["blocks"]) + 1
+    assert blocks[2]["kind"] == "video"
+    assert blocks[2]["videos"] == [{"url": "https://img.cloudy.nyc/p/b.mp4", "sync_loop": "4"}]
+
+
+def test_split_new_row_inherits_the_source_row_size(three_clip_post):
+    data = _three()
+    res = _split(THREE_SLUG, 1, data, 1)
+
+    blocks = res.json()["blocks"]
+    assert blocks[1]["size"] == "full"
+    assert blocks[2]["size"] == "full"
+
+
+def test_split_preserves_neighbouring_blocks(three_clip_post):
+    data = _three()
+    res = _split(THREE_SLUG, 1, data, 0)
+
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert blocks[0]["kind"] != "video"
+    assert blocks[-1]["kind"] != "video"
+
+    on_disk = three_clip_post.read_text(encoding="utf-8")
+    assert "Intro." in on_disk
+    assert "Outro." in on_disk
+
+
+def test_split_from_a_two_clip_row_yields_two_single_clip_rows(temp_post):
+    data = _get()
+    res = _split(SLUG, 2, data, 0)
+
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert _clips(blocks[2]) == ["https://img.cloudy.nyc/p/three.mp4"]
+    assert _clips(blocks[3]) == ["https://img.cloudy.nyc/p/two.mp4"]
+
+
+def test_split_rejects_a_single_clip_row(temp_post):
+    data = _get()
+    before = temp_post.read_text(encoding="utf-8")
+    res = _split(SLUG, 1, data, 0)
+
+    assert res.status_code == 400
+    assert temp_post.read_text(encoding="utf-8") == before
+
+
+def test_split_rejects_an_out_of_range_clip_index(three_clip_post):
+    data = _three()
+    before = three_clip_post.read_text(encoding="utf-8")
+    res = _split(THREE_SLUG, 1, data, 3)
+
+    assert res.status_code == 400
+    assert three_clip_post.read_text(encoding="utf-8") == before
+
+
+def test_split_rejects_a_stale_hash(three_clip_post):
+    data = _three()
+    data["hash"] = "0" * 64
+    before = three_clip_post.read_text(encoding="utf-8")
+    res = _split(THREE_SLUG, 1, data, 1)
+
+    assert res.status_code == 409
+    assert three_clip_post.read_text(encoding="utf-8") == before
+
+
+def test_split_rejects_an_unknown_size(three_clip_post):
+    data = _three()
+    before = three_clip_post.read_text(encoding="utf-8")
+    res = _split(THREE_SLUG, 1, data, 1, size="huge")
+
+    assert res.status_code == 400
+    assert three_clip_post.read_text(encoding="utf-8") == before
+
+
+def test_split_applies_a_pending_reorder_in_the_same_write(three_clip_post):
+    """The row editor only commits on Done, so a local reorder plus a split
+    arrives as one request and both halves must land."""
+    data = _three()
+    reordered = [
+        {"url": "https://img.cloudy.nyc/p/c.mp4", "sync_loop": None},
+        {"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None},
+        {"url": "https://img.cloudy.nyc/p/b.mp4", "sync_loop": "4"},
+    ]
+    res = _split(THREE_SLUG, 1, data, 2, videos=reordered)
+
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert _clips(blocks[1]) == ["https://img.cloudy.nyc/p/c.mp4", "https://img.cloudy.nyc/p/a.mp4"]
+    assert _clips(blocks[2]) == ["https://img.cloudy.nyc/p/b.mp4"]
+
+
+def test_split_leaves_both_rows_losslessly_parseable(three_clip_post):
+    """Both resulting rows must still round-trip through parse_videos, or the
+    client silently falls back to a raw textarea for them."""
+    data = _three()
+    _split(THREE_SLUG, 1, data, 1)
+
+    after = _three()
+    for block in after["blocks"][1:3]:
+        assert block["kind"] == "video"
+        assert "videos" in block

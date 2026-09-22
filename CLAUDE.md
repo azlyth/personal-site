@@ -432,6 +432,27 @@ alt text, and Small/Medium/Full size presets; everything else gets a markdown
 textarea. Any block can be moved (pick it up, tap a gap) or merged with an
 adjacent same-family block.
 
+- **"Split out" is how a clip escapes its row.** `move_block` moves blocks, not
+  clips, so a clip sharing a `video` row had no way to reach a distant part of
+  the post. `POST .../blocks/{index}/videos/split` lifts one clip into a row of
+  its own directly below (inheriting the source row's size), which the ordinary
+  block move can then place anywhere. Three things are load-bearing:
+  - **It takes the row's whole clip list, not just the split index.** The row
+    editor keeps a local working copy and only commits on Done, so reordering
+    and *then* splitting has to arrive as one request or the reorder is lost.
+  - **Both halves run in one `_write_body` transform** (`replace_block` then
+    `insert_block` at `index + 1` — `replace_block` doesn't change the block
+    count, so that's still the gap just below). As two requests the second
+    could 409 and strand the post half-split.
+  - **A row of fewer than two clips is a 400, not a no-op.** It is already its
+    own row, and letting it through would hit the "empty clip list deletes the
+    block" rule and silently delete it instead of splitting it.
+  The button sits on its own full-width line under each thumbnail rather than
+  beside the ←/→/× row: a fourth button across a 140px thumb falls under the
+  44px touch target the other controls are sized to. Unlike them it commits
+  immediately, because it changes the block list and the local `clips` array
+  can't represent a clip that now lives in a different block.
+
 - **Sizing a standalone image is opt-in by design.** Markdown has nowhere to
   hang a class, so a lone photo at default size stays `![alt](url)`; choosing a
   non-default size converts it to `<div class="img-row size-small">`, and
