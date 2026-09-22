@@ -39,8 +39,8 @@ I also started doing little litter patrols in the neighborhood.
 
 <div class="img-row">
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-1.jpg" alt="An overflowing public trash can on the sidewalk, full of litter">
-<img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-2.jpg" alt="A trash can next to another full public bin during a litter patrol">
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-bag.jpg" alt="A bag stuffed full of collected litter next to a public trash can">
+<img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-2.jpg" alt="A trash can next to another full public bin during a litter patrol">
 </div>
 
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass.
