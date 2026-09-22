@@ -831,15 +831,22 @@ absence caused a real bug here.
 
 Block kinds and their editors: `image` (standalone markdown), `img_row` and
 `video` (side-by-side grids) get thumbnail strips with add/remove/reorder,
-alt text, and Small/Medium/Full size presets; everything else gets a markdown
-textarea. Any block can be moved (pick it up, tap a gap) or merged with an
-adjacent same-family block. A media row carries a "Text wraps:
-No / Left / Right" picker, always visible; choosing a side floats the row and
-the text flows around it. A ⊟ control drops a stop-wrap marker to end a
-float early, and "⧉ Centre" folds a floated row and the section beside it
-into a paired block, side by side and vertically centred. A single photo or clip can be split out of its
-row into one of its own. The editor bar has Undo (walks back through the
-post's edits) and Discard (back to the last published version).
+alt text, and Small/Medium/Full size presets; `pair` (a picture and a bounded
+run of prose, side by side) gets that same strip plus its prose in one
+markdown field; `clear` and `spacer` render as labelled dividers; everything
+else gets a markdown textarea.
+
+Each block's control bar carries `+` (paragraph), `🖼` (photos), `␣`
+(spacer), `◨` (layout controls, on media rows and pairs), `⊟` (stop-wrap
+marker, only where a float is still wrapping), `⇅` (move) and `×`. The
+inserting ones ask above or below. Behind `◨`, a media row offers
+"Text wraps: No / Left / Right" — choosing a side floats it and the text
+flows around it — plus "⧉ Centre", which folds the row and the section
+beside it into a `pair`; a pair offers "⤢ Unpair" instead. A single photo or
+clip can be split out of its row into one of its own, and any block can be
+moved (pick it up, tap an overlaid bar) or merged with an adjacent
+same-family block. The editor bar has Undo (walks back through the post's
+edits), Discard (back to the last published version), and "↗ View live".
 
 - **"Split out" is how a clip escapes its row.** `move_block` moves blocks, not
   clips, so a clip sharing a `video` row had no way to reach a distant part of
