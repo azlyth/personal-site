@@ -8,7 +8,7 @@ This summer, my hobby has been cleaning and beautifying my corner in Astoria.
 
 It began with a mourning dove nest under my AC.
 
-<div class="pair pair-right size-medium">
+<div class="pair pair-right size-medium justify-evenly">
 <div class="pair-media">
 <div class="img-row size-medium">
 <img src="https://img.cloudy.nyc/guerilla-gardening/cat-and-chicks-a623affb.jpg" alt="Cat and chicks">
@@ -43,7 +43,7 @@ I also started doing little litter patrols in the neighborhood.
 <img src="https://img.cloudy.nyc/guerilla-gardening/litter-collection-bag.jpg" alt="A bag stuffed full of collected litter next to a public trash can">
 </div>
 
-<div class="pair pair-left size-small">
+<div class="pair pair-left size-small justify-evenly">
 <div class="pair-media">
 <div class="video-row size-small">
 <video autoplay loop muted playsinline data-sync-loop="4">
@@ -62,7 +62,9 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 </div>
 </div>
 
-<div class="video-row size-medium beside-right">
+<div class="pair pair-right size-medium">
+<div class="pair-media">
+<div class="video-row size-medium">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop-c31c0f9f.mp4" type="video/mp4">
 </video>
@@ -70,6 +72,8 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 <source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop-68edd3a2.mp4" type="video/mp4">
 </video>
 </div>
+</div>
+<div class="pair-text">
 
 ## Make it pretty, with bricks
 
@@ -79,19 +83,22 @@ So I thought, why not make them prettier? Have them spark a little joy.
 
 I took a walk around the neighborhood for some inspiration, looked at a few different nice tree bed setups, and decided: a nice simple red brick border. If it didn't go higher than 2 inches, then I wouldn't even need a permit to do so. Perfect.
 
+</div>
+</div>
+
 Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work later, we had a pretty red brick border on the two tree beds framing my apartment courtyard entrance.
 
 <div class="clear-beside"></div>
 
-<div class="video-row size-small beside-left">
+<div class="pair pair-left size-small">
+<div class="pair-media">
+<div class="video-row size-small">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/compost-bags-loop-f1b2bdb2.mp4" type="video/mp4">
 </video>
 </div>
-
-
-
- 
+</div>
+<div class="pair-text">
 
 ## Make it pretty, with dirt
 
@@ -103,7 +110,12 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 4 bags of organic compost per tree bed. I used my new cultivator, and mixed the compost into the tree beds. It's amazing how even just fresh, rich dirt alone made the tree beds look better. Healthier.
 
-<div class="clear-beside"></div>
+</div>
+</div>
+
+
+
+ 
 
 <div class="pair pair-right size-medium">
 <div class="pair-media">
