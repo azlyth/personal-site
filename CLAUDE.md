@@ -273,6 +273,36 @@ drifts off-center everywhere else.
   cloud up buys a horizontal scrollbar. The ambient drift animates
   `translate`, not `transform`, so it does not clobber the scatter, and it is
   gated behind `prefers-reduced-motion: no-preference`.
+- **The index is two columns** (changed 2026-09-21) — the title, and one date
+  cell carrying the day and the year together (`Sep 20 2026`, the year a shade
+  lighter). The year used to sit in its own left-hand gutter, which made every
+  row a three-part grid for one piece of metadata; the row is a plain block
+  now. The gap before the year is **a real space in the markup** plus a small
+  margin, not margin alone: spacing it visually while `textContent` still read
+  `Sep 202026` handed that string to screen readers and to anyone copying the
+  line.
+- **A pair of gulls crosses the list** every 38s, visible for about a third of
+  that, flying behind the rows and behind their clouds. Both of its
+  load-bearing details are non-obvious:
+  - **A `translate` percentage resolves against the element's own box**, not
+    its container. Animating the 17px bird to `104%` moved it 17px and read as
+    a twitch. The bird therefore rides a **full-width runner**
+    (`.archive-bird`) with the graphic hung off `::before`/`::after`, so `104%`
+    is an actual crossing.
+  - **The runner must be clipped, and not by `.archive-sky`.** Translated past
+    100% it extends the page's scrollable area and hands a phone a horizontal
+    scrollbar; clipping on `.archive-sky` instead would cut the rows' clouds,
+    which spill 1rem sideways on purpose. Hence the dedicated
+    `.archive-flightpath` layer with `overflow: hidden`.
+  The path and the wing beat are separate animations on separate elements
+  because they need separate timings — on one element the `animation`
+  shorthand's second declaration just replaces the first. The pair shares one
+  runner so they fly a single path, and flap on slightly different beats
+  because synchronised wings look mechanical.
+- ⚠ **The nav's `marquee` animation is the one thing on these pages that
+  ignores `prefers-reduced-motion`.** Everything the blog index adds stops
+  under `reduce` (the bird settles at opacity 0 rather than freezing
+  mid-flight); the scrolling site title does not, on any page.
 - **Post pages (`page.html`) read at `min(900px, 94vw)`**, not the site's 700px
   default — that is the width the `.img-row`/`.video-row` size presets were
   tuned against. `.container.post-container > nav:not(.post-nav)` is deliberate:

@@ -6,21 +6,24 @@
 {% if section.pages %}
 {# One continuous list rather than a block per year. Posting has been
    irregular, so grouping carved the page into lopsided chunks and made the
-   quiet years look like holes. The year still marks the list, but only where
-   it changes, in the margin. #}
-<ul class="archive">
-    {% set_global shown_year = 0 %}
-    {% for page in section.pages %}
-    <li class="archive-row">
-        <span class="archive-year">{% if page.year != shown_year %}{{ page.year }}{% endif %}</span>
-        <a class="archive-link" href="{{ page.permalink | safe }}">
-            <span class="archive-title">{{ page.title }}</span>
-            <span class="archive-date">{{ page.date | date(format="%b %-d") }}</span>
-        </a>
-    </li>
-    {% set_global shown_year = page.year %}
-    {% endfor %}
-</ul>
+   quiet years look like holes.
+
+   Two columns: the title, and one date cell carrying the day and the year
+   together. The year used to sit in its own left-hand gutter, which made
+   every row a three-part grid for what is really one piece of metadata. #}
+<div class="archive-sky">
+    <span class="archive-flightpath" aria-hidden="true"><span class="archive-bird"></span></span>
+    <ul class="archive">
+        {% for page in section.pages %}
+        <li class="archive-row">
+            <a class="archive-link" href="{{ page.permalink | safe }}">
+                <span class="archive-title">{{ page.title }}</span>
+                <span class="archive-date">{{ page.date | date(format="%b %-d") }} <span class="archive-year">{{ page.date | date(format="%Y") }}</span></span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
 {% else %}
 <p>No posts yet.</p>
 {% endif %}

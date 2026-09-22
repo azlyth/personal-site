@@ -316,16 +316,120 @@
             margin: 1rem 0 0;
         }
 
-        /* baseline alignment on the row is what puts the year marker on the
-           same line as its title -- the padding lives on the row, not the
-           link, so the two columns share a first baseline. isolation
-           contains the cloud's negative z-index inside this row instead of
-           sending it behind the page. */
+        /* isolation makes this the stacking context the bird's negative
+           z-index resolves against. Without it a z-index:-1 child of a
+           plain positioned element drops behind the opaque page background
+           and never paints at all. */
+        .archive-sky {
+            position: relative;
+            isolation: isolate;
+        }
+
+        /* One bird, for the whole list rather than one per row -- a single
+           crossing is a moment you happen to catch, and ten would be
+           wallpaper. It flies behind the rows and behind their clouds,
+           which is where the most distant thing on the page belongs.
+           Present for under a third of its cycle, so most of the time the
+           sky is simply empty.
+
+           Three nested elements, and the nesting is the whole trick. A
+           `translate` percentage resolves against the element's OWN box, so
+           animating the 17px bird to `104%` moved it 17px and read as a
+           twitch, not a flight. The runner is therefore full width -- 104%
+           of *that* is a crossing -- and the bird graphic hangs off it as a
+           pseudo-element. The path clips, because a runner translated past
+           100% would otherwise extend the page's scrollable area and hand a
+           phone a horizontal scrollbar. Clipping here rather than on
+           .archive-sky keeps the rows' clouds, which spill 1rem sideways on
+           purpose, unclipped. */
+        .archive-flightpath {
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .archive-bird {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 22px;
+            opacity: 0;
+        }
+
+        /* Two gulls on the one runner, so they share a path and read as a
+           pair flying together rather than as two unrelated effects. The
+           companion trails behind and below, and flaps on its own slightly
+           longer beat -- synchronised wings look mechanical. */
+        .archive-bird::before,
+        .archive-bird::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 8'%3E%3Cpath d='M1.5 5.2C5 1 8.5 1.2 12 4.4 15.5 1.2 19 1 22.5 5.2' fill='none' stroke='%235e8798' stroke-width='1.3' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+        }
+
+        .archive-bird::before {
+            width: 28px;
+            height: 11px;
+        }
+
+        .archive-bird::after {
+            width: 17px;
+            height: 7px;
+            margin: 12px 0 0 -25px;
+            opacity: 0.8;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            /* The path and the wing beat run on separate elements because
+               they need separate timings; on one element the shorthand's
+               second `animation` would simply replace the first. */
+            .archive-bird {
+                animation: bird-cross 38s linear infinite;
+            }
+
+            .archive-bird::before {
+                animation: bird-flap 0.46s ease-in-out infinite alternate;
+            }
+
+            .archive-bird::after {
+                animation: bird-flap 0.53s ease-in-out infinite alternate;
+            }
+        }
+
+        /* The path rises across the page and bobs on the way, rather than
+           tracking a straight line -- a gull works a thermal, it does not
+           commute. X is a percentage so the crossing scales with the
+           column. Y is in px, and the values are picked to sit near the row
+           boundaries rather than on the title baselines: the pair flies
+           behind the text either way, but crossing a word at 0.72 opacity
+           looked like a stray diacritic. */
+        @keyframes bird-cross {
+            0% { translate: -5% 252px; opacity: 0; }
+            4% { translate: 3% 242px; opacity: 0.72; }
+            11% { translate: 22% 186px; opacity: 0.72; }
+            18% { translate: 44% 193px; opacity: 0.72; }
+            25% { translate: 66% 128px; opacity: 0.66; }
+            31% { translate: 88% 68px; opacity: 0.38; }
+            37% { translate: 105% 20px; opacity: 0; }
+            100% { translate: 105% 20px; opacity: 0; }
+        }
+
+        @keyframes bird-flap {
+            from { transform: scaleY(1); }
+            to { transform: scaleY(0.55); }
+        }
+
+        /* isolation creates a stacking context per row, which contains the
+           cloud's negative z-index inside the row instead of sending it
+           behind the page background. The row is a plain block now: the
+           three-column grid existed to hold a left-hand year gutter, and
+           the year moved into the date cell. */
         .archive-row {
-            display: grid;
-            grid-template-columns: 4.5rem minmax(0, 1fr);
-            gap: 0 1.5rem;
-            align-items: baseline;
             padding: 1.05rem 0;
             margin: 0;
             position: relative;
@@ -363,10 +467,12 @@
             z-index: -1;
             pointer-events: none;
             background:
-                radial-gradient(15% 20% at calc(var(--cx, 44%) - 8%) 24%, rgba(116, 196, 231, 0.22), rgba(116, 196, 231, 0) 72%),
-                radial-gradient(11% 26% at var(--cx, 44%) 19%, rgba(116, 196, 231, 0.20), rgba(116, 196, 231, 0) 74%),
-                radial-gradient(16% 18% at calc(var(--cx, 44%) + 9%) 26%, rgba(116, 196, 231, 0.17), rgba(116, 196, 231, 0) 72%),
-                radial-gradient(6% 10% at calc(var(--cx, 44%) + 26%) 30%, rgba(116, 196, 231, 0.12), rgba(116, 196, 231, 0) 76%);
+                radial-gradient(15% 20% at calc(var(--cx, 44%) - 8%) 23%, rgba(116, 196, 231, 0.30), rgba(116, 196, 231, 0) 72%),
+                radial-gradient(11% 26% at var(--cx, 44%) 18%, rgba(116, 196, 231, 0.27), rgba(116, 196, 231, 0) 74%),
+                radial-gradient(16% 18% at calc(var(--cx, 44%) + 9%) 25%, rgba(116, 196, 231, 0.23), rgba(116, 196, 231, 0) 72%),
+                radial-gradient(23% 9% at calc(var(--cx, 44%) + 1%) 32%, rgba(96, 166, 200, 0.13), rgba(96, 166, 200, 0) 78%),
+                radial-gradient(6% 10% at calc(var(--cx, 44%) + 26%) 29%, rgba(116, 196, 231, 0.14), rgba(116, 196, 231, 0) 76%),
+                radial-gradient(3% 6% at calc(var(--cx, 44%) + 34%) 27%, rgba(116, 196, 231, 0.10), rgba(116, 196, 231, 0) 78%);
             opacity: var(--puff, 0.9);
             transform: translateX(var(--drift, 0px)) scale(var(--ps, 1));
             transition: opacity 0.5s ease-out, transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -406,45 +512,74 @@
             bottom: 0;
             height: 1px;
             background: linear-gradient(to right,
-                rgba(150, 182, 198, 0) 8%,
-                rgba(150, 182, 198, 0.3) 34%,
-                rgba(150, 182, 198, 0.3) 66%,
-                rgba(150, 182, 198, 0) 96%);
+                rgba(150, 182, 198, 0) 2%,
+                rgba(150, 182, 198, 0.3) 18%,
+                rgba(150, 182, 198, 0.3) 82%,
+                rgba(150, 182, 198, 0) 98%);
         }
 
         .archive-row:last-child::after {
             display: none;
         }
 
-        /* Clouds that hold perfectly still are not clouds. 14px of travel
-           over half a minute is under the threshold of noticing unless you
-           stare at it, and it animates `translate` rather than `transform`
-           so it does not clobber the scatter and hover above. */
+        /* Clouds that hold perfectly still are not clouds. The keyframes are
+           spaced unevenly and move on both axes, which is what makes this
+           read as a wander rather than a swing -- an even two-stop
+           alternate, the first version, was visibly a pendulum. The loop
+           closes (0% and 100% match) so it runs `infinite` without
+           `alternate`, and `reverse` on some rows is another free variation.
+
+           It animates `translate`, not `transform`, so it composes with the
+           scatter's scale and the hover's drift instead of silently winning
+           over them. Under 20px of travel across a minute is below the
+           threshold of noticing unless you stare. */
         @media (prefers-reduced-motion: no-preference) {
             .archive-row::before {
-                animation: cloud-drift 34s ease-in-out infinite alternate;
+                animation: cloud-wander 41s ease-in-out infinite;
             }
 
             .archive-row:nth-child(even)::before {
-                animation-duration: 47s;
-                animation-delay: -12s;
+                animation-duration: 53s;
+                animation-delay: -14s;
             }
 
             .archive-row:nth-child(3n)::before {
-                animation-duration: 58s;
-                animation-delay: -25s;
+                animation-duration: 67s;
+                animation-delay: -31s;
+                animation-direction: reverse;
+            }
+
+            .archive-row:nth-child(4n + 1)::before {
+                animation-duration: 46s;
+                animation-delay: -8s;
+            }
+
+            .archive-row:nth-child(5n + 2)::before {
+                animation-duration: 59s;
+                animation-delay: -22s;
+                animation-direction: reverse;
             }
         }
 
-        @keyframes cloud-drift {
-            from { translate: -7px 0; }
-            to { translate: 7px 0; }
+        @keyframes cloud-wander {
+            0% { translate: -9px 0; }
+            19% { translate: -3px -3px; }
+            37% { translate: 5px -1px; }
+            52% { translate: 9px 2px; }
+            68% { translate: 4px -2px; }
+            85% { translate: -4px 1px; }
+            100% { translate: -9px 0; }
         }
 
+        /* The year rides along inside the date cell, a shade lighter, so the
+           two read as one piece of metadata at a glance and as a full date
+           when you look. The gap is a real space in the markup plus a
+           little margin, not margin alone: spacing it visually while
+           `textContent` still read `Sep 202026` would have handed that
+           string to a screen reader and to anyone copying the line. */
         .archive-year {
-            font-size: 0.8rem;
-            color: #9aa8b0;
-            font-variant-numeric: tabular-nums;
+            margin-left: 0.15rem;
+            color: #b3bfc6;
         }
 
         .archive-link {
@@ -472,14 +607,10 @@
             font-size: 0.8rem;
             color: #8d979c;
             font-variant-numeric: tabular-nums;
+            white-space: nowrap;
         }
 
         @media (max-width: 600px) {
-            .archive-row {
-                grid-template-columns: 2.75rem minmax(0, 1fr);
-                gap: 0 0.75rem;
-            }
-
             .archive-title {
                 font-size: 1.0625rem;
             }
