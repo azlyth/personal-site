@@ -327,3 +327,145 @@ def test_move_to_index_out_of_range_raises():
 def test_move_to_index_negative_raises():
     with pytest.raises(IndexError):
         move_block(SIMPLE, 0, -1)
+
+
+# --- the clear marker -------------------------------------------------------
+# A float wraps EVERYTHING after it until something clears, so without a
+# marker "these blocks sit beside the row" would be a lie the moment the row
+# is taller than the blocks chosen. The marker is invisible on the published
+# page; it exists to end the wrap where the selection ends.
+
+
+def test_a_clear_marker_gets_its_own_kind():
+    blocks = parse_blocks('A\n\n<div class="clear-beside"></div>\n\nB')
+    assert [b.kind for b in blocks] == ["paragraph", "clear", "paragraph"]
+
+
+def test_a_clear_marker_is_not_mistaken_for_a_media_row():
+    block = parse_blocks('<div class="clear-beside"></div>')[0]
+    assert block.kind == "clear"
+    assert block.kind not in ("img_row", "video")
+
+
+def test_an_unrelated_div_is_still_plain_html():
+    assert parse_blocks('<div class="something-else"></div>')[0].kind == "html"
+
+
+# --- pair blocks: one block spanning several top-level tokens ---------------
+# A paired section is a picture and a bounded run of prose side by side,
+# vertically centred -- which floats cannot do, so the two have to live in one
+# container. Markdown inside HTML only parses when it's separated by blank
+# lines, so the wrapper necessarily spans several top-level tokens: an opening
+# html block, the prose, and a closing html block. parse_blocks folds those
+# back into ONE block, because the editor's model is one block per thing the
+# author thinks of as a thing.
+
+PAIR = '''<div class="pair pair-right size-medium">
+<div class="pair-media">
+<img src="u.jpg" alt="a">
+</div>
+<div class="pair-text">
+
+First paragraph with *emphasis*.
+
+Second paragraph.
+
+</div>
+</div>'''
+
+
+def test_a_pair_is_a_single_block():
+    blocks = parse_blocks(f"Before.\n\n{PAIR}\n\nAfter.")
+    assert [b.kind for b in blocks] == ["paragraph", "pair", "paragraph"]
+
+
+def test_a_pair_block_keeps_its_whole_source():
+    blocks = parse_blocks(f"Before.\n\n{PAIR}\n\nAfter.")
+    assert blocks[1].source == PAIR
+
+
+def test_blocks_after_a_pair_are_indexed_past_it():
+    blocks = parse_blocks(f"Before.\n\n{PAIR}\n\nAfter.")
+    assert [b.index for b in blocks] == [0, 1, 2]
+    assert blocks[2].source == "After."
+
+
+def test_a_pair_renders_its_markdown_as_markdown():
+    """The prose inside is real markdown -- that's the whole reason for the
+    blank lines -- so the block's preview has to show it rendered.
+    """
+    html = parse_blocks(PAIR)[0].html
+    assert "<em>emphasis</em>" in html
+    assert 'class="pair-media"' in html
+
+
+def test_two_pairs_in_one_post_stay_separate():
+    body = f"{PAIR}\n\nBetween.\n\n{PAIR}"
+    assert [b.kind for b in parse_blocks(body)] == ["pair", "paragraph", "pair"]
+
+
+def test_an_unclosed_pair_is_left_alone():
+    """Swallowing the rest of the post would be far worse than showing the
+    fragments: the author can still see and repair raw html blocks.
+    """
+    broken = PAIR.replace("</div>\n</div>", "")
+    kinds = [b.kind for b in parse_blocks(f"{broken}\n\nAfter.")]
+    assert "pair" not in kinds
+
+
+def test_a_stray_closer_is_just_html():
+    assert parse_blocks("</div>\n</div>")[0].kind == "html"
+
+
+def test_a_pair_can_be_spliced_like_any_other_block():
+    body = f"Before.\n\n{PAIR}\n\nAfter."
+    out = delete_block(body, 1)
+    assert [b.source for b in parse_blocks(out)] == ["Before.", "After."]
+
+
+def test_a_pair_can_be_moved_like_any_other_block():
+    body = f"Before.\n\n{PAIR}\n\nAfter."
+    out = move_block(body, 1, 0)
+    blocks = parse_blocks(out)
+    assert [b.kind for b in blocks] == ["pair", "paragraph", "paragraph"]
+    assert blocks[0].source == PAIR
+
+
+# --- the spacer -------------------------------------------------------------
+# Plain breathing room between sections. Its own kind for the same reason the
+# stop marker has one: an empty div would otherwise be an invisible,
+# unexplainable block sitting in the middle of a post.
+
+
+def test_a_spacer_gets_its_own_kind():
+    blocks = parse_blocks('A\n\n<div class="post-spacer"></div>\n\nB')
+    assert [b.kind for b in blocks] == ["paragraph", "spacer", "paragraph"]
+
+
+def test_a_spacer_is_not_confused_with_the_stop_marker():
+    assert parse_blocks('<div class="post-spacer"></div>')[0].kind == "spacer"
+    assert parse_blocks('<div class="clear-beside"></div>')[0].kind == "clear"
+
+
+def test_an_unrelated_div_is_not_a_spacer():
+    assert parse_blocks('<div class="post-spacer-ish"></div>')[0].kind == "html"
+
+
+def test_the_spacer_class_is_scoped_to_posts():
+    """`.spacer` alone is already taken by templates/lab.html's game chrome,
+    and base.html's styles are site-wide -- a bare rule would have given that
+    flex span a height.
+    """
+    from editor import config
+
+    assert 'class="spacer"' in (config.REPO / "templates" / "lab.html").read_text()
+
+
+def test_a_pair_with_a_justify_class_still_groups():
+    """The opener's class list grows as the pair gains options; the grouper
+    has to keep recognising it or the wrapper falls apart into raw fragments.
+    """
+    spread = PAIR.replace('size-medium"', 'size-medium justify-spread"')
+    assert [b.kind for b in parse_blocks(f"Before.\n\n{spread}\n\nAfter.")] == [
+        "paragraph", "pair", "paragraph",
+    ]

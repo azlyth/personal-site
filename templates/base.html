@@ -97,10 +97,10 @@
             color: #1a1a1a;
             font-weight: 500;
             line-height: 1.25;
-            /* A heading starts a new band of the page, so it never sits
-               beside a floated photo/video row (.beside-* below) -- it drops
-               below it instead. editor/app.py refuses to pair a heading with
-               a row for this reason. */
+            /* A heading starts a new band of the page, so by default it
+               drops below a float rather than sharing a line with one.
+               Headings that are deliberately part of a beside run opt out
+               just below. */
             clear: both;
         }
 
@@ -244,17 +244,136 @@
            There is deliberately no `beside-*` at full width: a row capped at
            100% leaves the text no column to flow into, so the pair would
            render as a plain stack. editor/videos.py refuses the combination
-           outright rather than letting it be written. */
+           outright rather than letting it be written.
+
+           `clear: both` is what stops two pictures pairing up. A float
+           otherwise slots into whatever room is left beside an earlier one,
+           so two rows close together end up side by side with the prose
+           squeezed into the gutter between them and headings breaking one
+           word per line. Each floated row starts its own wrap region. */
         .img-row.beside-left,
         .video-row.beside-left {
             float: left;
+            clear: both;
             margin: 0.4rem 1.5rem 1rem 0;
         }
 
         .img-row.beside-right,
         .video-row.beside-right {
             float: right;
+            clear: both;
             margin: 0.4rem 0 1rem 1.5rem;
+        }
+
+        /* A heading following a floated row does NOT clear, so a section
+           title can lead the text beside a photo -- which is the whole
+           point of being able to pick one.
+
+           The text simply flows around the row and reclaims the full width
+           once past it; where an author wants a section to start clean
+           instead, they insert a `.clear-beside` marker, which does the
+           clearing for everything after it. */
+        :is(.img-row, .video-row):is(.beside-left, .beside-right) ~ :is(h1, h2, h3, h4) {
+            clear: none;
+        }
+
+        /* Contain the post's floats inside the post. `.container` already
+           establishes a block formatting context so a float can't escape
+           the page, but the body inside it did not -- a photo taller than
+           the writing beside it pushed past the end of the prose and the
+           "All posts" link and the footer rode up alongside the picture.
+           A float belongs to the writing, not to the page chrome. */
+        .blog-post-body {
+            display: flow-root;
+        }
+
+        /* A paired section: a picture and a bounded run of prose, side by side and
+           VERTICALLY CENTRED -- the one thing a float cannot do. A floated row lets
+           text flow around a picture from the top down, which is right for prose
+           that simply continues past a photo; a section meant to sit level with its
+           picture needs both in one container, which is what this is.
+
+           The markup always writes the media column first (it reads better as
+           source, and the parser is simpler for it), so `pair-right` reorders
+           rather than changing the markup. */
+        .pair {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .pair-media { flex: 0 0 auto; }
+        .pair-text { flex: 1 1 0; min-width: 0; }
+
+        .pair-right .pair-media { order: 2; }
+
+        /* The size names mean the same thing they do on a row -- the width of the
+           picture -- and the prose takes what's left. */
+        .pair.size-small .pair-media { width: 240px; }
+        .pair.size-medium .pair-media { width: 420px; }
+
+        /* The row inside the media column is just a carrier: the pair owns the
+           width and the placement, so the row must not also cap or centre itself. */
+        .pair-media .img-row,
+        .pair-media .video-row {
+            max-width: 100%;
+            width: 100%;
+            margin: 0;
+            float: none;
+        }
+
+        /* The prose is a section, so it keeps its own rhythm -- but the first and
+           last elements lose their outer margins, or the "centred" text sits
+           visibly low against the picture. */
+        .pair-text > :first-child { margin-top: 0; }
+        .pair-text > :last-child { margin-bottom: 0; }
+
+        /* How the prose sits against the picture. Centred (no class) is right for a
+           short section; `spread` is for one that nearly fills the picture's height
+           -- first block against the top edge, last against the bottom, the slack
+           shared between them.
+
+           Only the TEXT column stretches. Stretching the pair itself would stretch
+           the media column too, and `.img-row img` carries `height: 100%;
+           object-fit: cover`, so the photo would be cropped to whatever height the
+           prose happened to want. */
+        .pair.justify-spread .pair-text,
+        .pair.justify-evenly .pair-text {
+            align-self: stretch;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Flush at both edges, all the slack between the blocks. */
+        .pair.justify-spread .pair-text { justify-content: space-between; }
+
+        /* Equal gaps everywhere, including above the first block and below the
+           last -- the section breathes inside the picture's height rather than
+           being pinned to its edges. */
+        .pair.justify-evenly .pair-text { justify-content: space-evenly; }
+
+        .pair.justify-top { align-items: flex-start; }
+
+        /* A heading inside a pair must not clear: it is IN the section, and
+           clearing would drop it below any float above. */
+        .pair-text :is(h1, h2, h3, h4) { clear: none; }
+
+        /* Plain breathing room between sections, added deliberately from the
+           editor. Named `post-spacer` rather than `spacer` because
+           templates/lab.html already uses that class for its game chrome and
+           these styles are site-wide. */
+        .post-spacer {
+            height: 2.5rem;
+        }
+
+        /* Ends a beside run. A float wraps everything after it until
+           something clears, so without this the paragraphs the author
+           didn't pick would still ride up alongside a tall row. Invisible
+           by design -- it occupies no space and shows nothing; the editor
+           writes it, and the editor is where it's visible. */
+        .clear-beside {
+            clear: both;
         }
 
         @media (max-width: 700px) {
@@ -269,6 +388,23 @@
                 float: none;
                 margin: 1.5rem auto;
             }
+
+            /* Below the reading column's width there is no room for two
+               things side by side -- the same reason a floated row unfloats. */
+            .pair {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            /* The section reads first, then the picture. Stacked, a picture on
+               top pushes the words it belongs to off the screen -- you scroll
+               past a photo to find out what it's of. Only `pair-left` actually
+               needs forcing (its media is first in markup), but both are written
+               out so the rule says what it means. */
+            .pair-left .pair-media,
+            .pair-right .pair-media { order: 2; }
+            .pair.size-small .pair-media,
+            .pair.size-medium .pair-media { width: auto; }
+
         }
 
         a {
@@ -413,7 +549,7 @@
             width: 100vw;
             margin-left: calc(50% - 50vw);
             margin-right: calc(50% - 50vw);
-            padding: 2.5rem 0 3rem;
+            padding: 0 0 3rem;
             /* The scene clips itself. The two cloud layers below are
                `inset: 0` but animated with `translate` up to 18px, and
                `translate` contributes to scrollable overflow -- so without
@@ -442,7 +578,15 @@
         .archive {
             list-style: none;
             max-width: calc(700px + 2rem);
-            margin: 0 auto;
+            /* The negative top margin cancels the first row's own top
+               padding, so the first post title's LINE BOX starts at exactly
+               the y every other page's <h1> does -- the page has to begin
+               where the rest of the site begins, and the list can't do that
+               while carrying a 1.05rem touch-target pad above its first
+               line. The sky's own padding-top is 0 for the same reason; its
+               gradient is feathered to zero up there anyway, so nothing
+               visible sits in the space this reclaims. */
+            margin: -1.05rem auto 0;
             padding: 0 1rem;
         }
 
@@ -720,6 +864,17 @@
                 text-decoration-thickness 0.18s ease-out;
         }
 
+        /* `a:hover { text-decoration: underline }` is specificity (0,1,1)
+           and outranks the `text-decoration: none` on `.archive-link`
+           (0,1,0), so hovering a row underlined the DATE as well as the
+           title -- the one element on this page deliberately given a
+           different underline treatment from the title's. Same leak, same
+           fix, as `.post-nav-link:hover`. */
+        .archive-link:hover,
+        .archive-link:focus-visible {
+            text-decoration: none;
+        }
+
         .archive-link:hover .archive-title,
         .archive-link:focus-visible .archive-title {
             color: #0066cc;
@@ -768,50 +923,206 @@
             max-width: min(900px, 94vw);
         }
 
-        /* :not(.post-nav) because the prev/next block is itself a <nav> and
-           belongs at the post's full width, not the site nav's. */
-        .container.post-container > nav:not(.post-nav),
-        .container.post-container > footer {
-            max-width: 700px;
-            margin-left: auto;
-            margin-right: auto;
-        }
+        /* The prev/next pair at the end of a post: one row, older on the
+           left and newer on the right. Left-to-right is forward in time,
+           which is how a timeline runs and how prev/next reads on every
+           other site -- so the SIDE says which direction and the word says
+           which direction in time, and neither has to be guessed.
 
+           The pieces are the blog index's: the same Sentient title, the same
+           gull-ink underline, the same soft sky wash on hover, the same meta
+           grey for the label and date. No box, no radius, no shadow -- same
+           no-boxes rule as the index. The one rule here is the top hairline,
+           which answers the one under `.post-meta` and closes the post the
+           way that line opens it. */
+        /* Every property below is also neutralising the bare `nav` type
+           selector further down, which this block is matched by too -- the
+           site chrome's nav sets `display`, `justify-content`, `align-items`
+           and bottom spacing, and its mobile rule ADDS `flex-direction:
+           column` and a `gap`. That last one is why the list is written out
+           in full rather than trimmed to what looks necessary: with
+           `flex-direction` left alone the two sides stacked on a phone, and
+           it stacked only there, so a desktop check said it was fine.
+           Anything added to `nav` needs an answer here. */
         .post-nav {
             display: flex;
+            flex-direction: row;
+            justify-content: flex-start;
+            align-items: flex-start;
             gap: 1.5rem;
-            margin-top: 3rem;
-            padding-top: 1.5rem;
+            margin: 3.5rem 0 0;
+            padding: 1.25rem 0 0;
             border-top: 1px solid #eee;
         }
 
+        /* Equal halves, and `min-width: 0` so a long title wraps inside its
+           half instead of pushing the other one off its side. The empty side
+           on the first and last post is a real flex item holding its half,
+           which is what stops the single neighbour drifting to the middle. */
         .post-nav-side {
             flex: 1 1 0;
             min-width: 0;
         }
 
-        .post-nav-right {
+        .post-nav-newer {
             text-align: right;
         }
 
-        .post-nav a {
+        /* The padding is on the anchor and not the side for the reason
+           written up at `.archive-link`: on the wrapper the hit area
+           collapses to the text's own line boxes and the airy space around
+           them does nothing. `isolation` keeps the wash's negative z-index
+           inside the link. */
+        .post-nav-link {
+            display: block;
+            padding: 0.95rem 0;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            isolation: isolate;
+            overflow-wrap: break-word;
+        }
+
+        /* `a:hover { text-decoration: underline }` is specificity (0,1,1)
+           and beats the `text-decoration: none` above, so without this the
+           whole anchor -- label and date included -- picked up an underline
+           on hover. Only the title is supposed to carry one. */
+        .post-nav-link:hover,
+        .post-nav-link:focus-visible {
             text-decoration: none;
         }
 
-        .post-nav-label {
+        /* The wash leans toward the edge its link belongs to, so the two
+           sides read as two things and not as one panel lighting up. */
+        .post-nav-link::before {
+            content: '';
+            position: absolute;
+            inset: -0.1rem -0.9rem;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.35s ease-out;
+        }
+
+        .post-nav-older .post-nav-link::before {
+            background: radial-gradient(64% 116% at 26% 50%, rgba(116, 196, 231, 0.3), rgba(116, 196, 231, 0) 74%);
+        }
+
+        .post-nav-newer .post-nav-link::before {
+            background: radial-gradient(64% 116% at 74% 50%, rgba(116, 196, 231, 0.3), rgba(116, 196, 231, 0) 74%);
+        }
+
+        .post-nav-link:hover::before,
+        .post-nav-link:focus-within::before,
+        .post-nav-link:active::before {
+            opacity: 1;
+        }
+
+        .post-nav-rel {
             display: block;
-            font-size: 0.75rem;
-            color: #888;
-            margin-bottom: 0.2rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #8d979c;
+            margin-bottom: 0.3rem;
+        }
+
+        /* A hairline chevron drawn from two borders rather than set as a
+           glyph: `‹`/`›` are not in Switzer and fall back to some other
+           face at a different weight, and an arrow stuck on the end of the
+           label is the generic version of this control. It sits on the
+           OUTER edge of each side, so the pair points away from the post
+           you are on. */
+        .post-nav-chev {
+            display: inline-block;
+            width: 0.34em;
+            height: 0.34em;
+            border: 1px solid currentColor;
+            vertical-align: 0.08em;
+        }
+
+        .post-nav-older .post-nav-chev {
+            border-width: 1px 0 0 1px;
+            transform: rotate(-45deg);
+            margin-right: 0.5em;
+        }
+
+        .post-nav-newer .post-nav-chev {
+            border-width: 1px 1px 0 0;
+            transform: rotate(45deg);
+            margin-left: 0.5em;
         }
 
         .post-nav-title {
             display: block;
+            font-family: var(--font-display);
+            font-size: 1.0625rem;
             line-height: 1.35;
+            color: #1a1a1a;
+            text-decoration: underline;
+            text-decoration-color: rgba(94, 135, 152, 0.62);
+            text-decoration-thickness: 1px;
+            text-underline-offset: 0.24em;
+            transition:
+                color 0.18s ease-out,
+                text-decoration-color 0.18s ease-out,
+                text-decoration-thickness 0.18s ease-out;
         }
 
-        .post-nav a:hover .post-nav-title {
-            text-decoration: underline;
+        /* The index's own date grey rather than the fainter `.archive-year`
+           one: that shade is faint enough to be decorative, which is fine
+           for a year sitting beside its own month and not fine for a date
+           standing alone. */
+        .post-nav-date {
+            display: block;
+            margin-top: 0.45rem;
+            font-size: 0.8rem;
+            color: #8d979c;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .post-nav-link:hover .post-nav-title,
+        .post-nav-link:focus-visible .post-nav-title {
+            color: #0066cc;
+            text-decoration-color: #0066cc;
+            text-decoration-thickness: 2px;
+        }
+
+        .post-nav-link:hover .post-nav-rel,
+        .post-nav-link:focus-visible .post-nav-rel {
+            color: #0066cc;
+        }
+
+        .post-nav-link:active .post-nav-title {
+            color: #004e9c;
+            text-decoration-color: #004e9c;
+            text-decoration-thickness: 2px;
+        }
+
+        .post-nav-link:focus-visible {
+            outline: 2px solid #0066cc;
+            outline-offset: 2px;
+            border-radius: 2px;
+        }
+
+        /* The two halves stay two halves on a phone -- a prev/next control
+           that stacks stops being a prev/next control. What gives is the
+           type: the titles step down and the gutter closes, because at
+           ~170px a column the 1.0625rem serif wraps every title to five or
+           six lines. */
+        @media (max-width: 600px) {
+            .post-nav {
+                gap: 1rem;
+            }
+
+            .post-nav-title {
+                font-size: 0.9375rem;
+                line-height: 1.3;
+            }
+
+            .post-nav-rel,
+            .post-nav-date {
+                font-size: 0.75rem;
+            }
         }
 
         .post-back {
@@ -884,6 +1195,32 @@
             }
         }
 
+
+        /* SITE CHROME SITS AT ONE WIDTH ON EVERY PAGE, whatever the page's
+           own reading column does (settled 2026-09-22). Each page used to
+           hand its nav and footer its own container's width -- 1080px on
+           home, 700px on the blog/timeline/lab, 700px on a post inside a
+           900px container -- so the links jumped left and right as you moved
+           between pages and the timeline's nav read as a different size than
+           the home page's.
+
+           The band is pulled out of the container rather than wrapped: `50%`
+           resolves against the centred container and the cap is half the
+           band, so from a 700px container the margins compute to -190px and
+           from home's own 1080px container to exactly 0. Both are needed --
+           a lone `width` would just overflow to the right. `:not(.post-nav)`
+           because the prev/next block is itself a <nav> and belongs at the
+           post's measure, not the site's.
+
+           This is deliberately NOT the `.bleed` idiom: nav and footer are
+           direct children of `.container` in the one layout template, so
+           there is no wrapper to bleed and nothing to re-cap inside it. */
+        .container > nav:not(.post-nav),
+        .container > footer {
+            width: min(1080px, 92vw);
+            margin-left: calc(50% - min(540px, 46vw));
+            margin-right: calc(50% - min(540px, 46vw));
+        }
 
         nav {
             margin-bottom: 2rem;
@@ -1105,9 +1442,37 @@
             margin-bottom: 1.5rem;
         }
 
-        .home-image {
+        /* "Welcome." is the one heading that belongs BESIDE a float. The
+           global `clear: both` on headings exists so a blog heading never
+           rides up next to a .beside-* photo row, but here it dropped the
+           whole intro below the 220px portrait and left the top of the page
+           empty. margin-top: 0 then lines the heading up with the photo's
+           top edge instead of sitting a heading margin below it. */
+        .home-header h1 {
+            clear: none;
+            margin-top: 0;
+        }
+
+        /* The PHOTO'S LINK carries the float, not the <img> inside it. A float
+           inside an inline box can't rise above that box's line box, so
+           floating the image left it sitting a line's worth (24px) below the
+           top of the intro -- "Welcome." level with the photo's middle rather
+           than its top edge. Floating the anchor takes the line box out of it.
+           line-height: 0 drops the descender gap under the image. */
+        .home-photo {
             float: right;
             margin: 0 0 1.5rem 1.5rem;
+            line-height: 0;
+        }
+
+        /* Selector is two classes deep to outrank `.container img`, which
+           centres standalone post photos with `margin: 1.5rem auto` and
+           `height: auto`. Inherited here that margin padded the link 24px
+           above the photo -- the same misalignment again, one level down.
+           Spacing belongs to .home-photo; the photo itself is flush. */
+        .home-photo .home-image {
+            display: block;
+            margin: 0;
             width: 220px;
             height: 220px;
             object-fit: cover;
@@ -1116,7 +1481,7 @@
         }
 
         @media (max-width: 768px) {
-            .home-image {
+            .home-photo .home-image {
                 width: 160px;
                 height: 160px;
                 border-radius: 16px;
@@ -1124,17 +1489,22 @@
         }
 
         @media (max-width: 600px) {
-            .home-image {
-                position: relative;
-                /* float must be cleared for the auto margins below to centre
-                   it -- horizontal auto margins compute to 0 on a float, so
-                   without this the "display:block; margin:auto" never applied
-                   and the photo just sat pinned to the right edge. */
+            /* Narrow enough that nothing fits beside the photo, so it stops
+               floating and centres above the text. The auto margins need a
+               non-float block with a shrink-wrapped width -- on a float,
+               horizontal auto margins compute to 0 and it would just stay
+               pinned to the right edge. */
+            .home-photo {
                 float: none;
+                display: block;
+                width: fit-content;
+                margin: 1rem auto;
+            }
+
+            .home-photo .home-image {
+                position: relative;
                 width: 140px;
                 height: 140px;
-                margin: 1rem auto;
-                display: block;
                 border-radius: 14px;
             }
 

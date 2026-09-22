@@ -11,6 +11,13 @@ CLOUDFLARED_CONFIG = HTTP_ROUTING / "cloudflared" / "config.yml"
 HOSTNAME = os.environ.get("EDITOR_HOSTNAME", "edit.cloudy.nyc")
 PORT = int(os.environ.get("EDITOR_PORT", "8804"))
 BLOG_DIR = REPO / "content" / "blog"
+
+# Where the published site actually lives. Duplicated from
+# `scripts/build-site.sh`'s BASE_URL default -- that script is what renders
+# the live site, and config.toml's `base_url` is only the fallback it
+# overrides. A test pins the two together, because a link built from the
+# wrong base points at a host that doesn't answer.
+SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://cloudy.nyc")
 WEB_DIR = REPO / "editor" / "web"
 
 

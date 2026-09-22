@@ -26,10 +26,32 @@ body {
 }
 .publish:disabled { opacity: 0.5; cursor: default; }
 
+/* Undo and Discard sit beside Publish but must not compete with it -- they
+   are recovery, not the thing you came to do. Outlined rather than filled,
+   and Discard is the only red in the bar. */
+.bar-action {
+    padding: 0.5rem 0.75rem; font-size: 0.9rem;
+    border: 1px solid #ccd4dc; border-radius: 6px;
+    background: #fff; color: #445; cursor: pointer;
+}
+.bar-action:hover:not(:disabled) { background: #eef2f6; }
+.bar-action:disabled { opacity: 0.4; cursor: default; }
+.bar-action.danger { color: #cc3333; border-color: #f0c9c9; }
+.bar-action.danger:hover { background: #fdf0f0; }
+
 .title { font-size: 1.6rem; font-weight: 600; cursor: text; }
 .title-input { font: inherit; font-weight: inherit; width: 100%; border: none; outline: none; }
 .post-meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; align-items: center; }
 .post-meta input[type="date"] { font: inherit; font-size: 0.9rem; }
+/* Sits with the slug, since both are about where the post lives rather than
+   what it says. Muted for a draft, which has no live page yet. */
+.live-link {
+    font-size: 0.85rem; font-weight: 700;
+    text-decoration: none; white-space: nowrap;
+}
+.live-link:hover { text-decoration: underline; }
+.live-link.unpublished { color: #a0a6b0; }
+
 .rename-slug {
     font: inherit; font-size: 0.85rem; color: #888;
     border: 1px solid #ddd; border-radius: 6px; background: #fff;
@@ -44,8 +66,73 @@ a { color: #0066cc; }
     border: 1px solid transparent; border-radius: 6px;
     padding: 0.25rem 0.5rem; margin: 0.25rem -0.5rem;
     cursor: text;
+    /* Stop the box at the picture. A block beside a float keeps the full
+       column width -- only its LINE boxes shorten -- so a text block's
+       border and hover background ran on underneath a floated photo and
+       disappeared behind it. A block formatting context doesn't overlap a
+       float; it narrows to the room actually left, which is exactly where
+       the text ends.
+
+       The cost is small and worth naming: a single block that is taller
+       than the picture stays narrow for its whole height instead of
+       reclaiming the column part-way down, so the preview is very slightly
+       less faithful than the published page for one long paragraph. Blocks
+       are usually shorter than the picture, and a hoverable box you can
+       actually see is worth more. */
+    display: flow-root;
 }
 .block:hover { border-color: #d5e6f7; background: #fbfdff; }
+
+/* A media row with a side floats its whole BLOCK rather than letting the row
+   escape it. When the row alone floated, the block stayed a full-width,
+   zero-height box lying across the picture -- so hovering the photo lit up
+   whichever paragraph overlapped it, that paragraph's absolutely-positioned
+   controls landed on top of the photo, and the photo's own controls appeared
+   at the top-right of its invisible block, nowhere near the photo. Giving
+   the block the picture's real dimensions puts hover, clicks and controls
+   where the picture is, and the wrap picker inside it comes along for free.
+
+   `clear: both` for the same reason the published page has it: two pictures
+   close together must not pair up and squeeze the prose between them.
+
+   The width adds the block's own horizontal padding and border to the row
+   width, so the picture inside still measures exactly what it will once
+   published. */
+.block.beside-left,
+.block.beside-right {
+    box-sizing: border-box;
+    width: calc(var(--row-w) + 1rem + 2px);
+    clear: both;
+    /* Every .block is `position: relative` (its controls are absolutely
+       positioned inside it), and positioned boxes paint above floats. So a
+       following paragraph -- whose box still spans the full column even
+       though its text wraps away from the picture -- sat on top of the
+       photo and swallowed the pointer: hovering the photo lit up that
+       paragraph, and clicking it opened a textarea. Lifting the floated
+       block one step puts the picture back on top of the boxes that only
+       LOOK like they aren't there. */
+    z-index: 1;
+}
+
+.block.beside-left { float: left; margin-right: 1.5rem; }
+.block.beside-right { float: right; margin-left: 1.5rem; }
+
+
+.block.size-small { --row-w: 240px; }
+.block.size-medium { --row-w: 420px; }
+.block.size-full { --row-w: 100%; }
+
+/* Inside a floated block the row fills it -- the block is already carrying
+   the width and the float, so the row repeating either would fight it. */
+.block.beside-left .img-row,
+.block.beside-right .img-row,
+.block.beside-left .video-row,
+.block.beside-right .video-row {
+    float: none;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+}
 .block.editing { border-color: #0066cc; background: #fff; cursor: default; }
 
 .block textarea {
@@ -75,6 +162,100 @@ a { color: #0066cc; }
 .video-row.size-medium { max-width: 420px; }
 .video-row.size-full { max-width: 100%; }
 
+/* A row floated beside the text that follows it. Directions and the
+   narrow-screen reset are kept in sync with templates/base.html and asserted
+   so by test_video_size_presets.py.
+
+   The float is deliberately allowed to ESCAPE its own .block: each block here
+   is a separate div, so a float contained inside its own box would sit to one
+   side of an empty strip and the following paragraph would start below it --
+   the one thing this feature exists to avoid, previewed wrong. Left to
+   escape, it overlaps the following blocks and their line boxes wrap around
+   it, which is what the published page does. The cost is that the text
+   block's own hover outline still spans the full width behind the float;
+   worth it for a preview that tells the truth about the layout. #blocks
+   contains the float so it can't escape the editor itself. */
+.img-row.beside-left,
+.video-row.beside-left {
+    float: left;
+    margin: 0.4rem 1.5rem 1rem 0;
+}
+
+.img-row.beside-right,
+.video-row.beside-right {
+    float: right;
+    margin: 0.4rem 0 1rem 1.5rem;
+}
+
+/* The published page renders this as nothing at all (see base.html) -- here
+   it has to be visible and deletable, or a block the author can't see or
+   explain sits in the middle of their post. Named for what it does rather
+   than what it is. */
+.block .clear-beside {
+    clear: both;
+    height: 0;
+}
+
+/* Shown at the height it will actually take, with a label -- an invisible
+   gap you can't see or select is exactly the block nobody can explain later.
+   The height is set here rather than on an inner `.post-spacer`, because a
+   spacer block renders its label instead of its own html, so there is no
+   inner element for a rule to land on. Kept in step with base.html's
+   `.post-spacer` by the usual parity test. */
+.block.spacer-block {
+    min-height: 2.5rem;
+    display: flex; align-items: center; gap: 0.5rem;
+    color: #b9bfc9; font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.04em;
+}
+.block.spacer-block::before,
+.block.spacer-block::after {
+    content: ''; flex: 1;
+    border-top: 1px dotted #e2e6ec;
+}
+
+.block.clear-block {
+    clear: both;
+    display: flex; align-items: center; gap: 0.5rem;
+    /* Above the floated blocks, which carry z-index: 1 -- otherwise the
+       divider disappears behind a picture it is meant to sit below. */
+    position: relative; z-index: 2;
+    color: #8a94a6; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.04em;
+}
+.block.clear-block::before,
+.block.clear-block::after {
+    content: ''; flex: 1;
+    border-top: 1px dashed #d6dce5;
+}
+
+/* `position: relative` makes this the containing block the move
+   overlay's absolutely positioned zones resolve against. */
+#blocks { display: flow-root; position: relative; }
+
+@media (max-width: 700px) {
+    /* Same breakpoint and same reason as the published page: below the
+       reading column's width there's no room for two things side by side. */
+    .img-row.beside-left,
+    .img-row.beside-right,
+    .video-row.beside-left,
+    .video-row.beside-right {
+        float: none;
+        margin: 1rem auto;
+    }
+
+
+    /* The block follows its row back into normal flow, full width again --
+       and the picker inside it comes along. */
+    .block.beside-left,
+    .block.beside-right {
+        float: none;
+        width: auto;
+        margin-left: -0.5rem;
+        margin-right: -0.5rem;
+    }
+}
+
 .block-controls {
     position: absolute; top: 0.25rem; right: 0.25rem;
     display: none; gap: 0.25rem;
@@ -84,6 +265,11 @@ a { color: #0066cc; }
     width: 28px; height: 28px; line-height: 1;
     border: 1px solid #ddd; border-radius: 6px;
     background: #fff; cursor: pointer; font-size: 1rem;
+}
+/* The layout toggle stays lit while its controls are showing, so the bar
+   reports the state rather than just triggering it. */
+.block-controls button.active {
+    border-color: #b7791f; background: #b7791f; color: #fff;
 }
 
 /* Thumbnail editor for an image / img-row block. Buttons are sized for a
@@ -176,6 +362,17 @@ a { color: #0066cc; }
 
 /* Full width on its own line, not a fourth sibling of the arrows: four
    buttons across a 140px thumb would each fall under the 44px touch target. */
+/* Identical to .video-thumb-split, and for the same reason -- a fourth
+   button beside the other three would squeeze each below the 44px touch
+   target. */
+.image-thumb-split {
+    width: 100%; height: 44px; line-height: 1;
+    border: 1px solid #ddd; border-radius: 6px;
+    background: #fff; color: #0066cc;
+    font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.image-thumb-split:disabled { opacity: 0.35; cursor: default; color: inherit; }
+
 .video-thumb-split {
     width: 100%; height: 44px; line-height: 1;
     border: 1px solid #ddd; border-radius: 6px;
@@ -209,6 +406,33 @@ a { color: #0066cc; }
     border-color: #0066cc; background: #0066cc; color: #fff;
 }
 
+/* The size row and the beside-text row, built together by framingControls()
+   because they constrain each other (nothing floats at full width). The side
+   buttons deliberately reuse .size-buttons' look -- they're the same kind of
+   choice about how the row is framed, just on a second axis. */
+.framing-controls { padding-bottom: 0.25rem; }
+
+.framing-label {
+    display: block;
+    padding-top: 0.6rem;
+    font-size: 0.8rem; font-weight: 700; color: #667;
+    text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+.side-buttons {
+    display: flex; gap: 0.5rem;
+    padding: 0.3rem 0 0.25rem;
+}
+.side-buttons button {
+    flex: 1; height: 44px;
+    font: inherit; font-size: 0.95rem;
+    border: 1px solid #ddd; border-radius: 6px;
+    background: #fff; color: #333; cursor: pointer;
+}
+.side-buttons button.active {
+    border-color: #0066cc; background: #0066cc; color: #fff;
+}
+
 /* Merge control -- sits between two adjacent, same-family media blocks.
    Full-width and thumb-sized (44px, the touch-target floor used throughout
    this tablet UI) rather than folded into the small icon row in
@@ -225,45 +449,262 @@ a { color: #0066cc; }
 }
 .merge-control:hover, .merge-control:active { background: #d3f3e3; }
 
-/* Move mode. Drop targets are the whole mechanic, so they get the biggest,
-   loudest touch target on the page -- taller than the 44px floor used
-   elsewhere -- and the banner makes "you are in move mode" unmissable
-   rather than relying on a subtle state change. */
+/* A paired section: a picture and a bounded run of prose, side by side and
+   VERTICALLY CENTRED -- the one thing a float cannot do. A floated row lets
+   text flow around a picture from the top down, which is right for prose
+   that simply continues past a photo; a section meant to sit level with its
+   picture needs both in one container, which is what this is.
+
+   The markup always writes the media column first (it reads better as
+   source, and the parser is simpler for it), so `pair-right` reorders
+   rather than changing the markup. */
+.pair {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.pair-media { flex: 0 0 auto; }
+.pair-text { flex: 1 1 0; min-width: 0; }
+
+.pair-right .pair-media { order: 2; }
+
+/* The size names mean the same thing they do on a row -- the width of the
+   picture -- and the prose takes what's left. */
+.pair.size-small .pair-media { width: 240px; }
+.pair.size-medium .pair-media { width: 420px; }
+
+/* The row inside the media column is just a carrier: the pair owns the
+   width and the placement, so the row must not also cap or centre itself. */
+.pair-media .img-row,
+.pair-media .video-row {
+    max-width: 100%;
+    width: 100%;
+    margin: 0;
+    float: none;
+}
+
+/* The prose is a section, so it keeps its own rhythm -- but the first and
+   last elements lose their outer margins, or the "centred" text sits
+   visibly low against the picture. */
+.pair-text > :first-child { margin-top: 0; }
+.pair-text > :last-child { margin-bottom: 0; }
+
+/* How the prose sits against the picture. Centred (no class) is right for a
+   short section; `spread` is for one that nearly fills the picture's height
+   -- first block against the top edge, last against the bottom, the slack
+   shared between them.
+
+   Only the TEXT column stretches. Stretching the pair itself would stretch
+   the media column too, and `.img-row img` carries `height: 100%;
+   object-fit: cover`, so the photo would be cropped to whatever height the
+   prose happened to want. */
+.pair.justify-spread .pair-text,
+.pair.justify-evenly .pair-text {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Flush at both edges, all the slack between the blocks. */
+.pair.justify-spread .pair-text { justify-content: space-between; }
+
+/* Equal gaps everywhere, including above the first block and below the
+   last -- the section breathes inside the picture's height rather than
+   being pinned to its edges. */
+.pair.justify-evenly .pair-text { justify-content: space-evenly; }
+
+.pair.justify-top { align-items: flex-start; }
+
+/* A heading inside a pair must not clear: it is IN the section, and
+   clearing would drop it below any float above. */
+.pair-text :is(h1, h2, h3, h4) { clear: none; }
+
+/* Deliberately AFTER the rules above rather than folded into the narrow
+   block higher up this file: these override declarations the base `.pair`
+   rules also set, and at equal specificity source order decides. Sitting
+   above them, `align-items: stretch` and the auto widths silently lost --
+   which left a `size-medium` pair holding a 420px picture on a 412px
+   screen. */
+@media (max-width: 700px) {
+    /* Below the reading column's width there is no room for two things
+       side by side -- the same reason a floated row unfloats. */
+    .pair {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    /* The section reads first, then the picture. Stacked, a picture on top
+       pushes the words it belongs to off the screen -- you scroll past a
+       photo to find out what it's of. Only `pair-left` actually needs
+       forcing (its media is first in markup), but both are written out so
+       the rule says what it means. */
+    .pair-left .pair-media,
+    .pair-right .pair-media { order: 2; }
+
+    .pair.size-small .pair-media,
+    .pair.size-medium .pair-media { width: auto; }
+}
+
+/* Editing a paired section: its picture, then its prose as one markdown
+   field. The section is one block, so it is edited as one thing -- the trade
+   the pair makes in exchange for being able to centre. */
+.pair-edit-media {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    padding: 0.5rem 0;
+}
+.pair-edit-media img,
+.pair-edit-media video {
+    width: 140px; height: 140px; object-fit: cover;
+    border-radius: 6px; margin: 0; display: block;
+    border: 1px solid #e9ecef; background: #000;
+}
+
+.pair-text-input {
+    width: 100%; box-sizing: border-box;
+    font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.95rem; line-height: 1.5;
+    padding: 0.5rem;
+    border: 1px solid #ddd; border-radius: 6px;
+    outline: none; resize: vertical; background: #fff;
+}
+.pair-text-input:focus { border-color: #0066cc; }
+
+/* Reads as a sibling of the wrap picker's buttons, since it belongs to the
+   same decision about how the picture relates to the words. */
+.pair-button {
+    flex: 1 1 auto; min-height: 40px; padding: 0 0.6rem;
+    border: 1px solid #e4cfa0; border-radius: 6px;
+    background: #fff; color: #8a6d1f;
+    font: inherit; font-size: 0.8rem; font-weight: 700;
+    text-transform: none; letter-spacing: normal;
+    cursor: pointer;
+}
+.pair-button:hover { background: #fdf0d5; }
+
+/* Asks which side of a block an insert meant. Blue rather than the picture
+   chrome's amber -- this is about the writing, not about a photo. */
+.insert-choice {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    box-sizing: border-box;
+    margin: 0.4rem 0 0.15rem;
+    padding: 0.4rem 0.5rem;
+    border: 2px dashed #0066cc; border-radius: 6px;
+    background: #eaf3ff; color: #0066cc;
+    font-size: 0.75rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    cursor: default;
+}
+
+.insert-choice button {
+    flex: 1 1 auto; min-height: 40px; padding: 0 0.7rem;
+    border: 1px solid #a8cbe8; border-radius: 6px;
+    background: #fff; color: #0066cc;
+    font: inherit; font-size: 0.8rem; font-weight: 700;
+    text-transform: none; letter-spacing: normal;
+    cursor: pointer;
+}
+.insert-choice button:hover { background: #d5e6f7; }
+.insert-choice .insert-cancel { flex: 0 0 auto; color: #667; border-color: #ccd4dc; }
+
+/* The wrap picker, under every media row and always visible (it began as an
+   icon in the hover-only .block-controls bar -- a control that does not
+   exist on a tablet). It sits INSIDE the row's block, so when that block
+   floats the picker goes with it and lands under the picture with no rules
+   of its own.
+
+   Amber so it reads as chrome belonging to the picture rather than as part
+   of the writing. */
+.wrap-control {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    box-sizing: border-box;
+    margin: 0.4rem 0 0.15rem;
+    padding: 0.4rem 0.5rem;
+    border: 2px dashed #b7791f; border-radius: 6px;
+    background: #fffaf0; color: #b7791f;
+    font-size: 0.75rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    cursor: default;
+}
+
+.wrap-control button {
+    flex: 1 1 auto; min-height: 40px; padding: 0 0.6rem;
+    border: 1px solid #e4cfa0; border-radius: 6px;
+    background: #fff; color: #8a6d1f;
+    font: inherit; font-size: 0.8rem; font-weight: 700;
+    text-transform: none; letter-spacing: normal;
+    cursor: pointer;
+}
+.wrap-control button:hover { background: #fdf0d5; }
+.wrap-control button.active {
+    border-color: #b7791f; background: #b7791f; color: #fff;
+}
+
+
+
+
+
+/* Move mode overlays; it never inserts. Everything here is positioned out
+   of flow, so picking a block up reflows nothing -- the post you're aiming
+   at stays exactly where it was. */
 .move-banner {
-    position: sticky; top: 0; z-index: 8;
+    position: fixed; left: 0; right: 0; z-index: 9;
     display: flex; align-items: center; justify-content: space-between;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    margin: 0 -0.5rem 0.75rem;
-    background: #fff4d6; border: 1px solid #f0c96b; border-radius: 6px;
-    font-weight: 600; color: #6b4e00;
+    background: #fff4d6; border-bottom: 1px solid #f0c96b;
+    font-weight: 700;
 }
+
+.move-layer {
+    position: absolute; inset: 0;
+    pointer-events: none;
+}
+
+/* A thin bar sitting ON the boundary it names rather than between the
+   blocks, so it costs no height. Its hit area is extended well past the bar
+   by a pseudo-element, which -- being absolutely positioned -- is also
+   free. */
+.move-target {
+    position: absolute; left: 0; right: 0;
+    transform: translateY(-50%);
+    height: 8px;
+    padding: 0; border: 0; border-radius: 4px;
+    background: #7fb2e8;
+    font-size: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 0 0 2px #fff;
+}
+
+.move-target::after {
+    content: '';
+    position: absolute; left: 0; right: 0; top: -12px; bottom: -12px;
+}
+
+.move-target:hover, .move-target:active { background: #0066cc; }
+
+/* While moving, the blocks are for looking at, not for editing. */
+.moving .block { pointer-events: none; }
+.moving .block:hover { border-color: transparent; background: transparent; }
+.moving .block-controls { display: none; }
 
 .move-cancel {
-    padding: 0.6rem 1.1rem; font: inherit; font-size: 0.95rem; font-weight: 600;
+    padding: 0.4rem 0.9rem;
     border: 1px solid #cc3333; border-radius: 6px;
-    background: #fff; color: #cc3333; cursor: pointer;
-}
-
-.move-target {
-    display: block; width: 100%; box-sizing: border-box;
-    min-height: 52px;
-    margin: 0.4rem 0;
-    padding: 0.6rem;
-    border: 2px dashed #0066cc; border-radius: 6px;
-    background: #eaf3ff; color: #0066cc;
-    font: inherit; font-size: 0.95rem; font-weight: 700;
+    background: #fff; color: #cc3333;
+    font: inherit; font-size: 0.9rem; font-weight: 700;
     cursor: pointer;
 }
-.move-target:hover, .move-target:active { background: #d5e6f7; }
 
-.move-preview { cursor: default; }
-.move-preview:hover { border-color: transparent; background: transparent; }
-
+/* The block being moved, dimmed and labelled in place -- it stays exactly
+   where it is, which is the whole point. */
 .move-source {
     opacity: 0.45;
     position: relative;
 }
+
 .move-source::after {
     content: 'moving this';
     position: absolute; top: 0.25rem; right: 0.25rem;

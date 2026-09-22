@@ -43,6 +43,26 @@ _VIDEO_ROW_RE = re.compile(r'<div\s+class="video-row', re.I)
 # `[^\]]*` (matching zero or more non-`]` characters) would stop at that
 # escaped bracket's `]` and never reach the real `](url)` closer.
 _ONLY_IMAGE_RE = re.compile(r"^!\[(?:\\.|[^\]\\])*\]\([^)]*\)$")
+# The marker "merge with text" drops after the run of blocks chosen to sit
+# beside a row. Invisible on the page -- it exists purely to stop the float
+# wrapping content the author didn't pick. Matched exactly, since this is the
+# one shape the editor ever writes.
+_CLEAR_RE = re.compile(r'^<div\s+class="clear-beside"\s*>\s*</div>$', re.I)
+# Plain breathing room between sections. Its own kind for the same reason the
+# stop marker has one: an empty div would otherwise be an invisible,
+# unexplainable block in the middle of a post. `post-spacer` rather than
+# `spacer` because templates/lab.html already uses that class for its game
+# chrome, and base.html's styles are site-wide.
+_SPACER_RE = re.compile(r'^<div\s+class="post-spacer"\s*>\s*</div>$', re.I)
+# A paired section: a picture and a bounded run of prose side by side,
+# vertically centred. Floats can't centre, so the two have to share a
+# container -- and markdown inside HTML only parses when blank lines separate
+# it, so the wrapper unavoidably spans several top-level tokens. These match
+# its first and last ones; `_group_pairs` folds the range back into one block.
+_PAIR_OPEN_RE = re.compile(
+    r'^<div class="pair pair-(?:left|right)(?: size-[a-z]+)?(?: justify-[a-z]+)?">'
+)
+_PAIR_CLOSE_RE = re.compile(r"^</div>\n</div>$")
 
 
 @dataclass
@@ -66,6 +86,10 @@ def _refine_kind(kind: str, source: str) -> str:
         return "img_row"
     if kind == "html" and _VIDEO_ROW_RE.search(stripped):
         return "video"
+    if kind == "html" and _CLEAR_RE.match(stripped):
+        return "clear"
+    if kind == "html" and _SPACER_RE.match(stripped):
+        return "spacer"
     if kind == "paragraph" and _ONLY_IMAGE_RE.match(stripped):
         return "image"
     return kind
@@ -104,7 +128,65 @@ def parse_blocks(body: str) -> list[Block]:
             )
         depth += token.nesting
 
-    return blocks
+    return _group_pairs(blocks, lines)
+
+
+def _group_pairs(blocks: list[Block], lines: list[str]) -> list[Block]:
+    """Fold each `pair` wrapper and its contents into a single block.
+
+    A pair parses as an opening html block, the prose inside it, and a
+    closing html block. The editor's model is one block per thing the author
+    thinks of as a thing, and a paired section is one thing.
+
+    An opener with no closer is left ungrouped rather than swallowing
+    everything after it: showing the raw fragments lets the author see and
+    repair the damage, where a block that ate the rest of the post would
+    just look like the post had vanished.
+    """
+    grouped: list[Block] = []
+    i = 0
+    while i < len(blocks):
+        block = blocks[i]
+        # Matched on SOURCE, not kind: the opening block holds the media
+        # column's own row div, so `_refine_kind` has already promoted it to
+        # `img_row`/`video`. What makes it a pair opener is how it starts.
+        if _PAIR_OPEN_RE.match(block.source.strip()):
+            close = next(
+                (
+                    j for j in range(i + 1, len(blocks))
+                    if _PAIR_CLOSE_RE.match(blocks[j].source.strip())
+                ),
+                None,
+            )
+            if close is not None:
+                end = blocks[close].end_line
+                source = "\n".join(lines[block.start_line:end]).rstrip()
+                grouped.append(
+                    Block(
+                        index=len(grouped),
+                        kind="pair",
+                        source=source,
+                        start_line=block.start_line,
+                        end_line=end,
+                        html=_md.render(source),
+                    )
+                )
+                i = close + 1
+                continue
+
+        grouped.append(
+            Block(
+                index=len(grouped),
+                kind=block.kind,
+                source=block.source,
+                start_line=block.start_line,
+                end_line=block.end_line,
+                html=block.html,
+            )
+        )
+        i += 1
+
+    return grouped
 
 
 def _splice(body: str, start: int, end: int, replacement: list[str]) -> str:
@@ -188,3 +270,4 @@ def delete_block(body: str, index: int) -> str:
         end += 1
 
     return _splice(body, block.start_line, end, [])
+

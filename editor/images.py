@@ -50,14 +50,20 @@ def image_key(post_slug: str, alt_text: str, data: bytes) -> str:
 
 _MD_IMAGE_RE = re.compile(r"^!\[(?P<alt>.*)\]\((?P<url>[^)]*)\)$", re.S)
 _IMG_TAG_RE = re.compile(r'<img\s+src="(?P<url>[^"]*)"\s+alt="(?P<alt>[^"]*)"\s*/?>')
-_IMG_ROW_OPEN_RE = re.compile(r'^<div class="img-row(?: size-(?P<size>[a-z]+))?">')
+_IMG_ROW_OPEN_RE = re.compile(
+    r'^<div class="img-row(?: size-(?P<size>[a-z]+))?(?: beside-(?P<side>[a-z]+))?">'
+)
 
 DEFAULT_SIZE = "full"
 _VALID_SIZES = {"small", "medium", "full"}
+# Which side of the text the row floats to, if any -- same vocabulary and
+# same default-writes-nothing rule as videos.py's.
+DEFAULT_SIDE = "none"
+_VALID_SIDES = {"none", "left", "right"}
 
 
 def parse_images(kind: str, source: str) -> dict | None:
-    """The inverse of `markdown_for`: pull `{size, images}` back out of an
+    """The inverse of `markdown_for`: pull `{size, side, images}` back out of an
     `image` or `img_row` block's markdown source, undoing the escaping
     `markdown_for` applied on the way in.
 
@@ -93,12 +99,14 @@ def parse_images(kind: str, source: str) -> dict | None:
         alt = match.group("alt").replace("\\]", "]").replace("\\[", "[")
         images = [{"url": match.group("url"), "alt": alt}]
         size = DEFAULT_SIZE
+        side = DEFAULT_SIDE
     elif kind == "img_row":
         stripped = source.strip()
         open_match = _IMG_ROW_OPEN_RE.match(stripped)
         if not open_match:
             return None
         size = open_match.group("size") or DEFAULT_SIZE
+        side = open_match.group("side") or DEFAULT_SIDE
         images = [
             {"url": match.group("url"), "alt": html.unescape(match.group("alt"))}
             for match in _IMG_TAG_RE.finditer(stripped)
@@ -108,18 +116,23 @@ def parse_images(kind: str, source: str) -> dict | None:
 
     try:
         regenerated = markdown_for(
-            [img["url"] for img in images], [img["alt"] for img in images], size
+            [img["url"] for img in images], [img["alt"] for img in images], size, side
         )
     except ValueError:
-        # size isn't one of the three real presets, or urls/alts somehow
+        # size isn't one of the three real presets, the side isn't a real
+        # side (or is an impossible full-width float), or urls/alts somehow
         # ended up mismatched -- either way this block isn't safely
         # representable.
         return None
 
-    return {"size": size, "images": images} if regenerated == source.strip() else None
+    if regenerated != source.strip():
+        return None
+    return {"size": size, "side": side, "images": images}
 
 
-def markdown_for(urls: list[str], alts: list[str], size: str = DEFAULT_SIZE) -> str:
+def markdown_for(
+    urls: list[str], alts: list[str], size: str = DEFAULT_SIZE, side: str = DEFAULT_SIDE
+) -> str:
     """One image at the default size is a standalone markdown link; anything
     else -- several images, or a single image at a non-default size -- is a
     `.img-row` div.
@@ -131,6 +144,13 @@ def markdown_for(urls: list[str], alts: list[str], size: str = DEFAULT_SIZE) -> 
     multi-photo side -- every row written before this feature existed has
     no class at all, and this keeps those byte-identical too.
 
+    `side` floats the row so the text after it flows alongside, as a third
+    class after the size (`img-row size-small beside-right`). The default
+    `none` writes nothing. A side is only legal below full width -- there'd
+    be no column left for the text -- so a floated row is always the
+    wrapped div shape and never collides with the lone-default-photo rule
+    above.
+
     Alt text is free-form input typed by a person, so it's escaped for
     whichever context it lands in: `]`/`[` (and a collapsed newline) for the
     markdown link, HTML entities (and a collapsed newline) for the <img> tag.
@@ -141,12 +161,21 @@ def markdown_for(urls: list[str], alts: list[str], size: str = DEFAULT_SIZE) -> 
         )
     if size not in _VALID_SIZES:
         raise ValueError(f"unknown image row size {size!r} (must be one of {sorted(_VALID_SIZES)})")
+    if side not in _VALID_SIDES:
+        raise ValueError(f"unknown image row side {side!r} (must be one of {sorted(_VALID_SIDES)})")
+    if side != DEFAULT_SIDE and size == DEFAULT_SIZE:
+        raise ValueError(
+            "a full-width row can't float beside text -- there is no column left for the text "
+            "to flow into. Pick 'small' or 'medium'."
+        )
 
     if len(urls) == 1 and size == DEFAULT_SIZE:
         alt = alts[0].replace("\n", " ").replace("[", "\\[").replace("]", "\\]")
         return f"![{alt}]({urls[0]})"
 
     class_attr = "img-row" if size == DEFAULT_SIZE else f"img-row size-{size}"
+    if side != DEFAULT_SIDE:
+        class_attr += f" beside-{side}"
     lines = [f'<div class="{class_attr}">']
     for url, alt in zip(urls, alts):
         safe_alt = html.escape(alt.replace("\n", " "), quote=True)

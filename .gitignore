@@ -49,3 +49,6 @@ node_modules
 
 # Agent scratch: subagent worktrees are their own git repos, never content here.
 .claude/worktrees/
+
+# Editor scratch: per-post undo snapshots (see editor/history.py)
+/editor/.history

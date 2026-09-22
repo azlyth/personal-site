@@ -164,6 +164,7 @@ def test_parse_images_single_markdown_image():
     out = parse_images("image", "![a cat](https://img.cloudy.nyc/p/a.jpg)")
     assert out == {
         "size": "full",
+        "side": "none",
         "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}],
     }
 
@@ -176,6 +177,7 @@ def test_parse_images_img_row_multiple():
     out = parse_images("img_row", source)
     assert out == {
         "size": "full",
+        "side": "none",
         "images": [
             {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
             {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
@@ -191,6 +193,7 @@ def test_parse_images_round_trips_escaped_markdown_alt():
     out = parse_images("image", source)
     assert out == {
         "size": "full",
+        "side": "none",
         "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a photo of [me]"}],
     }
 
@@ -233,6 +236,7 @@ def test_parse_images_img_row_without_size_class_defaults_to_full():
     out = parse_images("img_row", source)
     assert out == {
         "size": "full",
+        "side": "none",
         "images": [
             {"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a"},
             {"url": "https://img.cloudy.nyc/p/b.jpg", "alt": "b"},
@@ -248,6 +252,7 @@ def test_parse_images_single_sized_image_round_trips_as_img_row():
     out = parse_images("img_row", source)
     assert out == {
         "size": "small",
+        "side": "none",
         "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}],
     }
 
@@ -351,3 +356,74 @@ def test_cli_upload_path_shares_the_content_addressed_key():
 
     assert "image_key(" in script, "upload-image.py must use the shared content-addressed key"
     assert "f\"{post_slug}/{name}.jpg\"" not in script, "upload-image.py still builds an unhashed key"
+
+
+# --- `side`: floating a row beside the text that follows it -----------------
+# Mirrors videos.py exactly: a third class after the size preset, default
+# `none` writing nothing. Since a side is only legal at small/medium, a
+# floated photo is always the wrapped div shape -- it never collides with
+# the rule that keeps a lone default-size photo as plain markdown.
+
+
+def test_side_right_adds_a_beside_class_after_the_size():
+    out = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "small", "right")
+    assert out == (
+        '<div class="img-row size-small beside-right">\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg" alt="a cat">\n'
+        "</div>"
+    )
+
+
+def test_side_left_adds_a_beside_class_after_the_size():
+    out = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "medium", "left")
+    assert out.startswith('<div class="img-row size-medium beside-left">')
+
+
+def test_markdown_for_rejects_unknown_side():
+    with pytest.raises(ValueError):
+        markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "small", "sideways")
+
+
+def test_markdown_for_rejects_a_full_width_row_floated_beside_text():
+    # A row capped at 100% leaves the text no column to flow into.
+    with pytest.raises(ValueError):
+        markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "full", "right")
+
+
+def test_parse_images_reads_the_side_back():
+    source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "small", "right")
+    assert parse_images("img_row", source) == {
+        "size": "small",
+        "side": "right",
+        "images": [{"url": "https://img.cloudy.nyc/p/a.jpg", "alt": "a cat"}],
+    }
+
+
+def test_parse_images_reports_no_side_as_none():
+    source = markdown_for(["https://img.cloudy.nyc/p/a.jpg"], ["a cat"], "small")
+    assert parse_images("img_row", source)["side"] == "none"
+
+
+def test_parse_images_reports_a_standalone_image_as_unfloated():
+    assert parse_images("image", "![a cat](https://img.cloudy.nyc/p/a.jpg)")["side"] == "none"
+
+
+def test_parse_images_rejects_an_unknown_beside_class():
+    source = (
+        '<div class="img-row size-small beside-middle">\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg" alt="a cat">\n'
+        "</div>"
+    )
+    assert parse_images("img_row", source) is None
+
+
+def test_parse_images_rejects_a_beside_class_with_no_size():
+    """`markdown_for` can't emit it (a side is only legal at small/medium, and
+    both write their size class), so regenerating won't reproduce it.
+    """
+    source = (
+        '<div class="img-row beside-right">\n'
+        '<img src="https://img.cloudy.nyc/p/a.jpg" alt="a cat">\n'
+        "</div>"
+    )
+    assert parse_images("img_row", source) is None

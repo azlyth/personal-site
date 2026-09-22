@@ -176,6 +176,7 @@ def test_parse_videos_single_clip():
     out = parse_videos("video", source)
     assert out == {
         "size": "medium",
+        "side": "none",
         "videos": [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}],
     }
 
@@ -191,6 +192,7 @@ def test_parse_videos_multiple_clips_round_trip():
     out = parse_videos("video", source)
     assert out == {
         "size": "full",
+        "side": "none",
         "videos": [
             {"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": "4"},
             {"url": "https://img.cloudy.nyc/p/b.mp4", "sync_loop": "4"},
@@ -305,3 +307,79 @@ def test_cli_upload_path_shares_the_content_addressed_key():
 
     assert "video_key(" in script, "upload-video.py must use the shared content-addressed key"
     assert "f\"{post_slug}/{name}.mp4\"" not in script, "upload-video.py still builds an unhashed key"
+
+
+# --- `side`: floating a row beside the text that follows it -----------------
+# A third class after the size preset. `none` is the default and writes
+# nothing at all, so every row published before this feature existed stays
+# byte-identical -- the same discipline the size presets already follow.
+
+
+def test_side_defaults_to_none_and_writes_no_class():
+    out = markdown_for([{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "medium")
+    assert '<div class="video-row size-medium">' in out
+
+
+def test_side_right_adds_a_beside_class_after_the_size():
+    out = markdown_for(
+        [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "medium", "right",
+    )
+    assert out.startswith('<div class="video-row size-medium beside-right">')
+
+
+def test_side_left_adds_a_beside_class_after_the_size():
+    out = markdown_for(
+        [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "small", "left",
+    )
+    assert out.startswith('<div class="video-row size-small beside-left">')
+
+
+def test_markdown_for_rejects_unknown_side():
+    with pytest.raises(ValueError):
+        markdown_for(
+            [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "medium", "sideways",
+        )
+
+
+def test_markdown_for_rejects_a_full_width_row_floated_beside_text():
+    """A row capped at 100% leaves the text no column to flow into, so the
+    combination renders as a plain full-width row with the text pushed
+    below it -- an invisible no-op the editor would still show as active.
+    Refuse it at the boundary instead.
+    """
+    with pytest.raises(ValueError):
+        markdown_for(
+            [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "full", "right",
+        )
+
+
+def test_parse_videos_reads_the_side_back():
+    source = markdown_for(
+        [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "medium", "right",
+    )
+    out = parse_videos("video", source)
+    assert out == {
+        "size": "medium",
+        "side": "right",
+        "videos": [{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}],
+    }
+
+
+def test_parse_videos_reports_no_side_as_none():
+    source = markdown_for([{"url": "https://img.cloudy.nyc/p/a.mp4", "sync_loop": None}], "medium")
+    assert parse_videos("video", source)["side"] == "none"
+
+
+def test_parse_videos_rejects_an_unknown_beside_class():
+    """Not losslessly representable -- `markdown_for` could never emit it,
+    so regenerating can't reproduce the source and the caller must fall
+    back to editing raw text rather than dropping the class silently.
+    """
+    source = (
+        '<div class="video-row size-medium beside-middle">\n'
+        '<video autoplay loop muted playsinline>\n'
+        '<source src="https://img.cloudy.nyc/p/a.mp4" type="video/mp4">\n'
+        '</video>\n'
+        '</div>'
+    )
+    assert parse_videos("video", source) is None

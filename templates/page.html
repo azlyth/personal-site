@@ -12,26 +12,40 @@
 {{ page.content | safe }}
 </div>
 
-{# Guarded as a pair: Zola is currently handing this template no earlier/later
-   (nor lighter/heavier) for these pages, so without the outer check the block
-   would render as a bare rule and empty space. Kept rather than deleted -- the
-   markup is right, and it starts working the moment the neighbours resolve. #}
-{% if page.later or page.earlier %}
-<nav class="post-nav">
-    {# "later" is the newer post, so it sits on the left. #}
-    <div class="post-nav-side">
-        {% if page.later %}
-        <a href="{{ page.later.permalink | safe }}">
-            <span class="post-nav-label">← Newer</span>
-            <span class="post-nav-title">{{ page.later.title }}</span>
+{# The neighbouring posts, one on each side of a single row: older to the
+   left, newer to the right, the way a timeline runs and the way prev/next
+   reads everywhere else.
+
+   `lower`/`higher` are Zola's neighbour variables, and they are positions in
+   the sorted list, NOT dates: the section sorts newest-first, so `lower` (a
+   lower index) is the NEWER post and `higher` the older one. This block
+   previously read `page.later`/`page.earlier`, which Zola dropped in 0.19 --
+   they resolved to nothing, the `{% if %}` was permanently false, and no
+   post showed a prev/next link for as long as it existed. If this ever goes
+   blank again, check those names against the Zola version in Dockerfile.dev
+   first.
+
+   Both sides are always in the markup, even when empty. The first and last
+   posts have only one neighbour, and an empty div holding its half is what
+   keeps the one that does exist on its own side of the row instead of
+   sliding across to the middle. #}
+{% if page.lower or page.higher %}
+<nav class="post-nav" aria-label="More posts">
+    <div class="post-nav-side post-nav-older">
+        {% if page.higher %}
+        <a class="post-nav-link" href="{{ page.higher.permalink | safe }}">
+            <span class="post-nav-rel"><i class="post-nav-chev" aria-hidden="true"></i>Older</span>
+            <span class="post-nav-title">{{ page.higher.title }}</span>
+            <span class="post-nav-date">{{ page.higher.date | date(format="%B %-d, %Y") }}</span>
         </a>
         {% endif %}
     </div>
-    <div class="post-nav-side post-nav-right">
-        {% if page.earlier %}
-        <a href="{{ page.earlier.permalink | safe }}">
-            <span class="post-nav-label">Older →</span>
-            <span class="post-nav-title">{{ page.earlier.title }}</span>
+    <div class="post-nav-side post-nav-newer">
+        {% if page.lower %}
+        <a class="post-nav-link" href="{{ page.lower.permalink | safe }}">
+            <span class="post-nav-rel">Newer<i class="post-nav-chev" aria-hidden="true"></i></span>
+            <span class="post-nav-title">{{ page.lower.title }}</span>
+            <span class="post-nav-date">{{ page.lower.date | date(format="%B %-d, %Y") }}</span>
         </a>
         {% endif %}
     </div>

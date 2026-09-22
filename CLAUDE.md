@@ -550,32 +550,107 @@ drifts off-center everywhere else.
   `pkill -f chromium`, per the machine-wide rule about name-matched kills.
 - **Post pages (`page.html`) read at `min(900px, 94vw)`**, not the site's 700px
   default — that is the width the `.img-row`/`.video-row` size presets were
-  tuned against. `.container.post-container > nav:not(.post-nav)` is deliberate:
-  the prev/next block is itself a `<nav>` and belongs at the post's full width,
-  not the site nav's 700px.
-- **Prev/next on posts is written but inert.** Zola hands this template no
-  `page.earlier`/`page.later` (nor `lighter`/`heavier`) for these pages, so the
-  block is wrapped in `{% if page.later or page.earlier %}` — unguarded it
-  rendered as a bare rule and empty space under every post. Left in place
-  because the markup is right; it starts working if the neighbours ever resolve.
+  tuned against. Only the body: the nav and footer run at the site chrome width
+  like every other page (below), so `:not(.post-nav)` is what keeps the
+  prev/next block — itself a `<nav>` — at the post's own measure instead.
+- **Prev/next on posts is live** (fixed 2026-09-22; it had been written but
+  inert since it was added). The block read `page.earlier`/`page.later`, which
+  **Zola dropped in 0.19** — they resolved to nothing, the `{% if %}` guard was
+  permanently false, and no post ever rendered a neighbour link. The current
+  names are **`page.lower`/`page.higher`, and they are positions in the sorted
+  list rather than dates**: `content/blog/_index.md` sorts `date` (newest
+  first), so **`lower` is the NEWER post and `higher` the older one**. If the
+  block ever goes blank again, check those names against the Zola version in
+  `Dockerfile.dev` before anything else.
+  It renders as **one row with a side each — older left, newer right**
+  (Peter's call, 2026-09-22; a stacked first version was rejected).
+  Left-to-right is forward in time, which is how a timeline runs and how
+  prev/next reads elsewhere, so the SIDE says which direction and the word
+  says which direction in time. The pieces are the blog index's: the same
+  Sentient title, the same gull-ink underline, the same sky-blue hover wash
+  (leaning toward each link's own edge so the halves read as two things),
+  the same meta grey for label and date.
+  **Both sides are always in the markup, even when empty** — the first and
+  last post have one neighbour, and the empty `div` holding its half is what
+  keeps the one that exists on its own side instead of sliding to the middle.
+  The chevrons are **two borders on an `<i>`, rotated 45°**, not `‹`/`›`:
+  those glyphs aren't in Switzer and fall back to another face at another
+  weight. **It stays two halves under 600px** — a prev/next control that
+  stacks stops being one — and what gives instead is the type, since at
+  ~180px a column the 1.0625rem serif wraps every title to five or six lines.
+- ⚠ **`.post-nav` has to undo the bare `nav` type selector, at EVERY width.**
+  `base.html` styles `nav` directly, and the prev/next block is a `<nav>`: the
+  desktop rule brings `display: flex`, `justify-content`, `align-items` and
+  bottom spacing, and **the mobile rule adds `flex-direction: column` and a
+  `gap`**. `.post-nav` therefore writes all of those out in full rather than
+  only what looks necessary. The `flex-direction` one is the trap — leaving it
+  alone stacked the two sides on a phone and *only* on a phone, so a desktop
+  check said it was fine. Anything added to the `nav` rule needs an answer in
+  `.post-nav`. This is the second thing it has to opt out of; `:not(.post-nav)`
+  on the chrome-width rule is the first.
+- ⚠ **`a:hover { text-decoration: underline }` outranks a link-level
+  `text-decoration: none`** — (0,1,1) beats (0,1,0) — so any anchor here that
+  wraps more than its own link text and hand-draws the underline on one child
+  needs its own `:hover { text-decoration: none }`. Both `.archive-link` and
+  `.post-nav-link` do; the archive had been silently underlining each row's
+  DATE on hover since the row became a whole-row anchor (fixed 2026-09-22).
 - **`/blog/#<slug>` hash links no longer resolve** — they were how the SPA
   selected a post. Deliberately not shimmed.
 - **`/` (`index.html`)** widens to `min(1080px, 92vw)` at ≥1000px and flows its
   sections into two columns via **`column-count`, not a grid** — the browser
   balances them, so adding a section later doesn't need the split re-hardcoded.
   **Its nav and footer run that full width too** (fixed 2026-09-22) — they were
-  capped back to 700px and re-centred, the way post pages do it, which left
+  capped back to 700px and re-centred, the way post pages did it, which left
   them inset 190px on each side of the page they belong to at 1280px wide: the
   nav links started well right of "Welcome." and the footer's rule began and
   ended in mid-air. Uncapped, the links share the heading's left edge and the
-  site title lands exactly on the photo's right edge. The post-page cap stays —
-  there the body is a reading column, not a full-width layout.
+  site title lands exactly on the photo's right edge. **That width is now the
+  whole site's chrome width** — see the next bullet; fixing home alone just
+  moved the inconsistency to every other page.
   `.home-intro` is a `flow-root`: without it the floated photo escapes the
   intro and the multi-column box shrinks sideways to avoid the float instead of
-  using the full width. The "Author of" list links **live sites, not repos**,
+  using the full width. **"Welcome." and the photo are level at the top of the
+  page, and three separate rules are what keep them there** (fixed 2026-09-22;
+  the intro used to start a photo's height down the page, under a band of
+  nothing). `.home-header h1` opts out of the site-wide heading `clear` — this
+  is the one heading meant to sit beside a float — and zeroes its top margin.
+  The float lives on the photo's LINK (`.home-photo`), not the `<img>`: a float
+  inside an inline box can't rise above that box's line box, so floating the
+  image alone parked it 24px lower than the heading. And `.home-photo
+  .home-image` is two classes deep on purpose, to outrank `.container img`'s
+  `margin: 1.5rem auto` — inherited, that margin re-created the same 24px gap
+  inside the link. The "Author of" list links **live sites, not repos**,
   and only things that are actually publicly reachable — check
   `http-routing/cloudflared/config.yml` for that, not a curl from the Pi, since
   LAN-only hosts answer 200 from here and would be dead links for visitors.
+- **Two things are the same on every page, and both are enforced in
+  `base.html` rather than per template** (settled 2026-09-22):
+  - **The nav and footer sit at one width — `min(1080px, 92vw)` — whatever
+    the page's own reading column does.** They used to inherit their
+    container, so the links jumped as you moved between pages: 1080px on
+    home, 700px on `/blog`, `/timeline` and `/lab`, 700px on a post inside a
+    900px container. `.container > nav:not(.post-nav), .container > footer`
+    pulls the band back out of the container with
+    `margin-inline: calc(50% - min(540px, 46vw))` — `50%` resolves against
+    the centred container, so that computes to -190px from a 700px one and
+    to exactly 0 from home's, which is why home is unchanged. The `width`
+    and the margins are both required; a lone `width` just overflows right.
+    On the narrower pages the band is deliberately wider than the text under
+    it: the nav belongs to the page, not to the column.
+  - **The first line of text starts at the same y on every page** (105.6px at
+    desktop sizes — nav bottom + its 2rem margin). Everything else got this
+    free from its `<h1>`; the blog index did not, because `.archive-sky`
+    carried `2.5rem` of top padding *and* the first row's own `1.05rem`
+    touch-target padding, which put the first post title 57px below where
+    every other page starts. The sky's top padding is now 0 and `.archive`
+    carries `margin-top: -1.05rem` to cancel the row padding. Don't fix this
+    by shrinking `.archive-link`'s padding — that padding IS the 44px touch
+    target, as the bullet above warns.
+  - Verify both with a DOM probe rather than by eye: inject a script that
+    reports `nav.getBoundingClientRect()` and the topmost element in
+    `.container` holding a non-empty text node, then read it back out of
+    `chromium --headless --dump-dom` (no screenshot needed, and the numbers
+    are exact).
 - **`/lab` (`lab.html`)** uses the same bleed pattern for `.game-stage`, so a
   board can be wider than the 700px reading column. Boards no longer switch
   between hardcoded pixel sizes at a breakpoint the way the old Go board and
@@ -758,11 +833,13 @@ Block kinds and their editors: `image` (standalone markdown), `img_row` and
 `video` (side-by-side grids) get thumbnail strips with add/remove/reorder,
 alt text, and Small/Medium/Full size presets; everything else gets a markdown
 textarea. Any block can be moved (pick it up, tap a gap) or merged with an
-adjacent same-family block. A media row also carries a "beside" control that
-picks up the row and lets you tap the paragraph it should sit next to, and a
-single photo or clip can be split out of its row into one of its own. The
-editor bar has Undo (walks back through the post's edits) and Discard (back
-to the last published version).
+adjacent same-family block. A media row carries a "Text wraps:
+No / Left / Right" picker, always visible; choosing a side floats the row and
+the text flows around it. A ⊟ control drops a stop-wrap marker to end a
+float early, and "⧉ Centre" folds a floated row and the section beside it
+into a paired block, side by side and vertically centred. A single photo or clip can be split out of its
+row into one of its own. The editor bar has Undo (walks back through the
+post's edits) and Discard (back to the last published version).
 
 - **"Split out" is how a clip escapes its row.** `move_block` moves blocks, not
   clips, so a clip sharing a `video` row had no way to reach a distant part of
@@ -838,56 +915,186 @@ to the last published version).
     `rename_post` stages exactly like that -- and `git checkout HEAD --` on
     one of those fails, surfacing as a 500 instead of the clear "never been
     committed" refusal. A brand-new draft is refused rather than deleted.
-- **"Beside text" is a float, not a two-column block.** Putting a vertical
-  clip next to a paragraph is a third class on the row (`<div class="video-row
-  size-medium beside-right">`) plus `float: right` -- deliberately NOT a new
-  block kind holding both. A merged wrapper would have to contain markdown
-  inside HTML, which CommonMark doesn't parse, so keeping links and emphasis
-  alive means the wrapper spans several top-level tokens -- and `blocks.py`'s
-  whole model is one top-level token per block. The float buys the same
-  layout with no change to that model, at the cost of the text wrapping back
-  to full width under the row once it runs past it (which is usually what you
-  want anyway).
+- **Text wrapping is a float and nothing more: the row picks a side.** A
+  photo or clip sitting next to prose is a third class on the row
+  (`<div class="video-row size-medium beside-right">`) plus `float: right`.
+  Everything after it wraps around it and returns to full width once past
+  it. **There is deliberately no way to say which blocks sit beside a row** --
+  page widths are fluid, so how much text fits alongside isn't knowable when
+  the post is written. An earlier version had you select a fixed set of
+  blocks, gathered them into a run and fenced it with a marker; it could not
+  survive a change of screen width and was removed.
   - **`side` is orthogonal to `size`**, not three more presets: a row is
     "medium, floated right". `none` writes no class at all, so every row
     published before this existed stays byte-identical -- the same discipline
     that keeps `size-full` implicit.
   - **A full-width row can't float and is refused at the boundary**
     (`markdown_for` raises): a row capped at 100% leaves the text no column,
-    so the pair would silently render as a plain stack. Both the one-tap
-    action and the editor's side buttons therefore narrow a full-width row to
-    **medium** when you float it, and picking Full drops the side. That
-    constraint lives in exactly one place on each side of the wire
-    (`markdown_for`, and `framingControls()` in editor.js) or the two row
-    editors drift apart.
-  - **Three supporting rules in `base.html` are load-bearing**, each fixing a
-    way floats leak: `h1,h2,h3,h4 { clear: both }` (or the next section's
-    title rides up beside the video -- this is also *why* `app.py` refuses to
-    pair a heading with a row, and a test pins the two together);
-    `.container { display: flow-root }` (or a float taller than its text
-    escapes the post and overlaps the footer); and a `max-width: 700px`
+    so the pair would silently render as a plain stack. Choosing a side
+    therefore narrows a full-width row to **medium**, and choosing Full drops
+    the side. That constraint lives in exactly one place on each side of the
+    wire (`markdown_for`, and `framingControls()`/`setRowSide()` in
+    editor.js) or the two row editors drift apart.
+  - **Setting a side has no route of its own.** It is an ordinary property of
+    the row, so the picker performs the same PUT the row editor does.
+  - **A floated row carries `clear: both`.** Without it a second float slots
+    into whatever room is left beside an earlier one, so two pictures close
+    together pair up, the prose is squeezed into the gutter between them and
+    headings break one word per line. Each floated row starts its own wrap
+    region.
+  - **In the editor it is the whole `.block` that floats, not the row inside
+    it.** Letting the row escape its block left the block a full-width,
+    zero-height box lying across the picture, and three things broke at once:
+    hovering the photo lit up whichever paragraph's box overlapped it, that
+    paragraph's absolutely-positioned controls landed on top of the photo,
+    and the photo's own controls appeared at the top-right of its invisible
+    block. The floated block carries the row's width (`--row-w` plus the
+    block's own padding and border, so the picture still measures its
+    published width), the row inside drops back to `float: none; width: 100%`,
+    and the wrap picker lives inside the block so it travels with the float.
+    - **It also needs `z-index: 1`.** Every `.block` is `position: relative`
+      (its controls are absolutely positioned inside it), and positioned
+      boxes paint above floats -- so a following paragraph, whose box still
+      spans the full column even though its text wraps away from the
+      picture, covered the photo and swallowed the pointer.
+  - **Two rules in `base.html` are load-bearing**, each fixing a way floats
+    leak: `.container { display: flow-root }` (or a float taller than its
+    text escapes the post and overlaps the footer), and a `max-width: 700px`
     unfloat (below the reading column's own width even the 240px preset
-    leaves an unreadable measure).
-  - **`POST .../blocks/{index}/beside` names the row AND the text**
-    (`text_index`), and floats plus moves in one write. Naming the target
-    outright rather than inferring it from adjacency is what lets a row reach
-    writing anywhere in the post without being moved there first -- the UI is
-    a pick-the-destination mode mirroring move mode, not a strip between two
-    neighbours. A float only wraps what follows it, so "beside this text"
-    always means "immediately above it", and `move_block`'s gap convention
-    already means gap `text_index` is exactly that slot in both directions.
-    Both halves run in one `_write_body` transform, same reasoning as the
-    clip split: as two requests the second could 409 and strand the post with
-    a floated row in the wrong place.
-  - **Splitting a pair apart has no route of its own.** It's the ordinary row
-    save with the side cleared, which is why the control has to send the
-    row's current contents back rather than just a flag.
-  - **The editor lets the float escape its own `.block`** (`#blocks` carries
-    the `flow-root` instead). Each block is a separate div, so a float
-    contained inside its own box would sit beside an empty strip and the
-    paragraph would start below it -- the exact thing the feature exists to
-    avoid, previewed wrong. Left to escape, the following block's line boxes
-    wrap around it the way the published page does.
+    leaves an unreadable measure). Headings do **not** clear a float -- a
+    section title is allowed to sit beside a photo, which is the whole point
+    of letting the text flow.
+  - **`.clear-beside` is the stop-wrap marker, inserted by hand.** A float
+    otherwise wraps everything after it, so this is how an author ends a wrap
+    early and starts a new full-width section (typically one that pairs with
+    its own picture). It is an ordinary block -- added through the generic
+    add-block route, deleted like any other -- and `blocks.py` promotes it to
+    the `clear` kind so the editor shows a labelled divider rather than a
+    mystery empty block. The control only appears where a float is actually
+    still wrapping (`wrapIsActiveAt` scans back for a sided media row,
+    stopping at any earlier marker), so it can't insert a block that does
+    nothing.
+  - **The picker is a full-width strip under the row, not an icon in
+    `.block-controls`.** That bar is `display: none` until `:hover`, and the
+    tablet this editor exists for has no hover -- the feature was there and
+    effectively invisible.
+  - **"↗ View live" opens the published post in a new tab.** The base comes
+    from `config.SITE_BASE_URL`, hand-duplicated from `scripts/build-site.sh`'s
+    `BASE_URL` default and pinned by a test -- **that** script is what renders
+    the live site, and `config.toml`'s `base_url` (`peter.direct`) is only
+    the fallback it overrides, so building a link from it would point at a
+    host that doesn't answer. A draft's link is shown but muted and says so
+    in its title: a draft isn't built at all, so it would 404, and "where is
+    my post" is exactly the question a draft raises.
+  - **Layout controls are behind a `◨` toggle in the control bar**
+    (`state.wrapOpen`), not always on: a picture usually just sits there, and
+    a strip under every one of them is noise when reading a post back. The
+    toggle lights up while its controls are showing.
+  - **A spacer (`<div class="post-spacer">`) is plain breathing room between
+    sections**, with its own block kind for the same reason the stop marker
+    has one: an empty div is otherwise an invisible, unexplainable block. It
+    is `post-spacer`, NOT `spacer` -- `templates/lab.html` already uses that
+    class for its game chrome, and base.html's styles are site-wide. The
+    editor sets the height on `.block.spacer-block` rather than on an inner
+    element, because a spacer renders its label instead of its own html; a
+    test keeps that height in step with the published one, or the gap would
+    be tuned by guesswork.
+  - **`+`, `␣` and `⊟` ask above or below** rather than assuming. Both hang off a
+    block, and "above" (the old behaviour) was wrong about half the time --
+    an undo and a retry every other go. `insert_block` takes the block count
+    itself as "append", so "below the last block" needs no special case.
+  - **A text block is `display: flow-root`.** A block beside a float keeps
+    the full column width -- only its LINE boxes shorten -- so a text block's
+    border and hover background ran under a floated photo and vanished behind
+    it. A BFC root doesn't overlap a float; it narrows to the room left,
+    which is where the text ends. The cost, worth naming: one block taller
+    than the picture stays narrow for its whole height instead of reclaiming
+    the column part-way down, so the preview is very slightly less faithful
+    than the published page for a single long paragraph.
+  - **Move mode OVERLAYS; it never inserts.** It renders the real blocks --
+    not its own previews -- and adds a fixed banner plus a `.move-layer` of
+    absolutely positioned drop zones, so picking a block up reflows nothing
+    at all (verified: page height and every block's position unchanged to the
+    pixel). It used to swap the list for previews and insert N+1 button-sized
+    targets, which shoved the whole post down exactly when you were trying to
+    aim at it. `#blocks` is `position: relative` so the zones resolve against
+    it, and each zone's `top` is a block's measured `offsetTop`, which lands
+    on the right boundary with no margin arithmetic. The banner's `top` is
+    measured from `.bar` rather than hard-coded, since the toolbar's height
+    depends on its own contents.
+  - **The zones are repositioned by a `ResizeObserver`, not just at render.**
+    At first render the pictures have not loaded, and an `<img>` with no
+    intrinsic size yet is zero pixels tall -- so every block below one
+    measures too high and the bars end up scattered across the post instead
+    of between its blocks. One observer over the blocks catches every reason
+    the layout can move (pictures arriving, video metadata landing, fonts
+    swapping, the window resizing) instead of a list of `load` handlers. It
+    is disconnected in `renderBlocks` and `cancelMove`, since it points at
+    nodes that are about to be discarded.
+  - **A zone's tap area is a pseudo-element.** The bar is 8px so it reads as
+    a hairline; an absolutely positioned `::after` extends the hit region
+    ~12px either side, and out-of-flow boxes cost no layout.
+  - **The published page and the editor fail differently here, so check
+    both.** A full-width control next to a float gets pushed below it (a BFC
+    root never overlaps a float); a positioned sibling paints on top of it.
+    Neither shows up on the published page, which has no editor chrome --
+    which is exactly how both shipped. **Verify float work in the editor
+    preview, not just in a Zola build.**
+
+- **A paired section is the one thing a float can't be: vertically centred.**
+  A float lets text flow around a picture from the top down, and CSS has no
+  way to centre that text against it -- centring needs both in one container.
+  So `<div class="pair pair-right size-medium">` holds a `.pair-media` column
+  and a `.pair-text` column, flexed and `align-items: center`.
+  - **The blank lines around the prose are the mechanism, not formatting.**
+    CommonMark only parses markdown inside an HTML block once a blank line
+    has closed that block. Without them every link and emphasis in the
+    section would render as literal text. The cost is that the wrapper spans
+    several top-level tokens (opening html, the prose, closing html), which
+    is the one thing `blocks.py`'s one-token-per-block model couldn't
+    represent -- so `_group_pairs` folds the range back into a single `pair`
+    block. **It matches on the opener's SOURCE, not its kind**: that block
+    contains the media column's own row div, so `_refine_kind` has already
+    called it an `img_row`.
+    - An opener with no closer is left ungrouped rather than swallowing the
+      rest of the post: raw fragments can be seen and repaired; a block that
+      ate the post just looks like the post vanished.
+  - **The media column holds an ordinary row, verbatim.** That is what makes
+    pairing and unpairing lossless (the row's source moves in and out, never
+    regenerated) and what lets the existing thumbnail editors drive a paired
+    picture unchanged -- `_block_json` reports a pair's `images`/`videos`
+    from it. The row inside must never be plain markdown, which wouldn't
+    parse inside an HTML block; it can't be, because a paired row always has
+    a side, a side always implies small or medium, and both write the div.
+  - **`isMediaRow()` excludes pairs.** A pair reports `images` too, so
+    without that it would get a wrap picker instead of Unpair, and would look
+    like it started a wrap for everything after it.
+  - **A section's boundary is the stop marker, the next picture, or the end
+    of the post** -- exactly what the float was already wrapping. Pairing
+    consumes the marker (the pair's closing div does that job now) and
+    unpairing puts one back, which is what makes the round trip byte-exact.
+  - **Stacked on a phone, the picture comes AFTER the text.** A picture on
+    top pushes the words it belongs to off the screen -- you scroll past a
+    photo to find out what it's of.
+  - **The pair's narrow-screen overrides must sit AFTER the base `.pair`
+    rules, not in the breakpoint block higher up the file.** They override
+    declarations the base rules also set, and at equal specificity source
+    order decides: placed above, `align-items: stretch` and the auto widths
+    silently lost, which left a `size-medium` pair holding a 420px picture
+    on a 412px screen. editor.css had exactly that bug; base.html didn't,
+    because its pair rules happen to precede its breakpoint.
+  - **`justify` decides how the prose sits against the picture**, in flexbox
+    terms: `center` (the default, writing no class), `top` (flex-start),
+    `spread` (space-between -- flush top and bottom, slack between the
+    blocks) and `evenly` (space-evenly). Distributing needs the text column
+    to be as tall as the picture, and **only that column may stretch**:
+    stretching the pair would stretch the media column too, and
+    `.img-row img` carries `height: 100%; object-fit: cover`, so the photo
+    would be cropped to whatever height the prose happened to want.
+  - **A pair is edited as one thing**: its picture through the usual strip,
+    its prose as markdown in one textarea. That is the trade the pair makes
+    in exchange for being able to centre -- the section stopped being a set
+    of sibling blocks.
 
 - **Sizing a standalone image is opt-in by design.** Markdown has nowhere to
   hang a class, so a lone photo at default size stays `![alt](url)`; choosing a

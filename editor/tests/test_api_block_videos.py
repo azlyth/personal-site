@@ -364,13 +364,17 @@ def _clips(block):
     return [v["url"] for v in block["videos"]]
 
 
-def _split(slug, index, data, split, videos=None, size=None):
+def _split(slug, index, data, split, videos=None, size=None, side=None):
     block = data["blocks"][index]
     return client.post(
         f"/api/posts/{slug}/blocks/{index}/videos/split",
         json={
             "videos": videos if videos is not None else block["videos"],
             "size": size if size is not None else block["size"],
+            # Echoed back the same way `size` is: `side` server-side defaults
+            # to unfloated for back-compat, so a caller that drops it turns a
+            # floated row into a centred one as a side effect of splitting.
+            "side": side if side is not None else block["side"],
             "split": split,
             "hash": data["hash"],
         },
@@ -493,3 +497,138 @@ def test_split_leaves_both_rows_losslessly_parseable(three_clip_post):
     for block in after["blocks"][1:3]:
         assert block["kind"] == "video"
         assert "videos" in block
+
+
+# --- `side`: floating a row beside the text that follows it -----------------
+
+
+def test_get_post_includes_the_side_for_a_video_row(temp_post):
+    assert _get()["blocks"][1]["side"] == "none"
+
+
+def test_replace_block_videos_sets_a_side(temp_post):
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/videos",
+        json={
+            "videos": [{"url": "https://img.cloudy.nyc/p/one.mp4", "sync_loop": "4"}],
+            "size": "medium",
+            "side": "right",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["blocks"][1]["side"] == "right"
+    assert 'class="video-row size-medium beside-right"' in temp_post.read_text(encoding="utf-8")
+
+
+def test_replace_block_videos_omitting_side_leaves_the_row_unfloated(temp_post):
+    """Back-compat: a client that predates this feature never sends `side`,
+    and must not have its rows silently floated.
+    """
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/videos",
+        json={
+            "videos": [{"url": "https://img.cloudy.nyc/p/one.mp4", "sync_loop": "4"}],
+            "size": "medium",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    assert res.json()["blocks"][1]["side"] == "none"
+    assert "beside-" not in temp_post.read_text(encoding="utf-8")
+
+
+def test_replace_block_videos_rejects_an_unknown_side(temp_post):
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/videos",
+        json={
+            "videos": [{"url": "https://img.cloudy.nyc/p/one.mp4", "sync_loop": "4"}],
+            "size": "medium",
+            "side": "sideways",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 400
+
+
+def test_replace_block_videos_rejects_a_full_width_float(temp_post):
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/videos",
+        json={
+            "videos": [{"url": "https://img.cloudy.nyc/p/one.mp4", "sync_loop": "4"}],
+            "size": "full",
+            "side": "right",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 400
+
+
+def test_split_out_clip_is_never_floated(three_clip_post):
+    """A float exists in relation to the text that follows that row, and a
+    split-out clip is on its way somewhere else entirely -- so it lands
+    unfloated while the row it left keeps its side.
+    """
+    three_clip_post.write_text(
+        THREE_POST.replace('class="video-row size-full"', 'class="video-row size-medium beside-right"'),
+        encoding="utf-8",
+    )
+    data = _three()
+    assert data["blocks"][1]["side"] == "right"
+
+    res = _split(THREE_SLUG, 1, data, 1)
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert blocks[1]["side"] == "right"
+    assert blocks[2]["side"] == "none"
+
+
+# --- floating is just a side, nothing more ---------------------------------
+# Page widths are fluid, so how much text fits beside a row isn't knowable
+# when the post is written. The row picks a side and the text flows around
+# it; nothing is moved and no marker is inserted.
+
+
+def test_floating_a_row_moves_nothing_and_adds_nothing(temp_post):
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/videos",
+        json={
+            "videos": [{"url": "https://img.cloudy.nyc/p/one.mp4", "sync_loop": "4"}],
+            "size": "medium",
+            "side": "right",
+            "hash": data["hash"],
+        },
+    )
+    assert res.status_code == 200
+    out = res.json()
+
+    assert out["blocks"][1]["side"] == "right"
+    assert len(out["blocks"]) == len(data["blocks"])
+    # Every other block is byte-identical and still in its original place.
+    for i, before in enumerate(data["blocks"]):
+        if i != 1:
+            assert out["blocks"][i]["source"] == before["source"]
+
+
+def test_floating_writes_no_clear_marker(temp_post):
+    """Markers were how a fixed set of chosen blocks was fenced off. Choosing
+    a side instead means the text simply wraps, so nothing needs fencing --
+    and an invisible div appearing in the post would be unexplainable litter.
+    """
+    data = _get()
+    res = client.put(
+        f"/api/posts/{SLUG}/blocks/1/videos",
+        json={
+            "videos": [{"url": "https://img.cloudy.nyc/p/one.mp4", "sync_loop": "4"}],
+            "size": "medium",
+            "side": "right",
+            "hash": data["hash"],
+        },
+    )
+    assert not any(b["kind"] == "clear" for b in res.json()["blocks"])
+    assert "clear-beside" not in temp_post.read_text(encoding="utf-8")

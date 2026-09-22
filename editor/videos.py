@@ -56,8 +56,15 @@ def video_key(post_slug: str, name_hint: str, data: bytes) -> str:
 
 
 _VALID_SIZES = {"small", "medium", "full"}
+# Which side of the text the row floats to, if any. Orthogonal to size: a
+# row is "medium, floated right", not a fourth size. `none` is the default
+# and writes no class, so nothing published before this existed changes.
+_VALID_SIDES = {"none", "left", "right"}
+DEFAULT_SIDE = "none"
 
-_VIDEO_ROW_OPEN_RE = re.compile(r'^<div class="video-row size-(?P<size>[a-z]+)">')
+_VIDEO_ROW_OPEN_RE = re.compile(
+    r'^<div class="video-row size-(?P<size>[a-z]+)(?: beside-(?P<side>[a-z]+))?">'
+)
 _VIDEO_TAG_RE = re.compile(
     r'<video autoplay loop muted playsinline(?: data-sync-loop="(?P<sync>[^"]*)")?>\n'
     r'<source src="(?P<url>[^"]*)" type="video/mp4">\n'
@@ -66,8 +73,8 @@ _VIDEO_TAG_RE = re.compile(
 
 
 def parse_videos(kind: str, source: str) -> dict | None:
-    """The inverse of `markdown_for`: pull `{size, videos}` back out of a
-    `video` block's markdown source.
+    """The inverse of `markdown_for`: pull `{size, side, videos}` back out
+    of a `video` block's markdown source.
 
     Same discipline as `images.parse_images` and for the same reason: a
     hand-edited or otherwise non-canonical `<video>` tag this parser
@@ -88,6 +95,7 @@ def parse_videos(kind: str, source: str) -> dict | None:
     if not open_match:
         return None
     size = open_match.group("size")
+    side = open_match.group("side") or DEFAULT_SIDE
 
     videos = [
         {"url": match.group("url"), "sync_loop": match.group("sync")}
@@ -97,16 +105,20 @@ def parse_videos(kind: str, source: str) -> dict | None:
         return None
 
     try:
-        regenerated = markdown_for(videos, size)
+        regenerated = markdown_for(videos, size, side)
     except ValueError:
-        # size isn't one of the three real presets, or somehow videos ended
-        # up empty -- either way this block isn't safely representable.
+        # size isn't one of the three real presets, the side isn't one of
+        # the three real sides (or is an impossible full-width float), or
+        # somehow videos ended up empty -- either way this block isn't
+        # safely representable.
         return None
 
-    return {"size": size, "videos": videos} if regenerated == stripped else None
+    if regenerated != stripped:
+        return None
+    return {"size": size, "side": side, "videos": videos}
 
 
-def markdown_for(videos: list[dict], size: str) -> str:
+def markdown_for(videos: list[dict], size: str, side: str = DEFAULT_SIDE) -> str:
     """A `.video-row` wrapper around one or more `<video>` clips.
 
     Every row gets the wrapper -- unlike images, a single video is still
@@ -114,13 +126,29 @@ def markdown_for(videos: list[dict], size: str) -> str:
     size to control. `sync_loop`, when present, is carried through onto
     `data-sync-loop` verbatim (another feature keys off that exact string);
     when it's `None` the attribute is omitted entirely, not written empty.
+
+    `side` floats the row so the text after it flows alongside. It is a
+    third class *after* the size (`video-row size-medium beside-right`) and
+    the default `none` writes nothing at all -- that is what keeps every
+    row published before this feature existed byte-identical, the same
+    reason `.img-row` omits `size-full`.
     """
     if size not in _VALID_SIZES:
         raise ValueError(f"unknown video row size {size!r} (must be one of {sorted(_VALID_SIZES)})")
+    if side not in _VALID_SIDES:
+        raise ValueError(f"unknown video row side {side!r} (must be one of {sorted(_VALID_SIDES)})")
+    if side != DEFAULT_SIDE and size == "full":
+        raise ValueError(
+            "a full-width row can't float beside text -- there is no column left for the text "
+            "to flow into. Pick 'small' or 'medium'."
+        )
     if not videos:
         raise ValueError("videos must be non-empty -- an empty row should be deleted, not written")
 
-    lines = [f'<div class="video-row size-{size}">']
+    class_attr = f"video-row size-{size}"
+    if side != DEFAULT_SIDE:
+        class_attr += f" beside-{side}"
+    lines = [f'<div class="{class_attr}">']
     for video in videos:
         attrs = "autoplay loop muted playsinline"
         sync_loop = video.get("sync_loop")

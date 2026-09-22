@@ -379,3 +379,22 @@ def test_merge_a_post_consisting_of_exactly_two_blocks(two_block_only_post):
     reloaded = client.get(f"/api/posts/{TWO_BLOCK_ONLY_SLUG}").json()
     assert len(reloaded["blocks"]) == 1
     assert reloaded["blocks"][0]["images"] == out["blocks"][0]["images"]
+
+
+def test_merge_keeps_the_upper_rows_side(temp_post):
+    """Same rule as the size: the owner is acting from the upper block, so
+    its framing wins -- including whether the result floats beside the text.
+    """
+    floated = POST.replace(
+        '<div class="video-row size-medium">',
+        '<div class="video-row size-medium beside-right">',
+    )
+    temp_post.write_text(floated, encoding="utf-8")
+    data = _get()
+    assert data["blocks"][4]["side"] == "right"
+
+    res = _merge(4, data["hash"])
+    assert res.status_code == 200
+    merged = res.json()["blocks"][4]
+    assert merged["side"] == "right"
+    assert len(merged["videos"]) == 2

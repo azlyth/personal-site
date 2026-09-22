@@ -10,6 +10,10 @@ from editor.app import app
 client = TestClient(app)
 SLUG = "editor-test-post"
 
+# The one shape blocks.py recognises as a stop-wrap marker.
+CLEAR_SOURCE = '<div class="clear-beside"></div>'
+SPACER_SOURCE = '<div class="post-spacer"></div>' 
+
 POST = """+++
 title = "Editor Test Post"
 date = 2026-01-01
@@ -196,3 +200,73 @@ def test_move_block_out_of_range_to_index_returns_409_not_500(temp_post):
     )
     assert res.status_code == 409
     assert temp_post.read_text(encoding="utf-8") == POST
+
+
+# --- the stop-wrap marker --------------------------------------------------
+# Inserted by hand from the editor to end a float's wrap early, so a new
+# section can start clean at full width (and pair with its own picture)
+# instead of continuing to run alongside the previous one.
+
+
+def test_the_stop_wrap_marker_inserts_as_its_own_kind(temp_post):
+    data = _get()
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": CLEAR_SOURCE, "hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    blocks = res.json()["blocks"]
+    assert blocks[1]["kind"] == "clear"
+    assert len(blocks) == len(data["blocks"]) + 1
+
+
+def test_the_stop_wrap_marker_round_trips_through_the_file(temp_post):
+    """It has to come back as `clear`, not as raw html -- that's what gets it
+    the labelled divider in the editor instead of an invisible empty block.
+    """
+    data = _get()
+    client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": CLEAR_SOURCE, "hash": data["hash"]},
+    )
+    assert CLEAR_SOURCE in temp_post.read_text(encoding="utf-8")
+    assert _get()["blocks"][1]["kind"] == "clear"
+
+
+def test_the_stop_wrap_marker_can_be_deleted_like_any_block(temp_post):
+    data = _get()
+    added = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": CLEAR_SOURCE, "hash": data["hash"]},
+    ).json()
+
+    removed = client.request(
+        "DELETE", f"/api/posts/{SLUG}/blocks/1", json={"hash": added["hash"]}
+    ).json()
+    assert not any(b["kind"] == "clear" for b in removed["blocks"])
+    assert len(removed["blocks"]) == len(data["blocks"])
+
+
+def test_the_spacer_inserts_as_its_own_kind(temp_post):
+    data = _get()
+    res = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": SPACER_SOURCE, "hash": data["hash"]},
+    )
+    assert res.status_code == 200
+    assert res.json()["blocks"][1]["kind"] == "spacer"
+
+
+def test_the_spacer_round_trips_and_deletes(temp_post):
+    data = _get()
+    added = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": SPACER_SOURCE, "hash": data["hash"]},
+    ).json()
+    assert SPACER_SOURCE in temp_post.read_text(encoding="utf-8")
+    assert _get()["blocks"][1]["kind"] == "spacer"
+
+    removed = client.request(
+        "DELETE", f"/api/posts/{SLUG}/blocks/1", json={"hash": added["hash"]}
+    ).json()
+    assert not any(b["kind"] == "spacer" for b in removed["blocks"])

@@ -20,8 +20,14 @@ from PIL import UnidentifiedImageError
 
 import tomlkit
 
-from editor import config, videos
-from editor.blocks import delete_block, insert_block, move_block, parse_blocks, replace_block
+from editor import config, history, pairs, videos
+from editor.blocks import (
+    delete_block,
+    insert_block,
+    move_block,
+    parse_blocks,
+    replace_block,
+)
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
 from editor.images import image_key, markdown_for, parse_images, process_image, upload
@@ -251,16 +257,24 @@ def get_post(slug: str):
     # trip through str -- Task 8 uses this hash as the staleness guard that
     # decides whether to accept a write, so it needs to match the file
     # exactly.
-    _, raw_bytes, frontmatter, body = _read_post(slug)
+    path, raw_bytes, frontmatter, body = _read_post(slug)
     meta = read_meta(frontmatter)
     return {
         "slug": slug,
+        # Where this post lives once published, so the editor can offer a
+        # link straight to it.
+        "url": f"{config.SITE_BASE_URL}/blog/{slug}/",
         "meta": {
             "title": meta.get("title", slug),
             "date": str(meta.get("date", "")),
             "draft": bool(meta.get("draft", False)),
         },
         "hash": hashlib.sha256(raw_bytes).hexdigest(),
+        # Drives the Undo button's enabled state. Included in EVERY post
+        # payload, not just the initial load, because the client re-renders
+        # from each write's own response -- otherwise the button would stay
+        # disabled until the next full page load.
+        "can_undo": history.can_undo(path),
         "blocks": [_block_json(b) for b in parse_blocks(body)],
     }
 
@@ -277,12 +291,30 @@ def _block_json(block) -> dict:
         if parsed is not None:
             out["images"] = parsed["images"]
             out["size"] = parsed["size"]
+            out["side"] = parsed["side"]
     elif block.kind == "video":
         # Same discipline as parse_images -- see videos.parse_videos.
         parsed = videos.parse_videos(block.kind, block.source)
         if parsed is not None:
             out["videos"] = parsed["videos"]
             out["size"] = parsed["size"]
+            out["side"] = parsed["side"]
+    elif block.kind == "pair":
+        # Same omit-on-doubt rule as the rows. A pair reports its prose and
+        # its framing, plus -- because the media column holds an ordinary row
+        # verbatim -- the very same `images`/`videos` keys the row editors
+        # already know how to drive.
+        parsed = pairs.parse_pair(block.kind, block.source)
+        if parsed is not None:
+            out["text"] = parsed["text"]
+            out["size"] = parsed["size"]
+            out["side"] = parsed["side"]
+            out["justify"] = parsed["justify"]
+            media = parse_blocks(parsed["media_source"])
+            if len(media) == 1:
+                for key, value in _block_json(media[0]).items():
+                    if key in ("images", "videos"):
+                        out[key] = value
     return out
 
 
@@ -324,7 +356,87 @@ def _write_body(slug: str, expected_hash: str, transform):
             detail="block index no longer exists; reload before saving",
         )
 
+    # One snapshot hook for every block route -- they all funnel through
+    # here, so Undo covers the lot without each one remembering to opt in.
+    history.snapshot(path)
     _atomic_write_text(path, join_post(frontmatter, new_body))
+    return get_post(slug)
+
+
+class PostRestore(BaseModel):
+    hash: str
+
+
+@app.post("/api/posts/{slug}/undo")
+def undo_post(slug: str, edit: PostRestore):
+    """Step the post back to the state before its most recent edit.
+
+    Guarded by the same staleness hash as every write: undoing from a view
+    that no longer matches the file would silently discard whatever the
+    other writer did.
+    """
+    path, raw, _, _ = _read_post(slug)
+    if hashlib.sha256(raw).hexdigest() != edit.hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before undoing",
+        )
+
+    if not history.undo(path):
+        raise HTTPException(status_code=400, detail="there is nothing left to undo")
+
+    return get_post(slug)
+
+
+@app.post("/api/posts/{slug}/discard")
+def discard_post(slug: str, edit: PostRestore):
+    """Throw the post back to its last committed state.
+
+    The editor stages and commits exactly this path when you publish (see
+    publish.py), so "since the last publish" and "since the last commit" are
+    the same line -- which is why this can be a plain `git checkout` of one
+    file rather than a bespoke baseline of its own.
+
+    Snapshots first, so hitting this by accident is recoverable with Undo.
+    A post git has never seen has no committed version to restore; refusing
+    is the only safe answer, since the alternative is deleting a draft.
+    """
+    path, raw, _, _ = _read_post(slug)
+    if hashlib.sha256(raw).hexdigest() != edit.hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before discarding",
+        )
+
+    # Ask whether HEAD actually holds a version of this file, not merely
+    # whether git knows the path: `git ls-files` also succeeds for a merely
+    # STAGED post (rename_post stages exactly like that), and
+    # `git checkout HEAD --` on one of those fails -- which would surface as
+    # a 500 instead of the clear refusal below. A repo with no commits at all
+    # has no HEAD and fails here too, which is the same right answer.
+    relative = path.relative_to(config.REPO)
+    committed = subprocess.run(
+        ["git", "cat-file", "-e", f"HEAD:{relative.as_posix()}"],
+        cwd=config.REPO, capture_output=True, text=True,
+    )
+    if committed.returncode != 0:
+        raise HTTPException(
+            status_code=400,
+            detail="this post has never been committed, so there's no published "
+                   "version to go back to",
+        )
+
+    history.snapshot(path)
+    restored = subprocess.run(
+        ["git", "checkout", "HEAD", "--", str(path)],
+        cwd=config.REPO, capture_output=True, text=True,
+    )
+    if restored.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"could not restore from git: {restored.stderr.strip()}",
+        )
+
     return get_post(slug)
 
 
@@ -392,7 +504,10 @@ def _merge_source(upper, lower) -> str | None:
         # the video merge below, for the same reason (the owner is acting
         # from the upper block).
         return markdown_for(
-            [img["url"] for img in combined], [img["alt"] for img in combined], upper_parsed["size"]
+            [img["url"] for img in combined],
+            [img["alt"] for img in combined],
+            upper_parsed["size"],
+            upper_parsed["side"],
         )
 
     if upper.kind == "video" and lower.kind == "video":
@@ -403,7 +518,7 @@ def _merge_source(upper, lower) -> str | None:
         combined = upper_parsed["videos"] + lower_parsed["videos"]
         # Keep the UPPER row's size preset, not the lower's -- the owner is
         # acting from the upper block, so that's the one whose framing wins.
-        return videos.markdown_for(combined, upper_parsed["size"])
+        return videos.markdown_for(combined, upper_parsed["size"], upper_parsed["side"])
 
     return None
 
@@ -440,6 +555,218 @@ def merge_block_route(slug: str, index: int, edit: BlockMerge):
     return _write_body(slug, edit.hash, transform)
 
 
+class BlockPair(BaseModel):
+    hash: str
+
+
+# The marker an author drops to end a float's wrap early. A pair consumes one
+# when it swallows the section it bounded, and puts one back when unpaired.
+CLEAR_MARKER = '<div class="clear-beside"></div>'
+
+# Kinds that end a section: another picture starts its own.
+_MEDIA_KINDS = {"image", "img_row", "video", "pair"}
+
+
+def _row_with_side(block, side: str) -> str | None:
+    """Regenerate a media row's source with `side`, or `None` if the block
+    can't be read losslessly.
+
+    The size carries over untouched, which matters for the pair round trip:
+    a paired row always has a side, a side always implies small or medium,
+    and both of those write the div shape -- so the media column is never
+    plain markdown, which inside an HTML block would not parse at all.
+    """
+    if block.kind in ("image", "img_row"):
+        parsed = parse_images(block.kind, block.source)
+        if parsed is None:
+            return None
+        return markdown_for(
+            [i["url"] for i in parsed["images"]],
+            [i["alt"] for i in parsed["images"]],
+            parsed["size"],
+            side,
+        )
+    if block.kind == "video":
+        parsed = videos.parse_videos(block.kind, block.source)
+        if parsed is None:
+            return None
+        return videos.markdown_for(parsed["videos"], parsed["size"], side)
+    return None
+
+
+# Where a paired section ends: the author's own stop marker, the next
+# picture, or the end of the post. Nothing else can be the boundary -- the
+# float was already wrapping exactly this much.
+def _section_after(blocks, index: int) -> int:
+    end = index + 1
+    while end < len(blocks):
+        kind = blocks[end].kind
+        if kind == "clear" or kind in _MEDIA_KINDS:
+            break
+        end += 1
+    return end
+
+
+@app.post("/api/posts/{slug}/blocks/{index}/pair")
+def pair_block(slug: str, index: int, edit: BlockPair):
+    """Fold a floated row and the section beside it into one paired block.
+
+    A float can only let text flow around a picture from the top down; CSS
+    has no way to centre wrapped text against it. A pair puts the picture and
+    its prose in one container so they sit level -- which means the prose has
+    to stop being a set of sibling blocks and start being the pair's second
+    column.
+
+    The row must already be floated: pairing is a stronger form of "beside",
+    and on a row that isn't beside anything the section boundary would mean
+    nothing. Its `side` and `size` carry over, and the stop marker that ended
+    the section is consumed, since the pair's own closing div now does that.
+    """
+
+    def transform(body: str) -> str:
+        blocks = parse_blocks(body)
+        if not 0 <= index < len(blocks):
+            raise IndexError(f"no block at index {index}")
+
+        row = blocks[index]
+        parsed = parse_images(row.kind, row.source) or videos.parse_videos(
+            row.kind, row.source
+        )
+        if parsed is None or row.kind == "pair":
+            raise HTTPException(
+                status_code=400, detail="only a photo or video row can be paired"
+            )
+        if parsed["side"] == "none":
+            raise HTTPException(
+                status_code=400,
+                detail="give the row a side first -- a pair is a picture beside something",
+            )
+
+        end = _section_after(blocks, index)
+        section = blocks[index + 1:end]
+        if not section:
+            raise HTTPException(
+                status_code=400,
+                detail="there's no text after this picture to pair it with",
+            )
+
+        # The row goes in unfloated: inside a pair the columns do the work,
+        # and a float within one would fight them.
+        media_source = _row_with_side(row, "none")
+        if media_source is None:
+            raise HTTPException(status_code=400, detail="this picture can't be read")
+        try:
+            pair_source = pairs.markdown_for(
+                media_source=media_source,
+                text="\n\n".join(b.source for b in section),
+                side=parsed["side"],
+                size=parsed["size"],
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        # Delete from the end backwards so each removal leaves the earlier
+        # indices valid, then replace the row itself with the whole pair.
+        stop = end if end < len(blocks) and blocks[end].kind == "clear" else None
+        out = body
+        if stop is not None:
+            out = delete_block(out, stop)
+        for i in range(end - 1, index, -1):
+            out = delete_block(out, i)
+        return replace_block(out, index, pair_source)
+
+    return _write_body(slug, edit.hash, transform)
+
+
+class BlockPairEdit(BaseModel):
+    text: str
+    side: str
+    size: str
+    # How the prose sits against the picture. Defaults to centred for the
+    # same reason `side` defaults to none: a caller that predates this must
+    # not have its pairs rearranged.
+    justify: str = "center"
+    # The media column holds an ordinary row, so it's edited with the very
+    # same payload the row editors send. Exactly one of these is present.
+    images: list[ImageItem] | None = None
+    videos: list[VideoItem] | None = None
+    hash: str
+
+
+@app.put("/api/posts/{slug}/blocks/{index}/pair")
+def edit_pair(slug: str, index: int, edit: BlockPairEdit):
+    """Rewrite a paired section: its prose, its framing, and its picture.
+
+    All markup generation stays server-side, as everywhere else -- the client
+    sends the prose as markdown and the picture as the same list of
+    URLs/alts the row editors send, and `pairs.markdown_for` reassembles the
+    wrapper around a freshly generated row.
+    """
+
+    def transform(body: str) -> str:
+        blocks = parse_blocks(body)
+        if not 0 <= index < len(blocks):
+            raise IndexError(f"no block at index {index}")
+        if blocks[index].kind != "pair":
+            raise HTTPException(status_code=400, detail="this block isn't a paired section")
+
+        try:
+            if edit.videos is not None:
+                media_source = videos.markdown_for(
+                    [{"url": v.url, "sync_loop": v.sync_loop} for v in edit.videos],
+                    edit.size,
+                )
+            else:
+                items = edit.images or []
+                media_source = markdown_for(
+                    [i.url for i in items], [i.alt for i in items], edit.size
+                )
+            new_source = pairs.markdown_for(
+                media_source=media_source, text=edit.text, side=edit.side,
+                size=edit.size, justify=edit.justify,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        return replace_block(body, index, new_source)
+
+    return _write_body(slug, edit.hash, transform)
+
+
+@app.post("/api/posts/{slug}/blocks/{index}/unpair")
+def unpair_block(slug: str, index: int, edit: BlockPair):
+    """Take a paired section back apart into a floated row and loose blocks.
+
+    The row comes back floated to the side the pair used, and a stop marker
+    goes in after the prose -- without it the text that followed the pair
+    would start wrapping around the picture, which is not where it was.
+    """
+
+    def transform(body: str) -> str:
+        blocks = parse_blocks(body)
+        if not 0 <= index < len(blocks):
+            raise IndexError(f"no block at index {index}")
+
+        parsed = pairs.parse_pair(blocks[index].kind, blocks[index].source)
+        if parsed is None:
+            raise HTTPException(status_code=400, detail="this block isn't a paired section")
+
+        media = parse_blocks(parsed["media_source"])
+        if len(media) != 1:
+            raise HTTPException(status_code=400, detail="this pair's picture can't be read")
+        row_source = _row_with_side(media[0], parsed["side"])
+        if row_source is None:
+            raise HTTPException(status_code=400, detail="this pair's picture can't be read")
+
+        out = replace_block(body, index, row_source)
+        out = insert_block(out, index + 1, parsed["text"])
+        # The prose may be several blocks; the marker goes after all of them.
+        after = index + 1 + len(parse_blocks(parsed["text"]))
+        return insert_block(out, after, CLEAR_MARKER)
+
+    return _write_body(slug, edit.hash, transform)
+
+
 class ImageItem(BaseModel):
     url: str
     alt: str
@@ -451,6 +778,10 @@ class BlockImagesEdit(BaseModel):
     # preset so callers that predate this feature (and existing tests) that
     # never send `size` at all keep behaving exactly as before.
     size: str = "full"
+    # Which side of the following text the row floats to. Defaults to
+    # unfloated for the same reason `size` defaults: a caller that predates
+    # this feature and never sends `side` must not have its rows moved.
+    side: str = "none"
     hash: str
 
 
@@ -471,10 +802,55 @@ def edit_block_images(slug: str, index: int, edit: BlockImagesEdit):
         urls = [image.url for image in edit.images]
         alts = [image.alt for image in edit.images]
         try:
-            new_source = markdown_for(urls, alts, edit.size)
+            new_source = markdown_for(urls, alts, edit.size, edit.side)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         return replace_block(body, index, new_source)
+
+    return _write_body(slug, edit.hash, transform)
+
+
+class BlockImagesSplit(BlockImagesEdit):
+    split: int
+
+
+@app.post("/api/posts/{slug}/blocks/{index}/images/split")
+def split_block_image(slug: str, index: int, edit: BlockImagesSplit):
+    """Lift one photo out of an `img_row` into a row of its own directly below.
+
+    The video row's `Split out` in every respect -- see `split_block_video`
+    for why it takes the whole list rather than just `split`, why both halves
+    run in one transform, and why a row of fewer than two is a 400 rather
+    than a no-op. The only difference is which `markdown_for` builds the
+    markup.
+    """
+    if len(edit.images) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="a row with fewer than two photos is already its own row",
+        )
+    if not 0 <= edit.split < len(edit.images):
+        raise HTTPException(status_code=400, detail=f"no photo at index {edit.split}")
+
+    photos = [{"url": image.url, "alt": image.alt} for image in edit.images]
+    moved = photos.pop(edit.split)
+
+    try:
+        remaining_source = markdown_for(
+            [i["url"] for i in photos], [i["alt"] for i in photos], edit.size, edit.side
+        )
+        # Inherits the size but never the side, same as the video split: a
+        # float exists in relation to the text following that row, and this
+        # photo is on its way somewhere else entirely.
+        moved_source = markdown_for([moved["url"]], [moved["alt"]], edit.size)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    def transform(body: str) -> str:
+        # replace_block leaves the block count unchanged, so index + 1 is
+        # still the gap immediately below this row when insert_block runs.
+        body = replace_block(body, index, remaining_source)
+        return insert_block(body, index + 1, moved_source)
 
     return _write_body(slug, edit.hash, transform)
 
@@ -487,6 +863,8 @@ class VideoItem(BaseModel):
 class BlockVideosEdit(BaseModel):
     videos: list[VideoItem]
     size: str
+    # See BlockImagesEdit.side.
+    side: str = "none"
     hash: str
 
 
@@ -502,7 +880,7 @@ def edit_block_videos(slug: str, index: int, edit: BlockVideosEdit):
             return delete_block(body, index)
         clips = [{"url": video.url, "sync_loop": video.sync_loop} for video in edit.videos]
         try:
-            new_source = videos.markdown_for(clips, edit.size)
+            new_source = videos.markdown_for(clips, edit.size, edit.side)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         return replace_block(body, index, new_source)
@@ -546,7 +924,12 @@ def split_block_video(slug: str, index: int, edit: BlockVideoSplit):
     moved = clips.pop(edit.split)
 
     try:
-        remaining_source = videos.markdown_for(clips, edit.size)
+        remaining_source = videos.markdown_for(clips, edit.size, edit.side)
+        # The split-out clip inherits the size but never the side: a float
+        # exists in relation to the text following that particular row, and
+        # this clip is on its way somewhere else entirely (that's what
+        # splitting is for). Landing it floated would also put two floats
+        # back to back, which reads as one wide row rather than two.
         moved_source = videos.markdown_for([moved], edit.size)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -856,6 +1239,9 @@ def edit_meta(slug: str, edit: MetaEdit):
                 )
         frontmatter = set_meta(frontmatter, key, value)
 
+    # Title/date/draft don't go through _write_body, and an Undo that
+    # silently skipped them would be a trap.
+    history.snapshot(path)
     _atomic_write_text(path, join_post(frontmatter, body))
     return get_post(slug)
 
