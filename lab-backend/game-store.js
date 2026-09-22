@@ -12,10 +12,16 @@
  * whole point - the lab has always been one global Go board, not a lobby.
  */
 
-// Bumped whenever a game's persisted state shape changes incompatibly. A board
-// stored under an older version is discarded rather than fed to a rule module
-// that no longer understands it.
-const STATE_VERSION = 1;
+// Bumped whenever a game's persisted shape changes. A board stored under a
+// version this code cannot read is discarded rather than fed to a rule module
+// that no longer understands it -- but a readable older shape is ADOPTED, not
+// thrown away, because discarding it would wipe a game in progress on deploy.
+// v1: { v, state }.  v2: { v, state, history }.
+const STATE_VERSION = 2;
+
+// How far back undo can walk. Undo is shared -- anyone on the board can press
+// it -- so this is a depth, not a per-player allowance.
+const MAX_HISTORY = 20;
 
 class GameStore {
   constructor(persistence, games, { flushIntervalMs = 200 } = {}) {
@@ -24,6 +30,7 @@ class GameStore {
     this.flushIntervalMs = flushIntervalMs;
 
     this.states = new Map();
+    this.histories = new Map(); // gameId -> prior states, oldest first
     this.loads = new Map();
     this.writes = new Map();
     this.timers = new Map();
@@ -39,8 +46,13 @@ class GameStore {
       const persisted = await this.persistence.loadGameState(gameId);
       // A concurrent load may have populated the board while we waited.
       if (!this.states.has(gameId)) {
-        const usable = persisted && persisted.v === STATE_VERSION && persisted.state;
-        this.states.set(gameId, usable ? persisted.state : game.initialState());
+        const readable = persisted && persisted.state
+          && (persisted.v === 1 || persisted.v === STATE_VERSION);
+        this.states.set(gameId, readable ? persisted.state : game.initialState());
+        // A v1 board predates undo, so it arrives with nothing to undo to.
+        this.histories.set(gameId, readable && Array.isArray(persisted.history)
+          ? persisted.history.slice(-MAX_HISTORY)
+          : []);
       }
       return this.states.get(gameId);
     })();
@@ -80,6 +92,7 @@ class GameStore {
     }
     if (result.error) return { error: result.error };
 
+    this.remember(gameId, state);
     this.states.set(gameId, result.state);
     this.touch(gameId);
     return { state: result.state };
@@ -87,10 +100,39 @@ class GameStore {
 
   reset(gameId) {
     const game = this.requireGame(gameId);
+    // A reset is undoable on purpose: anybody on a shared board can wipe it,
+    // and "someone just cleared the game I was playing" is exactly the moment
+    // you want a way back.
+    const previous = this.states.get(gameId);
+    if (previous) this.remember(gameId, previous);
     const state = game.initialState();
     this.states.set(gameId, state);
     this.touch(gameId);
     return state;
+  }
+
+  /** Steps the board back one move. Returns { state } or { error }. */
+  undo(gameId) {
+    this.requireGame(gameId);
+    const history = this.histories.get(gameId);
+    if (!history || history.length === 0) return { error: 'Nothing to undo.' };
+
+    const state = history.pop();
+    this.states.set(gameId, state);
+    this.touch(gameId);
+    return { state };
+  }
+
+  canUndo(gameId) {
+    const history = this.histories.get(gameId);
+    return Boolean(history && history.length);
+  }
+
+  remember(gameId, state) {
+    const history = this.histories.get(gameId) || [];
+    history.push(state);
+    if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+    this.histories.set(gameId, history);
   }
 
   gameIds() {
@@ -146,7 +188,11 @@ class GameStore {
           this.dirty.delete(gameId);
           const state = this.states.get(gameId);
           if (!state) break;
-          await this.persistence.saveGameState(gameId, { v: STATE_VERSION, state });
+          await this.persistence.saveGameState(gameId, {
+            v: STATE_VERSION,
+            state,
+            history: this.histories.get(gameId) || []
+          });
         }
       } finally {
         this.writes.delete(gameId);
@@ -160,3 +206,4 @@ class GameStore {
 
 module.exports = GameStore;
 module.exports.STATE_VERSION = STATE_VERSION;
+module.exports.MAX_HISTORY = MAX_HISTORY;

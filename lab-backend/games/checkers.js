@@ -362,6 +362,7 @@ module.exports = {
   id: 'checkers',
   name: 'Checkers',
   blurb: 'Jumps are compulsory. Sorry.',
+  seats: [{ id: 'red', label: 'Red' }, { id: 'black', label: 'Black' }],
   initialState,
   applyMove,
   legalMovesFrom,

@@ -41,7 +41,11 @@ function describeResult(chess) {
   return null;
 }
 
-function buildState(chess, lastMove) {
+// `past` is the move list as it stood before this move. It has to be carried
+// in rather than read off the board: every applyMove rebuilds a Chess from the
+// FEN alone, so chess.history() knows only the move just played and using it
+// directly left the move list permanently one move long.
+function buildState(chess, lastMove, past = []) {
   const over = chess.isGameOver();
   const result = over ? describeResult(chess) : null;
   return {
@@ -49,7 +53,7 @@ function buildState(chess, lastMove) {
     turn: over ? null : colorName(chess.turn()),
     over,
     result,
-    history: chess.history(),
+    history: past.concat(chess.history()),
     lastMove: lastMove ? { from: lastMove.from, to: lastMove.to } : null,
     check: chess.isCheck(),
   };
@@ -100,13 +104,14 @@ function applyMove(state, move) {
     return { error: 'Illegal move' };
   }
 
-  return { state: buildState(chess, result) };
+  return { state: buildState(chess, result, Array.isArray(state.history) ? state.history : []) };
 }
 
 module.exports = {
   id: 'chess',
   name: 'Chess',
   blurb: 'Full rules, including the ones you forget.',
+  seats: [{ id: 'white', label: 'White' }, { id: 'black', label: 'Black' }],
   initialState,
   applyMove,
 };

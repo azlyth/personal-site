@@ -79,7 +79,9 @@ and the canvas already did.
    and `applyMove(state, move)` returning `{state}` or `{error}`, no sockets,
    no Redis, no clock, and **no mutation of the state it is handed**. Register
    it in `games/index.js`, which documents the contract in full. Being pure is
-   the only reason a chess engine is testable here at all.
+   the only reason a chess engine is testable here at all. It also declares
+   `seats` — and **each seat id must be exactly a value `state.turn` takes**,
+   since that comparison is the whole of side enforcement.
 2. `templates/games/<id>.html` — the renderer. A `<section class="game-panel"
    data-game="<id>" hidden>`, scoped CSS, and a `LabGames.register(...)` call.
    Then one `{% include %}` line in `lab.html`.
@@ -90,6 +92,40 @@ rule are all its job. Note 1.4.0's `move()` **throws** on an illegal move
 rather than returning null, and it throws on a promoting move with no
 `promotion` field — `games/chess.js` passes `promotion: 'q'` unconditionally,
 which chess.js ignores on non-promoting moves. Do not hand-roll any of this.
+
+**Sides are shared, not claimed** (added 2026-09-22). The picker in the shared
+chrome binds YOU to White; it does not reserve White from anyone else, and
+several people can be on a side at once. That choice is deliberate and it is
+what makes the feature small: no ownership, no release-on-disconnect, no idle
+takeover timer, and nobody can squat a seat on a public board. **"Both" is the
+default**, so playing both sides by yourself — how the boards worked before —
+is unchanged. The choice is per game, kept in `localStorage` under
+`lab-seat-<id>`, sent with `game-join` and again on `game-seat`. Enforcement is
+one comparison in `game-move`: bound, and it isn't your turn, so no. Chess and
+checkers rotate to face your side; a renderer asks `LabGames.seatFor(id)` and
+the shell re-renders when it changes.
+
+⚠ **A flipped board must not flip what a click means.** Both renderers keep the
+square's identity on the element (`data-square`, `data-row`/`data-col`, set once
+at build time) and reorder elements for display. Deriving the coordinate from a
+DOM index a second time is how this breaks.
+
+**Undo is shared too** (added 2026-09-22). `game-store.js` keeps up to
+`MAX_HISTORY` (20) previous positions per board; anyone on the board can step
+it back, the same way anyone can reset it. **A reset pushes onto that stack**,
+so "somebody just wiped the game I was playing" is recoverable — that is the
+case the feature is actually for. `game-state` carries `canUndo` so the button
+can disable itself. The canvas has its own Undo next to Clear, removing one
+press-to-lift stroke: the client stamps a `gesture` id on every packet of a
+stroke and `drawing-store.undoLastGesture` drops the trailing run sharing the
+newest id. Only a TRAILING run, because two people draw at once and undo is
+last-in-first-out. Removing strokes can't be an append, so the server answers
+`drawing-undone` with a full repaint.
+
+⚠ **The persisted shape went v1 → v2 to carry history, and the loader ADOPTS a
+v1 board** rather than discarding it. The version guard's natural behaviour is
+to throw away what it doesn't recognise, which would have wiped every game in
+progress on deploy. Only a genuinely unreadable version resets.
 
 ⚠ **The framework `<script>` must come before the `{% include %}`s in
 `lab.html`.** Partials call `LabGames.register()` as they parse, so with the
@@ -107,11 +143,14 @@ join/move/reset.
 
 **Backend** (`lab-backend/server.js`, ~370 lines, down from 777):
 
-- Four generic socket events cover every turn-based game: `game-join`,
-  `game-move`, `game-reset`, `game-list`, answered by `game-state`,
-  `game-error` and `game-catalog`. One Socket.IO room per game id; the room
-  size IS the player count. `game-counts` broadcasts to everyone on any join
-  or leave, because the menu shows a live count on every tile.
+- A handful of generic socket events cover every turn-based game: `game-join`,
+  `game-move`, `game-reset`, `game-undo`, `game-seat`, `game-list`, answered by
+  `game-state`, `game-error`, `game-seats` and `game-catalog`. One Socket.IO
+  room per game id; the room size IS the player count. `game-counts` broadcasts
+  to everyone on any join or leave, because the menu shows a live count on
+  every tile. Every board update is shaped by one `stateFor()` helper, so a new
+  field can't reach some clients and not others depending on which handler
+  sent it.
 - `lab-backend/game-store.js` holds boards in memory, loads from Redis once at
   boot and writes back on a coalescing timer — the same discipline
   `drawing-store.js` documents below, for the same reason. **`applyMove` is
@@ -166,7 +205,7 @@ flush, so stop the backend first.
 
 **Verifying the lab:**
 
-- `cd lab-backend && npm test` — 73 tests. Rule modules are unit-tested
+- `cd lab-backend && npm test` — 94 tests. Rule modules are unit-tested
   per-game; the drawing store has a Redis-backed integration test that needs
   Docker and **binds port 6399**, so nothing else may be holding it.
 - `scripts/verify-lab-drawing.py` drives real Chromium over CDP against the
@@ -174,6 +213,17 @@ flush, so stop the backend first.
 - For UI work, a page-level CDP harness beats the one-shot `--screenshot`
   flag: the page holds a websocket open, so `--virtual-time-budget` never
   settles and the flag just hangs.
+- ⚠ **A row with an author `display` needs `[hidden] { display: none }` of its
+  own.** The `hidden` attribute only sets `display: none` in the UA stylesheet,
+  so `.game-seats { display: flex }` beat it and the side picker followed you
+  onto the painting canvas, which has no sides. The DOM said `hidden === true`
+  the whole time; only a screenshot caught it. `.game-panel[hidden]` already
+  existed for the same reason.
+- ⚠ **Chess state is rebuilt from the FEN on every move**, so `chess.history()`
+  knows only the move it was just handed. The move list has to be carried
+  forward explicitly (`past.concat(...)` in `buildState`). Reading it directly
+  left the list permanently one move long, which every single-move test passed
+  happily.
 - `templates/lab.html`'s `backendUrl()` accepts a `?backend=<url>` override
   **only when the page is served from localhost**, which is how a dev page
   gets pointed at a throwaway backend instead of playing on the live boards.
@@ -425,13 +475,19 @@ drifts off-center everywhere else.
   with `text-decoration: none` and signalled nothing until `:hover` turned
   them blue — which on a touch screen is no signal at all. The underline uses
   the gulls' own ink held at 62% (`rgba(94,135,152,0.62)`) rather than a link
-  blue, so the affordance belongs to the page's palette; at full strength the
-  nine underlines plus nine row rules read as ruled paper, which is why the
-  row rule came down to 0.22 at the same time. It is a real
-  `text-decoration`, not a faded gradient matching the row separators: the
-  faded version is prettier and measurably less obviously a link.
+  blue, so the affordance belongs to the page's palette. It is a real
+  `text-decoration` and not a faded gradient: the faded version is prettier
+  and measurably less obviously a link, and this is the one element on the
+  page where being understood beats being handsome.
   `:active` (the only feedback a tap gets) and a `:focus-visible` ring were
   both missing entirely and now exist.
+- **There is deliberately no row separator** (removed 2026-09-21). There was
+  one — a hairline faded to nothing at both ends — and it stopped earning its
+  place once the titles gained the underline above and the list moved inside
+  the sky: every row then carried two horizontal lines about 20px apart,
+  which reads as ruled paper, and a rule that stops dead at the column edge
+  inside a full-bleed scene reads as a leftover table. The underline
+  separates one title from the next; the spacing and the sky do the rest.
 - ⚠ **The row's padding lives on `.archive-link`, not on `.archive-row`.**
   That is a touch target, not a style choice: with the padding on the row the
   anchor measured **700x26**, so a finger had to find a 26px strip while the

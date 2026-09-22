@@ -227,3 +227,23 @@ test('check is flagged without ending the game', () => {
   assert.strictEqual(outcome.state.result, null);
   assert.strictEqual(outcome.state.turn, 'black');
 });
+
+test('the move list accumulates instead of holding only the last move', () => {
+  // Regression: applyMove rebuilds a Chess from the FEN alone, so
+  // chess.history() reports just the move it was handed. Reading it directly
+  // left the move list permanently one move long, which looked fine in every
+  // single-move test.
+  let state = chess.initialState();
+  for (const move of [
+    { from: 'e2', to: 'e4' },
+    { from: 'e7', to: 'e5' },
+    { from: 'g1', to: 'f3' },
+    { from: 'b8', to: 'c6' }
+  ]) {
+    const result = chess.applyMove(state, move);
+    assert.ok(!result.error, `unexpected rejection: ${result.error}`);
+    state = result.state;
+  }
+
+  assert.deepEqual(state.history, ['e4', 'e5', 'Nf3', 'Nc6']);
+});

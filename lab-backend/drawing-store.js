@@ -62,8 +62,14 @@ class DrawingStore {
     return Array.from(this.states.keys());
   }
 
-  /** Appends segments and returns the stored strokes, in drawing order. */
-  appendSegments(sessionId, segments) {
+  /**
+   * Appends segments and returns the stored strokes, in drawing order.
+   *
+   * `gesture` groups the segments of one press-to-lift stroke. The canvas
+   * receives a stream of short line segments, so without it "undo" would mean
+   * erasing a few pixels rather than the line somebody just drew.
+   */
+  appendSegments(sessionId, segments, gesture) {
     const state = this.requireState(sessionId);
     const now = Date.now();
     const strokes = segments.map((segment) => ({
@@ -73,6 +79,7 @@ class DrawingStore {
       toY: segment.toY,
       color: segment.color,
       lineWidth: segment.lineWidth,
+      gesture,
       timestamp: now
     }));
 
@@ -82,6 +89,30 @@ class DrawingStore {
     }
     this.touch(sessionId, state);
     return strokes;
+  }
+
+  /**
+   * Removes the most recent complete stroke and returns how many segments went
+   * with it. Only a TRAILING run is removed: undo is last-in-first-out, and an
+   * older gesture may have been interleaved with somebody else's drawing.
+   */
+  undoLastGesture(sessionId) {
+    const state = this.requireState(sessionId);
+    const strokes = state.strokes;
+    if (strokes.length === 0) return 0;
+
+    const last = strokes[strokes.length - 1].gesture;
+    // Strokes stored before gestures existed carry none; treat each as its own
+    // so undo still walks back one segment at a time rather than the lot.
+    let cut = last ? strokes.length : strokes.length - 1;
+    if (last) {
+      while (cut > 0 && strokes[cut - 1].gesture === last) cut -= 1;
+    }
+
+    const removed = strokes.length - cut;
+    strokes.splice(cut);
+    this.touch(sessionId, state);
+    return removed;
   }
 
   clear(sessionId) {

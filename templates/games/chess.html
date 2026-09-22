@@ -290,6 +290,48 @@
     let disabled = false;
     let currentPieces = {};
     let currentTurnColor = null;
+    let orientationSet = false;
+    let currentFlipped = false;
+
+    function squarePosition(square, flipped) {
+        const file = square.charCodeAt(0) - 97;
+        const rank = Number(square[1]);
+        const row = flipped ? rank - 1 : 8 - rank;
+        const col = flipped ? 7 - file : file;
+        return { row, col };
+    }
+
+    function applyOrientation(flipped) {
+        if (orientationSet && flipped === currentFlipped) return;
+
+        Object.keys(els.squares).forEach((square) => {
+            const { sq } = els.squares[square];
+            const { row, col } = squarePosition(square, flipped);
+            sq.style.gridRowStart = String(row + 1);
+            sq.style.gridColumnStart = String(col + 1);
+        });
+
+        const rankOrder = flipped ? [1, 2, 3, 4, 5, 6, 7, 8] : [8, 7, 6, 5, 4, 3, 2, 1];
+        els.ranks.innerHTML = '';
+        rankOrder.forEach((rank) => {
+            const label = document.createElement('span');
+            label.textContent = rank;
+            els.ranks.appendChild(label);
+        });
+
+        const fileOrder = flipped
+            ? ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a']
+            : ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+        els.files.innerHTML = '';
+        fileOrder.forEach((file) => {
+            const label = document.createElement('span');
+            label.textContent = file;
+            els.files.appendChild(label);
+        });
+
+        currentFlipped = flipped;
+        orientationSet = true;
+    }
 
     function parsePlacement(placement) {
         const pieces = {};
@@ -438,16 +480,7 @@
             }
         }
 
-        for (let rank = 8; rank >= 1; rank--) {
-            const label = document.createElement('span');
-            label.textContent = rank;
-            els.ranks.appendChild(label);
-        }
-        for (let f = 0; f < 8; f++) {
-            const label = document.createElement('span');
-            label.textContent = String.fromCharCode(97 + f);
-            els.files.appendChild(label);
-        }
+        applyOrientation(false);
 
         els.board.addEventListener('click', (e) => {
             const sqEl = e.target.closest('.chess-sq');
@@ -473,6 +506,9 @@
         const fields = fen.split(' ');
         const placement = fields[0] || '';
         const activeColor = fields[1] || null;
+
+        const seat = window.LabGames.seatFor ? window.LabGames.seatFor('chess') : null;
+        applyOrientation(seat === 'black');
 
         if (fen !== lastFen) {
             selected = null;

@@ -157,6 +157,7 @@ module.exports = {
   id: 'go',
   name: 'Go',
   blurb: 'Nine by nine. Captures count.',
+  seats: [{ id: 'black', label: 'Black' }, { id: 'white', label: 'White' }],
   initialState,
   applyMove
 };

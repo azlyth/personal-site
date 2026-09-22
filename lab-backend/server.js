@@ -60,6 +60,56 @@ function isDrawableSegment(segment) {
 
 // Go game helper functions
 
+// Which side each socket is bound to, per game. Sides are SHARED: several
+// people can be on White at once. Binding holds YOU to a side, it does not
+// reserve that side from anybody else -- so there is no ownership to track,
+// nothing to release on a timer, and nobody can squat a seat on a public board.
+const seatChoices = new Map(); // gameId -> Map(socketId -> seat id)
+
+function seatLabel(gameId, seatId) {
+  const game = games.getGame(gameId);
+  const seat = game && game.seats.find((candidate) => candidate.id === seatId);
+  return seat ? seat.label : seatId;
+}
+
+function setSeat(gameId, socketId, seat) {
+  const game = games.getGame(gameId);
+  const valid = game && game.seats.some((candidate) => candidate.id === seat) ? seat : null;
+
+  let choices = seatChoices.get(gameId);
+  if (!choices) {
+    choices = new Map();
+    seatChoices.set(gameId, choices);
+  }
+  // Anything that isn't one of this game's seats means "both sides", which is
+  // the default and is stored as absence rather than as a value.
+  if (valid) choices.set(socketId, valid);
+  else choices.delete(socketId);
+  return valid;
+}
+
+function seatOf(gameId, socketId) {
+  const choices = seatChoices.get(gameId);
+  return (choices && choices.get(socketId)) || null;
+}
+
+function seatCounts(gameId) {
+  const game = games.getGame(gameId);
+  if (!game) return {};
+  const counts = Object.fromEntries(game.seats.map((seat) => [seat.id, 0]));
+  const choices = seatChoices.get(gameId);
+  if (choices) {
+    for (const seat of choices.values()) {
+      if (seat in counts) counts[seat] += 1;
+    }
+  }
+  return counts;
+}
+
+function forgetSeats(socketId) {
+  for (const choices of seatChoices.values()) choices.delete(socketId);
+}
+
 // One Socket.IO room per game. Everyone on the site shares one board per game,
 // so the room is both the broadcast target and the player count.
 function roomFor(gameId) {
@@ -82,6 +132,22 @@ function allPlayerCounts() {
 // news to everybody, not just the room being joined.
 function broadcastPlayerCounts() {
   io.emit('game-counts', { counts: allPlayerCounts() });
+}
+
+// Every board update is shaped in one place, so a new field can't reach some
+// clients and not others depending on which handler sent it.
+function stateFor(gameId, state) {
+  return {
+    gameId,
+    state,
+    players: playerCount(gameId),
+    canUndo: gameStore.canUndo(gameId),
+    seatCounts: seatCounts(gameId)
+  };
+}
+
+function broadcastSeats(gameId) {
+  io.to(roomFor(gameId)).emit('game-seats', { gameId, seatCounts: seatCounts(gameId) });
 }
 
 // Initialize server with Redis connection and data loading
@@ -135,12 +201,12 @@ io.on('connection', (socket) => {
 
   socket.on('game-list', () => {
     socket.emit('game-catalog', {
-      games: games.GAMES.map(({ id, name, blurb }) => ({ id, name, blurb })),
+      games: games.GAMES.map(({ id, name, blurb, seats }) => ({ id, name, blurb, seats })),
       counts: allPlayerCounts()
     });
   });
 
-  socket.on('game-join', async ({ gameId } = {}) => {
+  socket.on('game-join', async ({ gameId, seat } = {}) => {
     if (!games.getGame(gameId)) {
       socket.emit('game-error', { gameId, reason: 'No such game.' });
       return;
@@ -155,10 +221,22 @@ io.on('connection', (socket) => {
     const state = await gameStore.load(gameId);
     socket.join(roomFor(gameId));
     socket.gameId = gameId;
+    setSeat(gameId, socket.id, seat);
 
-    console.log(`Player joined ${gameId} (${playerCount(gameId)} watching)`);
-    socket.emit('game-state', { gameId, state, players: playerCount(gameId) });
+    console.log(`Player joined ${gameId} as ${seatOf(gameId, socket.id) || 'both sides'} `
+      + `(${playerCount(gameId)} watching)`);
+    socket.emit('game-state', stateFor(gameId, state));
+    broadcastSeats(gameId);
     broadcastPlayerCounts();
+  });
+
+  socket.on('game-seat', ({ gameId, seat } = {}) => {
+    if (!games.getGame(gameId)) {
+      socket.emit('game-error', { gameId, reason: 'No such game.' });
+      return;
+    }
+    setSeat(gameId, socket.id, seat);
+    broadcastSeats(gameId);
   });
 
   socket.on('game-leave', ({ gameId } = {}) => {
@@ -166,12 +244,28 @@ io.on('connection', (socket) => {
     if (!leaving) return;
     socket.leave(roomFor(leaving));
     if (socket.gameId === leaving) socket.gameId = null;
+    setSeat(leaving, socket.id, null);
+    broadcastSeats(leaving);
     broadcastPlayerCounts();
   });
 
   socket.on('game-move', ({ gameId, move } = {}) => {
     if (!games.getGame(gameId)) {
       socket.emit('game-error', { gameId, reason: 'No such game.' });
+      return;
+    }
+
+    // A player bound to a side may only move on that side's turn. Unbound --
+    // the default -- still moves for whoever is to play, which is what makes
+    // playing both sides by yourself work.
+    const seat = seatOf(gameId, socket.id);
+    const current = gameStore.getState(gameId);
+    if (seat && current && current.turn && current.turn !== seat) {
+      socket.emit('game-error', {
+        gameId,
+        reason: `You are playing ${seatLabel(gameId, seat)}. `
+          + `It is ${seatLabel(gameId, current.turn)}'s move.`
+      });
       return;
     }
 
@@ -183,11 +277,25 @@ io.on('connection', (socket) => {
       return;
     }
 
-    io.to(roomFor(gameId)).emit('game-state', {
-      gameId,
-      state: result.state,
-      players: playerCount(gameId)
-    });
+    io.to(roomFor(gameId)).emit('game-state', stateFor(gameId, result.state));
+  });
+
+  // Undo is deliberately not seat-checked: on a board anyone can reset, anyone
+  // can also step it back.
+  socket.on('game-undo', ({ gameId } = {}) => {
+    if (!games.getGame(gameId)) {
+      socket.emit('game-error', { gameId, reason: 'No such game.' });
+      return;
+    }
+
+    const result = gameStore.undo(gameId);
+    if (result.error) {
+      socket.emit('game-error', { gameId, reason: result.error });
+      return;
+    }
+
+    console.log(`${gameId} stepped back by ${socket.id}`);
+    io.to(roomFor(gameId)).emit('game-state', stateFor(gameId, result.state));
   });
 
   socket.on('game-reset', ({ gameId } = {}) => {
@@ -198,7 +306,7 @@ io.on('connection', (socket) => {
 
     const state = gameStore.reset(gameId);
     console.log(`${gameId} board reset by ${socket.id}`);
-    io.to(roomFor(gameId)).emit('game-state', { gameId, state, players: playerCount(gameId) });
+    io.to(roomFor(gameId)).emit('game-state', stateFor(gameId, state));
   });
 
 
@@ -247,7 +355,7 @@ io.on('connection', (socket) => {
   
   // Handle drawing data. Clients batch a stroke's points into `segments`, but a
   // single `{fromX, ...}` segment is still accepted so older tabs keep drawing.
-  socket.on('drawing-data', async ({ sessionId, segments, fromX, fromY, toX, toY, color, lineWidth }) => {
+  socket.on('drawing-data', async ({ sessionId, segments, gesture, fromX, fromY, toX, toY, color, lineWidth }) => {
     const batch = Array.isArray(segments)
       ? segments.map((segment) => ({ color, lineWidth, ...segment }))
       : [{ fromX, fromY, toX, toY, color, lineWidth }];
@@ -263,14 +371,41 @@ io.on('connection', (socket) => {
       await drawingStore.load(sessionId);
     }
     
+    // The client stamps one id per press-to-lift so undo can remove a stroke
+    // rather than a few pixels. A tab open from before gestures existed sends
+    // none, so each of its packets becomes its own stroke -- undo still walks
+    // back sensibly, just in smaller steps.
+    const strokeId = typeof gesture === 'string' && gesture
+      ? gesture.slice(0, 64)
+      : `${socket.id}-${Date.now()}`;
+
     // Synchronous from here: nothing can interleave between read and write, so
     // no stroke in a burst of packets can be lost.
-    const strokes = drawingStore.appendSegments(sessionId, valid);
+    const strokes = drawingStore.appendSegments(sessionId, valid, strokeId);
     
     // Send only what is new; clients already hold the rest of the canvas.
     socket.to(sessionId).emit('drawing-append', { strokes });
   });
   
+  // Handle stroke undo
+  socket.on('drawing-undo', async ({ sessionId } = {}) => {
+    if (!drawingStore.getState(sessionId)) {
+      if (sessionId !== GLOBAL_DRAWING_SESSION && !(await persistence.loadDrawingSession(sessionId))) {
+        socket.emit('drawing-session-not-found');
+        return;
+      }
+      await drawingStore.load(sessionId);
+    }
+
+    const removed = drawingStore.undoLastGesture(sessionId);
+    if (removed === 0) return;
+
+    console.log(`Undid a ${removed}-segment stroke in session ${sessionId}`);
+
+    // Removing strokes cannot be expressed as an append, so everybody repaints.
+    io.to(sessionId).emit('drawing-undone', { drawingState: drawingStore.getStrokes(sessionId) });
+  });
+
   // Handle canvas clear
   socket.on('clear-drawing-canvas', async ({ sessionId }) => {
     console.log(`Received clear-drawing-canvas: ${sessionId} from ${socket.id}`);
@@ -296,8 +431,11 @@ io.on('connection', (socket) => {
     console.log('Client disconnected:', socket.id);
 
     if (socket.gameId) {
-      // The room membership is already gone by now; the count just needs to
-      // reach everyone still looking at the menu.
+      const left = socket.gameId;
+      forgetSeats(socket.id);
+      // The room membership is already gone by now; the counts just need to
+      // reach everyone still looking at the board and the menu.
+      broadcastSeats(left);
       broadcastPlayerCounts();
     }
 
@@ -335,11 +473,14 @@ app.get('/health', async (req, res) => {
 // Board state endpoint (for debugging)
 app.get('/games', (req, res) => {
   res.json({
-    games: games.GAMES.map(({ id, name, blurb }) => ({
+    games: games.GAMES.map(({ id, name, blurb, seats }) => ({
       id,
       name,
       blurb,
+      seats,
       players: playerCount(id),
+      seatCounts: seatCounts(id),
+      canUndo: gameStore.canUndo(id),
       state: gameStore.getState(id)
     }))
   });

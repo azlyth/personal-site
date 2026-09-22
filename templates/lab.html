@@ -144,7 +144,7 @@
 
 #game-players { font-size: 0.8rem; color: #8d979c; }
 
-.game-reset {
+.game-btn {
     font: inherit;
     font-size: 0.8rem;
     padding: 0.3rem 0.7rem;
@@ -155,7 +155,49 @@
     cursor: pointer;
 }
 
-.game-reset:hover { background: #f2f4f5; color: #333; }
+.game-btn:hover:not(:disabled) { background: #f2f4f5; color: #333; }
+.game-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Which side you are playing. Sides are shared -- several people can be on
+   White -- so this binds you to a side rather than reserving one. */
+.game-seats {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.7rem;
+    font-size: 0.82rem;
+    color: #8d979c;
+}
+
+.seat-picker {
+    display: inline-flex;
+    border: 1px solid #e3e6e8;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.seat-btn {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0.35rem 0.8rem;
+    min-height: 36px;
+    border: none;
+    border-right: 1px solid #e3e6e8;
+    background: #fff;
+    color: #666;
+    cursor: pointer;
+}
+
+.seat-btn:last-child { border-right: none; }
+.seat-btn:hover:not(.active) { background: #f5f7f8; color: #333; }
+.seat-btn.active { background: #2f6fb3; color: #fff; }
+
+/* An author `display` beats the hidden attribute's UA `display: none`, so a
+   row that sets display must opt back out explicitly -- same reason
+   .game-panel[hidden] exists below. Without this the side picker followed
+   you onto the painting canvas, which has no sides. */
+.game-seats[hidden] { display: none; }
 
 #game-error {
     min-height: 1.25rem;
@@ -215,11 +257,19 @@
  * LabGames.move(id, move). It must not assume it is the only player, and it
  * must be able to render any state at any time: the server is authoritative
  * and a state can arrive that the local player did not cause.
+ *
+ * The shell also owns the side picker and the undo button. A renderer that
+ * wants to orient its board reads `LabGames.seatFor(id)` -- the seat this
+ * browser is bound to ('white', 'red', ...) or null for "both sides" -- and
+ * the shell re-renders whenever that changes. Sides are SHARED: binding to
+ * White stops you moving Black, it does not reserve White from anybody else.
  */
 window.LabGames = (function () {
     const registry = new Map();
     const mounted = new Set();
     const latest = new Map();
+    const catalog = new Map();      // gameId -> { seats: [{id, label}] }
+    const chosenSeats = new Map();  // gameId -> seat id, or null for both sides
 
     let socket = null;
     let activeId = null;
@@ -252,6 +302,73 @@ window.LabGames = (function () {
         const status = definition.status ? definition.status(state) : defaultStatus(definition, state);
         els.status.textContent = status || '';
         els.status.classList.toggle('over', Boolean(state && state.over));
+    }
+
+    // The chosen side is per game and remembered per browser, so coming back
+    // to a board does not silently put you back on both sides.
+    function seatFor(id) {
+        if (!chosenSeats.has(id)) {
+            let stored = null;
+            try {
+                stored = window.localStorage.getItem('lab-seat-' + id);
+            } catch (error) {
+                stored = null; // private mode; the seat just won't be remembered
+            }
+            chosenSeats.set(id, stored || null);
+        }
+        return chosenSeats.get(id);
+    }
+
+    function chooseSeat(id, seat) {
+        chosenSeats.set(id, seat);
+        try {
+            if (seat) window.localStorage.setItem('lab-seat-' + id, seat);
+            else window.localStorage.removeItem('lab-seat-' + id);
+        } catch (error) { /* nothing to do; the choice still holds this session */ }
+
+        if (socket) socket.emit('game-seat', { gameId: id, seat });
+        paintSeatPicker(id);
+
+        // A board can be oriented to the seat, so it has to repaint.
+        const definition = registry.get(id);
+        const state = latest.get(id);
+        if (definition && definition.render && state) definition.render(state);
+    }
+
+    function paintSeatPicker(id) {
+        const entry = catalog.get(id);
+        const definition = registry.get(id);
+        const seats = entry && entry.seats;
+        if (!seats || !seats.length || !definition || !definition.turnBased) {
+            els.seats.hidden = true;
+            return;
+        }
+
+        els.seats.hidden = false;
+        const chosen = seatFor(id);
+        els.picker.innerHTML = '';
+        seats.concat([{ id: null, label: 'Both' }]).forEach((option) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'seat-btn' + (chosen === option.id ? ' active' : '');
+            button.textContent = option.label;
+            button.addEventListener('click', () => chooseSeat(id, option.id));
+            els.picker.appendChild(button);
+        });
+    }
+
+    // Sides are shared, so who else is on yours is not something you could
+    // otherwise tell.
+    function paintSeatTally(id, seatCounts) {
+        const entry = catalog.get(id);
+        if (!seatCounts || !entry || !entry.seats) {
+            els.tally.textContent = '';
+            return;
+        }
+        const parts = entry.seats
+            .filter((seat) => seatCounts[seat.id])
+            .map((seat) => `${seatCounts[seat.id]} on ${seat.label}`);
+        els.tally.textContent = parts.length ? '\u00b7 ' + parts.join(', ') : '';
     }
 
     function showError(reason) {
@@ -295,8 +412,12 @@ window.LabGames = (function () {
         const tile = document.querySelector(`[data-tile="${id}"] .tile-name`);
         els.title.textContent = tile ? tile.textContent : id;
         els.reset.hidden = !definition.turnBased;
+        els.undo.hidden = !definition.turnBased;
+        els.undo.disabled = true;
         els.status.textContent = '';
         els.players.textContent = '';
+        els.tally.textContent = '';
+        paintSeatPicker(id);
 
         const panel = panelFor(id);
         if (!mounted.has(id)) {
@@ -305,7 +426,7 @@ window.LabGames = (function () {
         }
 
         if (definition.turnBased) {
-            socket.emit('game-join', { gameId: id });
+            socket.emit('game-join', { gameId: id, seat: seatFor(id) });
             // A board we have seen before paints immediately; the server's
             // answer to game-join then overwrites it with the truth.
             const cached = latest.get(id);
@@ -379,6 +500,10 @@ window.LabGames = (function () {
         els.dotText = document.getElementById('global-connection-text');
         els.here = document.getElementById('lab-here');
         els.back = document.getElementById('game-back');
+        els.undo = document.getElementById('game-undo');
+        els.seats = document.getElementById('game-seats');
+        els.picker = document.getElementById('seat-picker');
+        els.tally = document.getElementById('seat-tally');
 
         socket = io(backendUrl());
         LabGames.socket = socket;
@@ -389,23 +514,33 @@ window.LabGames = (function () {
             // A reconnect has to re-enter the room, or moves land nowhere.
             if (activeId) {
                 const definition = registry.get(activeId);
-                if (definition && definition.turnBased) socket.emit('game-join', { gameId: activeId });
+                if (definition && definition.turnBased) socket.emit('game-join', { gameId: activeId, seat: seatFor(activeId) });
                 else if (definition && definition.onOpen) definition.onOpen();
             }
         });
         socket.on('disconnect', connectionChanged);
 
-        socket.on('game-catalog', (data) => paintCounts(data.counts || {}));
+        socket.on('game-catalog', (data) => {
+            (data.games || []).forEach((game) => catalog.set(game.id, game));
+            paintCounts(data.counts || {});
+            if (activeId) paintSeatPicker(activeId);
+        });
         socket.on('game-counts', (data) => paintCounts(data.counts || {}));
 
-        socket.on('game-state', ({ gameId, state, players }) => {
+        socket.on('game-state', ({ gameId, state, players, canUndo, seatCounts }) => {
             latest.set(gameId, state);
             if (gameId !== activeId) return;
             const definition = registry.get(gameId);
             if (!definition) return;
             paintChrome(definition, state);
             setPlayers(players);
+            els.undo.disabled = !canUndo;
+            paintSeatTally(gameId, seatCounts);
             if (definition.render) definition.render(state);
+        });
+
+        socket.on('game-seats', ({ gameId, seatCounts }) => {
+            if (gameId === activeId) paintSeatTally(gameId, seatCounts);
         });
 
         socket.on('game-error', ({ gameId, reason }) => {
@@ -423,6 +558,10 @@ window.LabGames = (function () {
             socket.emit('game-reset', { gameId: activeId });
         });
 
+        els.undo.addEventListener('click', () => {
+            if (activeId) socket.emit('game-undo', { gameId: activeId });
+        });
+
         els.back.addEventListener('click', () => {
             if (window.location.hash) window.history.back(); else menu();
         });
@@ -431,7 +570,7 @@ window.LabGames = (function () {
         applyHash();
     }
 
-    return { register, move, start, socket: null, get activeId() { return activeId; } };
+    return { register, move, start, seatFor, socket: null, get activeId() { return activeId; } };
 })();
 </script>
 
@@ -551,7 +690,13 @@ window.LabGames = (function () {
         <span id="game-status"></span>
         <span class="spacer"></span>
         <span id="game-players"></span>
-        <button class="game-reset" id="game-reset" type="button">Reset</button>
+        <button class="game-btn" id="game-undo" type="button">Undo</button>
+        <button class="game-btn" id="game-reset" type="button">Reset</button>
+    </div>
+    <div class="game-seats" id="game-seats" hidden>
+        <span>Playing as</span>
+        <div class="seat-picker" id="seat-picker"></div>
+        <span id="seat-tally"></span>
     </div>
     <div id="game-error">&nbsp;</div>
     <div class="game-stage"><div class="game-stage-inner">

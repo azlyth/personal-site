@@ -119,6 +119,7 @@ module.exports = {
   id: 'tictactoe',
   name: 'Tic-Tac-Toe',
   blurb: 'It ends in a draw. Play anyway.',
+  seats: [{ id: 'x', label: 'X' }, { id: 'o', label: 'O' }],
   initialState,
   applyMove
 };

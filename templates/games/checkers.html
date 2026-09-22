@@ -226,6 +226,23 @@
 
         let selected = null; // {row, col} | null
         let lastState = null;
+        let boardFlipped = false; // true when drawing rotated 180deg for the red seat
+
+        // Squares keep their (row, col) identity via dataset attributes set at
+        // creation time; flipping the board only reorders these same elements
+        // in the DOM (CSS grid places items in DOM order), so every lookup by
+        // coordinate elsewhere in this file stays correct unchanged.
+        function applyOrientation(flipped) {
+            if (flipped === boardFlipped && boardEl.childElementCount === 64) return;
+            boardFlipped = flipped;
+            for (let displayRow = 0; displayRow < 8; displayRow += 1) {
+                for (let displayCol = 0; displayCol < 8; displayCol += 1) {
+                    const row = flipped ? 7 - displayRow : displayRow;
+                    const col = flipped ? 7 - displayCol : displayCol;
+                    boardEl.appendChild(squares[row][col]);
+                }
+            }
+        }
 
         function pieceAt(state, row, col) {
             return state.board[row][col];
@@ -250,6 +267,8 @@
 
         function render(state) {
             lastState = state;
+
+            applyOrientation(LabGames.seatFor('checkers') === 'red');
 
             // A state change from outside invalidates any local selection that
             // no longer makes sense (piece moved/captured, turn changed, etc).

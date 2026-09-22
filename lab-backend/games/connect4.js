@@ -139,6 +139,7 @@ module.exports = {
   id: 'connect4',
   name: 'Connect Four',
   blurb: 'Drop a disc, get four in a row.',
+  seats: [{ id: 'red', label: 'Red' }, { id: 'yellow', label: 'Yellow' }],
   initialState,
   applyMove
 };

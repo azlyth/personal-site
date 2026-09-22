@@ -9,6 +9,7 @@
             <button type="button" class="draw-swatch" data-color="#2f6fb3" style="background: #2f6fb3;" aria-label="Blue"></button>
             <button type="button" class="draw-swatch" data-color="#6f42c1" style="background: #6f42c1;" aria-label="Purple"></button>
             <button type="button" class="draw-swatch draw-swatch-white" data-color="#fdfdfd" style="background: #fdfdfd;" aria-label="White"></button>
+            <button type="button" class="draw-undo-btn" disabled>Undo</button>
             <button type="button" class="draw-clear-btn">Clear</button>
         </div>
         <div class="draw-canvas-wrap">
@@ -60,8 +61,30 @@
 .draw-swatch-white { border-color: #c9c3b6; }
 .draw-swatch-white.draw-swatch-active { border-color: #2b2b2b; }
 
-.draw-clear-btn {
+.draw-undo-btn {
     margin-left: auto;
+    font: inherit;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    color: #555;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.draw-undo-btn:hover:not(:disabled) {
+    background: #f2f4f5;
+    color: #333;
+}
+
+.draw-undo-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.draw-clear-btn {
     font: inherit;
     font-size: 0.8rem;
     padding: 0.4rem 0.8rem;
@@ -110,10 +133,30 @@
 
     var canvas = null;
     var ctx = null;
+    var undoBtn = null;
     var color = '#2b2b2b';
     var drawing = false;
     var lastX = 0;
     var lastY = 0;
+    var hasStrokes = false;
+
+    // Every drawing-data packet in one press-to-lift gesture carries the same
+    // id, so the server can group the segment stream it receives back into
+    // strokes it can undo one at a time. A fresh id is drawn on every
+    // pointer-down; colour changes flush and cannot happen mid-drag, so one
+    // id per gesture is correct.
+    var gestureSeq = 0;
+    var currentGesture = null;
+
+    function newGesture() {
+        gestureSeq += 1;
+        return Math.random().toString(36).slice(2) + '-' + gestureSeq;
+    }
+
+    function setHasStrokes(value) {
+        hasStrokes = Boolean(value);
+        if (undoBtn) undoBtn.disabled = !hasStrokes;
+    }
 
     // Points are queued and flushed once per animation frame: a pointer
     // moving fast fires more events than one round trip can carry, and a
@@ -173,6 +216,7 @@
 
         LabGames.socket.emit('drawing-data', {
             sessionId: SESSION_ID,
+            gesture: currentGesture,
             segments: segments,
             color: color,
             lineWidth: LINE_WIDTH
@@ -209,6 +253,7 @@
         var point = eventPoint(evt);
         var pos = bufferPos(point.clientX, point.clientY);
         drawing = true;
+        currentGesture = newGesture();
         lastX = pos.x;
         lastY = pos.y;
     }
@@ -220,6 +265,7 @@
         var pos = bufferPos(point.clientX, point.clientY);
         paintSegment(lastX, lastY, pos.x, pos.y, color, LINE_WIDTH);
         queueSegment(lastX, lastY, pos.x, pos.y);
+        setHasStrokes(true);
         lastX = pos.x;
         lastY = pos.y;
     }
@@ -247,19 +293,38 @@
 
         socket.on('drawing-session-created', function (data) {
             socket.emit('join-drawing-session', { sessionId: SESSION_ID });
-            if (data && data.drawingState) redraw(data.drawingState);
+            if (data && data.drawingState) {
+                redraw(data.drawingState);
+                setHasStrokes(data.drawingState.length > 0);
+            }
         });
 
         socket.on('drawing-session-joined', function (data) {
-            if (data && data.drawingState) redraw(data.drawingState);
+            if (data && data.drawingState) {
+                redraw(data.drawingState);
+                setHasStrokes(data.drawingState.length > 0);
+            }
         });
 
         socket.on('drawing-append', function (data) {
-            appendStrokes(data && data.strokes);
+            var strokes = data && data.strokes;
+            appendStrokes(strokes);
+            if (Array.isArray(strokes) && strokes.length > 0) setHasStrokes(true);
         });
 
         socket.on('drawing-cleared', function (data) {
-            redraw((data && data.drawingState) || []);
+            var strokes = (data && data.drawingState) || [];
+            redraw(strokes);
+            setHasStrokes(strokes.length > 0);
+        });
+
+        // The server cannot express "remove some strokes" as an append, so
+        // undo answers with the whole remaining stroke array and this repaints
+        // from scratch -- same treatment as drawing-cleared above.
+        socket.on('drawing-undone', function (data) {
+            var strokes = (data && data.drawingState) || [];
+            redraw(strokes);
+            setHasStrokes(strokes.length > 0);
         });
     }
 
@@ -269,7 +334,9 @@
         mount: function (root) {
             canvas = root.querySelector('.draw-canvas');
             ctx = canvas.getContext('2d');
+            undoBtn = root.querySelector('.draw-undo-btn');
             clearLocally();
+            setHasStrokes(false);
 
             canvas.addEventListener('mousedown', pointerDown);
             canvas.addEventListener('mousemove', pointerMove);
@@ -288,6 +355,10 @@
             root.querySelector('.draw-clear-btn').addEventListener('click', function () {
                 if (!confirm('Clear the canvas? This affects everyone.')) return;
                 if (LabGames.socket) LabGames.socket.emit('clear-drawing-canvas', { sessionId: SESSION_ID });
+            });
+
+            undoBtn.addEventListener('click', function () {
+                if (LabGames.socket) LabGames.socket.emit('drawing-undo', { sessionId: SESSION_ID });
             });
 
             bindSocketListeners();
