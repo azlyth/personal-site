@@ -52,8 +52,14 @@ _CLEAR_RE = re.compile(r'^<div\s+class="clear-beside"\s*>\s*</div>$', re.I)
 # stop marker has one: an empty div would otherwise be an invisible,
 # unexplainable block in the middle of a post. `post-spacer` rather than
 # `spacer` because templates/lab.html already uses that class for its game
-# chrome, and base.html's styles are site-wide.
-_SPACER_RE = re.compile(r'^<div\s+class="post-spacer"\s*>\s*</div>$', re.I)
+# chrome, and base.html's styles are site-wide. The optional ` desktop-only`
+# modifier collapses the gap on a phone (base.html hides it in the same 700px
+# query that unfloats rows); it is spelled out rather than left open as
+# `[^"]*`, so only the two shapes the editor actually writes are promoted --
+# a class nothing styles would preview as a gap and publish as nothing.
+_SPACER_RE = re.compile(
+    r'^<div\s+class="post-spacer(?P<modifier> desktop-only)?"\s*>\s*</div>$', re.I
+)
 # A paired section: a picture and a bounded run of prose side by side,
 # vertically centred. Floats can't centre, so the two have to share a
 # container -- and markdown inside HTML only parses when blank lines separate
@@ -77,6 +83,16 @@ class Block:
 
 def _lines(body: str) -> list[str]:
     return body.split("\n")
+
+
+def spacer_is_desktop_only(source: str) -> bool:
+    """Whether a `spacer` block is the collapse-on-mobile variant.
+
+    Lives here, with the regex that defines the two shapes, so the API and
+    the editor read the flag rather than each re-deriving it from the markup.
+    """
+    match = _SPACER_RE.match(source.strip())
+    return bool(match and match.group("modifier"))
 
 
 def _refine_kind(kind: str, source: str) -> str:

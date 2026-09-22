@@ -257,7 +257,13 @@ function renderBlocks() {
     // page. Here it has to be legible, or an invisible block sits in the
     // middle of the post with no way to understand or remove it.
     if (block.kind === 'clear') el.classList.add('clear-block');
-    if (block.kind === 'spacer') el.classList.add('spacer-block');
+    if (block.kind === 'spacer') {
+      el.classList.add('spacer-block');
+      // Shown at its real height either way: the editor runs on a tablet,
+      // above the breakpoint, so a desktop-only gap genuinely IS here. It
+      // just has to say so -- see the label below and editor.css.
+      if (block.desktop_only) el.classList.add('desktop-only');
+    }
 
     // Dimmed and labelled in place: the block being moved stays exactly
     // where it is, which is the whole point of overlaying the drop zones
@@ -274,7 +280,7 @@ function renderBlocks() {
     if (block.kind === 'clear') {
       content.textContent = 'text stops wrapping here';
     } else if (block.kind === 'spacer') {
-      content.textContent = 'space';
+      content.textContent = block.desktop_only ? 'space · desktop only' : 'space';
     } else {
       content.innerHTML = block.html;
     }
@@ -318,7 +324,7 @@ function renderBlocks() {
       if (isMediaRow(block)) el.appendChild(wrapControl(block));
       else if (block.kind === 'pair' && block.text !== undefined) {
         el.appendChild(unpairControl(block));
-      }
+      } else if (block.kind === 'spacer') el.appendChild(spacerControl(block));
     }
 
     els.blocks.appendChild(el);
@@ -563,6 +569,42 @@ function unpairControl(block) {
   return wrap;
 }
 
+// Under a spacer: where the gap applies. A phone renders the post as one
+// narrow column, so a deliberate section break can read as a scroll of blank
+// screen there while being exactly right on a wide screen -- this is how you
+// say "only where there's room". Nothing needs a route of its own: the two
+// shapes differ by a class, so the toggle is an ordinary block edit.
+function spacerControl(block) {
+  const wrap = document.createElement('div');
+  wrap.className = 'wrap-control';
+  // It sits inside the block, whose own click opens the raw source editor.
+  wrap.addEventListener('click', (e) => e.stopPropagation());
+
+  const label = document.createElement('span');
+  label.textContent = 'Space shows:';
+  wrap.appendChild(label);
+
+  [[false, 'Everywhere', SPACER_SOURCE, 'A gap on every screen'],
+   [true, 'Desktop only', DESKTOP_SPACER_SOURCE, 'A gap on wide screens, nothing on a phone'],
+  ].forEach(([value, text, source, title]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = text;
+    btn.title = title;
+    if (value === Boolean(block.desktop_only)) btn.classList.add('active');
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (value === Boolean(block.desktop_only)) return;
+      if (!(await flushPendingEdit())) return;
+      saveBlock(block.index, source);
+    });
+    wrap.appendChild(btn);
+  });
+
+  return wrap;
+}
+
 async function pairBlock(index) {
   await postBlockAction(index, 'pair', 'pairing…');
 }
@@ -646,6 +688,11 @@ const CLEAR_SOURCE = '<div class="clear-beside"></div>';
 // Plain breathing room between sections. Same shape rule as CLEAR_SOURCE:
 // must match blocks.py's _SPACER_RE to come back as the `spacer` kind.
 const SPACER_SOURCE = '<div class="post-spacer"></div>';
+// The same gap, kept off phones -- base.html collapses it to nothing inside
+// the same 700px query that unfloats rows. Inserted only by the toggle under
+// an existing spacer, never by the ␣ button: which spacer you want is a thing
+// you see once the gap is there, not before.
+const DESKTOP_SPACER_SOURCE = '<div class="post-spacer desktop-only"></div>';
 
 // True when a float is still wrapping text at this point in the post: scan
 // back for a media row with a side, stopping at any marker that already
@@ -711,12 +758,15 @@ function blockControls(block) {
   });
 
   // Shows/hides this block's layout controls. Only on the things that HAVE
-  // any: a picture, a clip, or a paired section.
+  // any: a picture, a clip, a paired section, or a spacer.
   let layout = null;
-  if (isMediaRow(block) || (block.kind === 'pair' && block.text !== undefined)) {
+  const isPair = block.kind === 'pair' && block.text !== undefined;
+  if (isMediaRow(block) || isPair || block.kind === 'spacer') {
     layout = document.createElement('button');
     layout.textContent = '◨';
-    layout.title = 'Text wrapping';
+    // A spacer has no text to wrap -- its one choice is which screens the
+    // gap applies to -- so the button says what it opens.
+    layout.title = block.kind === 'spacer' ? 'Where this space applies' : 'Text wrapping';
     if (state.wrapOpen.has(block.index)) layout.classList.add('active');
     layout.addEventListener('click', async (e) => {
       e.stopPropagation();

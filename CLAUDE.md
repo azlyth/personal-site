@@ -837,12 +837,13 @@ markdown field; `clear` and `spacer` render as labelled dividers; everything
 else gets a markdown textarea.
 
 Each block's control bar carries `+` (paragraph), `🖼` (photos), `␣`
-(spacer), `◨` (layout controls, on media rows and pairs), `⊟` (stop-wrap
+(spacer), `◨` (layout controls, on media rows, pairs and spacers), `⊟` (stop-wrap
 marker, only where a float is still wrapping), `⇅` (move) and `×`. The
 inserting ones ask above or below. Behind `◨`, a media row offers
 "Text wraps: No / Left / Right" — choosing a side floats it and the text
 flows around it — plus "⧉ Centre", which folds the row and the section
-beside it into a `pair`; a pair offers "⤢ Unpair" instead. A single photo or
+beside it into a `pair`; a pair offers "⤢ Unpair" instead; a spacer offers
+"Space shows: Everywhere / Desktop only". A single photo or
 clip can be split out of its row into one of its own, and any block can be
 moved (pick it up, tap an overlaid bar) or merged with an adjacent
 same-family block. The editor bar has Undo (walks back through the post's
@@ -1006,6 +1007,20 @@ edits), Discard (back to the last published version), and "↗ View live".
     element, because a spacer renders its label instead of its own html; a
     test keeps that height in step with the published one, or the gap would
     be tuned by guesswork.
+  - **A spacer can be desktop-only** (`class="post-spacer desktop-only"`,
+    picked behind `◨`): on a phone the post is already one narrow column, so a
+    deliberate section break reads as a scroll of blank screen. `base.html`
+    collapses it to `height: 0` inside the same `max-width: 700px` query that
+    unfloats rows, so "mobile" means one thing site-wide, and the rule is
+    written compound (`.post-spacer.desktop-only`) because `desktop-only`
+    alone would be a site-wide class that hides whatever picked it up.
+    `_SPACER_RE` spells the modifier out rather than allowing any class, so
+    only the two shapes the editor writes are promoted to the `spacer` kind --
+    a test parses every `*SPACER_SOURCE` constant in `editor.js` back through
+    it. The API reports `desktop_only` on spacer blocks the way rows report
+    `size`/`side`. The editor does NOT hide the gap: it runs on a tablet,
+    above the breakpoint, so the space genuinely is there -- it says so
+    instead, with dashed rules and a "space · desktop only" label.
   - **`+`, `␣` and `⊟` ask above or below** rather than assuming. Both hang off a
     block, and "above" (the old behaviour) was wrong about half the time --
     an undo and a retry every other go. `insert_block` takes the block count

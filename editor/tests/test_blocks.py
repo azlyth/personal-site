@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from editor.blocks import (
@@ -459,6 +461,36 @@ def test_the_spacer_class_is_scoped_to_posts():
     from editor import config
 
     assert 'class="spacer"' in (config.REPO / "templates" / "lab.html").read_text()
+
+
+def test_a_desktop_only_spacer_is_still_a_spacer():
+    """The desktop-only variant is the same block with one modifier class --
+    it has to keep its kind, or the gap you deliberately added comes back as
+    an unexplainable empty div in the middle of the post.
+    """
+    blocks = parse_blocks('A\n\n<div class="post-spacer desktop-only"></div>\n\nB')
+    assert [b.kind for b in blocks] == ["paragraph", "spacer", "paragraph"]
+
+
+def test_an_unknown_spacer_modifier_is_not_a_spacer():
+    """Only the two shapes the editor actually writes are promoted. A class
+    nothing styles would render as a spacer here and as nothing on the page.
+    """
+    assert parse_blocks('<div class="post-spacer sometimes"></div>')[0].kind == "html"
+
+
+def test_every_spacer_the_editor_writes_parses_back_as_a_spacer():
+    """editor.js hand-duplicates the spacer markup that `_SPACER_RE` matches.
+    If one side gains a shape the other doesn't, the editor inserts a block
+    that immediately comes back as raw html -- visible only by inserting one.
+    """
+    from editor import config
+
+    js = (config.REPO / "editor" / "web" / "editor.js").read_text()
+    sources = re.findall(r"^const \w*SPACER_SOURCE = '([^']+)';$", js, re.M)
+    assert len(sources) == 2, sources
+    for source in sources:
+        assert parse_blocks(source)[0].kind == "spacer", source
 
 
 def test_a_pair_with_a_justify_class_still_groups():

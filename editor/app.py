@@ -27,6 +27,7 @@ from editor.blocks import (
     move_block,
     parse_blocks,
     replace_block,
+    spacer_is_desktop_only,
 )
 from editor.frontmatter import join_post, read_meta, set_meta, split_post
 from editor.guard import assert_not_publicly_routed
@@ -299,6 +300,11 @@ def _block_json(block) -> dict:
             out["videos"] = parsed["videos"]
             out["size"] = parsed["size"]
             out["side"] = parsed["side"]
+    elif block.kind == "spacer":
+        # Which of the two spacer shapes this is -- the editor's
+        # Everywhere/Desktop-only choice reads this the way a row's controls
+        # read `size`/`side`, rather than re-deriving it from the markup.
+        out["desktop_only"] = spacer_is_desktop_only(block.source)
     elif block.kind == "pair":
         # Same omit-on-doubt rule as the rows. A pair reports its prose and
         # its framing, plus -- because the media column holds an ordinary row

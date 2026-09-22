@@ -13,6 +13,9 @@ SLUG = "editor-test-post"
 # The one shape blocks.py recognises as a stop-wrap marker.
 CLEAR_SOURCE = '<div class="clear-beside"></div>'
 SPACER_SOURCE = '<div class="post-spacer"></div>' 
+# The same gap, but only where there is room for it: collapsed to nothing on
+# a phone, where the post is already one narrow column.
+DESKTOP_SPACER_SOURCE = '<div class="post-spacer desktop-only"></div>'
 
 POST = """+++
 title = "Editor Test Post"
@@ -270,3 +273,58 @@ def test_the_spacer_round_trips_and_deletes(temp_post):
         "DELETE", f"/api/posts/{SLUG}/blocks/1", json={"hash": added["hash"]}
     ).json()
     assert not any(b["kind"] == "spacer" for b in removed["blocks"])
+
+
+def test_a_spacer_reports_whether_it_is_desktop_only(temp_post):
+    """The editor draws the Everywhere/Desktop-only choice from this flag, the
+    same way a row's controls read `size`/`side` -- reading it back out of the
+    raw source in the client would duplicate the parser.
+    """
+    data = _get()
+    plain = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": SPACER_SOURCE, "hash": data["hash"]},
+    ).json()
+    assert plain["blocks"][1] == {**plain["blocks"][1], "kind": "spacer", "desktop_only": False}
+
+    both = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 2, "source": DESKTOP_SPACER_SOURCE, "hash": plain["hash"]},
+    ).json()
+    assert both["blocks"][2]["kind"] == "spacer"
+    assert both["blocks"][2]["desktop_only"] is True
+    assert both["blocks"][1]["desktop_only"] is False
+
+
+def test_only_a_spacer_reports_desktop_only(temp_post):
+    """A flag on every block would read as a setting every block has."""
+    assert all("desktop_only" not in b for b in _get()["blocks"])
+
+
+def test_toggling_a_spacer_to_desktop_only_leaves_its_neighbours_alone(temp_post):
+    """The toggle is an ordinary block edit -- a line splice -- so the rest of
+    the post must come back byte-identical.
+    """
+    data = _get()
+    added = client.post(
+        f"/api/posts/{SLUG}/blocks",
+        json={"index": 1, "source": SPACER_SOURCE, "hash": data["hash"]},
+    ).json()
+    before = temp_post.read_text(encoding="utf-8")
+
+    toggled = client.put(
+        f"/api/posts/{SLUG}/blocks/1",
+        json={"source": DESKTOP_SPACER_SOURCE, "hash": added["hash"]},
+    ).json()
+    assert toggled["blocks"][1]["kind"] == "spacer"
+    assert toggled["blocks"][1]["desktop_only"] is True
+    assert temp_post.read_text(encoding="utf-8") == before.replace(
+        SPACER_SOURCE, DESKTOP_SPACER_SOURCE, 1
+    )
+
+    back = client.put(
+        f"/api/posts/{SLUG}/blocks/1",
+        json={"source": SPACER_SOURCE, "hash": toggled["hash"]},
+    ).json()
+    assert back["blocks"][1]["desktop_only"] is False
+    assert temp_post.read_text(encoding="utf-8") == before

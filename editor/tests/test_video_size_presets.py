@@ -380,6 +380,36 @@ def test_the_spacer_is_the_same_height_in_both_stylesheets():
     assert site.group(1) == editor.group(1) == "2.5rem"
 
 
+def test_a_desktop_only_spacer_collapses_on_a_narrow_screen():
+    """The whole point of the variant: breathing room where there is width to
+    spare, nothing on a phone, where the post is already a single column and
+    the gap just reads as a scroll of blank screen. Pinned inside the same
+    700px breakpoint the floats and pairs use, so "mobile" means one thing.
+    """
+    site_css, _ = _css_pair()
+    narrow = [b for b in _narrow_blocks(site_css) if "post-spacer" in b]
+    assert narrow, "no narrow-screen spacer rule in base.html"
+    rule = re.search(
+        r"\.post-spacer\.desktop-only\s*\{(?P<body>[^}]*)\}", "\n".join(narrow)
+    )
+    assert rule, narrow
+    assert re.search(r"height:\s*0\s*;", rule.group("body")), rule.group("body")
+
+
+def test_the_editor_marks_a_desktop_only_spacer_rather_than_hiding_it():
+    """The editor is used on a tablet, above the breakpoint -- so a desktop-only
+    spacer must still occupy its real height there. What changes is that it says
+    so, or the two spacer kinds are indistinguishable in the one place you pick
+    between them.
+    """
+    _, editor_css = _css_pair()
+    rule = re.search(
+        r"\.block\.spacer-block\.desktop-only\s*\{(?P<body>[^}]*)\}", editor_css
+    )
+    assert rule, "no desktop-only spacer rule in editor.css"
+    assert "height: 0" not in rule.group("body")
+
+
 def test_a_distributed_pair_stretches_only_its_text_column():
     """The slack goes between the prose blocks, not into the picture.
 

@@ -405,6 +405,16 @@
             .pair.size-small .pair-media,
             .pair.size-medium .pair-media { width: auto; }
 
+            /* A spacer the author marked desktop-only. On a phone the post is
+               already a single narrow column, so a deliberate gap between
+               sections reads as a scroll of blank screen rather than as
+               breathing room. The rule is compound on purpose: `desktop-only`
+               is a generic name, and on its own it would be a site-wide class
+               that hides whatever happened to pick it up. */
+            .post-spacer.desktop-only {
+                height: 0;
+            }
+
         }
 
         a {

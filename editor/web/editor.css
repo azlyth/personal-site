@@ -214,6 +214,19 @@ a { color: #0066cc; }
     border-top: 1px dotted #e2e6ec;
 }
 
+/* The desktop-only variant. Not hidden here: the editor is used on a tablet,
+   above the 700px breakpoint, so this gap IS present at the width you're
+   editing at and pretending otherwise would misreport the layout. Dashed
+   rather than dotted rules say the space is conditional; the block's label
+   says which condition. */
+.block.spacer-block.desktop-only::before,
+.block.spacer-block.desktop-only::after {
+    border-top-style: dashed;
+}
+.block.spacer-block.desktop-only {
+    color: #a8b0bd;
+}
+
 .block.clear-block {
     clear: both;
     display: flex; align-items: center; gap: 0.5rem;
