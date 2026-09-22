@@ -90,6 +90,8 @@ Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work la
 
 <div class="clear-beside"></div>
 
+<div class="post-spacer"></div>
+
 <div class="pair pair-left size-small">
 <div class="pair-media">
 <div class="video-row size-small">
@@ -116,6 +118,8 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 
  
+
+<div class="post-spacer"></div>
 
 <div class="pair pair-right size-medium">
 <div class="pair-media">
