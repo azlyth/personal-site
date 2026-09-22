@@ -22,8 +22,9 @@ I've had a visualization in mind to explain **localmart** to folks, so here's a 
 
 Cash is flowing out to corporations, but with more local orders, cash stays in the neighborhood and makes the neighborhood healthier.
 
-<div id="localmart-visualization" style="width: 100%; height: 600px; border: 2px solid #ddd; border-radius: 8px; margin: 20px 0; position: relative; background: linear-gradient(135deg, #87CEEB 0%, #98FB98 100%);">
-    <div id="controls" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: rgba(255,255,255,0.9); padding: 12px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 180px;">
+<div class="bleed">
+<div id="localmart-visualization" style="width: 100%; height: min(64vh, 760px); min-height: 380px; margin: 2rem 0; position: relative; background: linear-gradient(135deg, #87CEEB 0%, #98FB98 100%);">
+    <div id="controls" style="position: absolute; top: 20px; right: max(20px, calc(50% - 440px)); z-index: 100; background: rgba(255,255,255,0.9); padding: 12px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 180px;">
         <div style="margin-bottom: 10px; font-size: 13px; font-weight: 700; color: #333; text-align: center;">Orders in Astoria</div>
         <div style="margin-bottom: 10px; font-size: 12px; color: #444; text-align: center; font-weight: 600;">
             <span id="current-time">June 2025</span>
@@ -45,6 +46,7 @@ Cash is flowing out to corporations, but with more local orders, cash stays in t
         </div>
     </div>
     <canvas id="neighborhood-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

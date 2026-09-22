@@ -40,6 +40,15 @@
             color: #333;
             background: #fff;
             padding: 2rem 1rem;
+            /* Load-bearing for every .bleed on the site. `html` sets
+               `scrollbar-gutter: stable`, so the gutter is always reserved
+               and `100vw` is wider than the client width by exactly the
+               scrollbar -- a full-bleed child would otherwise hand every
+               page a horizontal scrollbar for those last few pixels.
+               `clip` rather than `hidden`: `hidden` makes this a scroll
+               container, which breaks `position: sticky` and scroll
+               anchoring on the vertical axis. */
+            overflow-x: clip;
         }
 
 
@@ -53,6 +62,31 @@
             max-width: 700px;
             margin: 0 auto;
             display: flow-root;
+        }
+
+        /* Opt a block out of the reading column and across the whole
+           viewport. Two layers on purpose: one element cannot both bleed to
+           the viewport AND re-centre at a capped width from a single set of
+           margins. `lab.html` carries the scar -- its earlier version mixed
+           a container-relative `margin-left` with an own-width-relative
+           `translateX`, and those only cancel at one specific viewport
+           width, so it drifted off-centre everywhere else.
+
+           `50%` resolves against the centred container, `50vw` against the
+           viewport, and the difference between them is exactly the
+           container's own inset -- which is why this lands flush at any
+           width without needing to know the container's size.
+           `.bleed-inner` is optional, for content that wants a cap inside
+           the full-width strip; content meant to reach both edges omits it. */
+        .bleed {
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+        }
+
+        .bleed-inner {
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
         /* One scale for the whole site. h1 and h2 used to be 1.6 and 1.5rem,

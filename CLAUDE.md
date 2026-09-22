@@ -322,6 +322,38 @@ drifts off-center everywhere else.
   ignores `prefers-reduced-motion`.** Everything the blog index adds stops
   under `reduce` (the bird settles at opacity 0 rather than freezing
   mid-flight); the scrolling site title does not, on any page.
+- **`.bleed` opts any block out of the reading column and across the whole
+  viewport** (added 2026-09-21; first use is the localmart three.js
+  visualization). It is the same two-layer idiom `lab.html` documents —
+  `width: 100vw` plus `margin-inline: calc(50% - 50vw)` on the outer element,
+  and an optional `.bleed-inner` that re-caps and centres inside that strip.
+  One element cannot do both jobs; see the `lab.html` comment for the version
+  that drifted off-centre.
+- ⚠ **`body { overflow-x: clip }` is what makes `.bleed` safe, and it is load
+  bearing.** `html` sets `scrollbar-gutter: stable`, so the gutter is always
+  reserved and `100vw` is wider than the client width by exactly the
+  scrollbar — without the clip, every page with a bleed gets a horizontal
+  scrollbar for those last ~15px. It must be `clip` and not `hidden`:
+  `hidden` would make `body` a scroll container and break `position: sticky`
+  and scroll anchoring on the vertical axis.
+- **The localmart visualization is full-bleed** and sizes itself from
+  `container.offsetWidth/offsetHeight` (camera aspect *and*
+  `renderer.setSize`), with a `resize` listener, so the bleed needed no JS
+  change. Its height is `min(64vh, 760px)` with a `380px` floor rather than a
+  fixed `600px`, because at a fixed height a full-bleed box letterboxes on a
+  wide screen — and since the camera takes its aspect from the box, a wider
+  box just fans the field of view out flat. Its control panel is pinned with
+  `right: max(20px, calc(50% - 440px))`, which parks it at the *post column's*
+  right edge on a wide screen instead of flinging it to the far side of a 27"
+  monitor. ⚠ **The scene itself does not grow with the viewport** — camera
+  distance is fixed, so past roughly 1600px the extra width becomes empty
+  sky. Fixing that means scaling camera distance with aspect in the post's
+  own JS.
+- ⚠ **Testing this page headless needs software WebGL.** With plain
+  `--disable-gpu` the renderer throws `Error creating WebGL context` and the
+  canvas silently stays at its default `300x150` while CSS stretches it to
+  fill — which looks exactly like a sizing bug in the page. Add
+  `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader`.
 - **Post pages (`page.html`) read at `min(900px, 94vw)`**, not the site's 700px
   default — that is the width the `.img-row`/`.video-row` size presets were
   tuned against. `.container.post-container > nav:not(.post-nav)` is deliberate:
@@ -524,7 +556,9 @@ Block kinds and their editors: `image` (standalone markdown), `img_row` and
 `video` (side-by-side grids) get thumbnail strips with add/remove/reorder,
 alt text, and Small/Medium/Full size presets; everything else gets a markdown
 textarea. Any block can be moved (pick it up, tap a gap) or merged with an
-adjacent same-family block.
+adjacent same-family block. A media row adjacent to a paragraph or list gets
+a different pair control instead -- "put the row beside this text", which
+floats it (see below).
 
 - **"Split out" is how a clip escapes its row.** `move_block` moves blocks, not
   clips, so a clip sharing a `video` row had no way to reach a distant part of
@@ -572,6 +606,50 @@ adjacent same-family block.
   way. `editor_page` itself answers `no-cache` for the same bootstrap
   reason: a heuristically cached shell would keep naming the OLD hashes
   forever.
+
+- **"Beside text" is a float, not a two-column block.** Putting a vertical
+  clip next to a paragraph is a third class on the row (`<div class="video-row
+  size-medium beside-right">`) plus `float: right` -- deliberately NOT a new
+  block kind holding both. A merged wrapper would have to contain markdown
+  inside HTML, which CommonMark doesn't parse, so keeping links and emphasis
+  alive means the wrapper spans several top-level tokens -- and `blocks.py`'s
+  whole model is one top-level token per block. The float buys the same
+  layout with no change to that model, at the cost of the text wrapping back
+  to full width under the row once it runs past it (which is usually what you
+  want anyway).
+  - **`side` is orthogonal to `size`**, not three more presets: a row is
+    "medium, floated right". `none` writes no class at all, so every row
+    published before this existed stays byte-identical -- the same discipline
+    that keeps `size-full` implicit.
+  - **A full-width row can't float and is refused at the boundary**
+    (`markdown_for` raises): a row capped at 100% leaves the text no column,
+    so the pair would silently render as a plain stack. Both the one-tap
+    action and the editor's side buttons therefore narrow a full-width row to
+    **medium** when you float it, and picking Full drops the side. That
+    constraint lives in exactly one place on each side of the wire
+    (`markdown_for`, and `framingControls()` in editor.js) or the two row
+    editors drift apart.
+  - **Three supporting rules in `base.html` are load-bearing**, each fixing a
+    way floats leak: `h1,h2,h3,h4 { clear: both }` (or the next section's
+    title rides up beside the video -- this is also *why* `app.py` refuses to
+    pair a heading with a row, and a test pins the two together);
+    `.container { display: flow-root }` (or a float taller than its text
+    escapes the post and overlaps the footer); and a `max-width: 700px`
+    unfloat (below the reading column's own width even the 240px preset
+    leaves an unreadable measure).
+  - **`POST .../blocks/{index}/beside` floats AND moves in one write.** A
+    float only wraps what follows it, so when the row sits below its
+    paragraph the row has to be lifted above it too -- one `_write_body`
+    transform, same reasoning as the clip split: as two requests the second
+    could 409 and strand the post with a floated row in the wrong place.
+    `index` names the UPPER block of the pair, the convention `/merge` uses,
+    because the control that drives it sits in the gap between the two.
+  - **The editor lets the float escape its own `.block`** (`#blocks` carries
+    the `flow-root` instead). Each block is a separate div, so a float
+    contained inside its own box would sit beside an empty strip and the
+    paragraph would start below it -- the exact thing the feature exists to
+    avoid, previewed wrong. Left to escape, the following block's line boxes
+    wrap around it the way the published page does.
 
 - **Sizing a standalone image is opt-in by design.** Markdown has nowhere to
   hang a class, so a lone photo at default size stays `![alt](url)`; choosing a
