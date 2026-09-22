@@ -8,17 +8,19 @@
    irregular, so grouping carved the page into lopsided chunks and made the
    quiet years look like holes.
 
-   Two columns: the title, and one date cell carrying the day and the year
-   together. The year used to sit in its own left-hand gutter, which made
-   every row a three-part grid for what is really one piece of metadata. #}
+   Two columns, date first: the date cell carries the day and the year
+   together, and the title hangs off it to the right. The pair used to sit
+   at opposite ends of a space-between row, which pushed them apart -- a
+   short title left a wide void before its date and nothing about the two
+   read as one record. #}
 <div class="archive-sky">
     <span class="archive-flightpath" aria-hidden="true"><span class="archive-bird"></span></span>
     <ul class="archive">
         {% for page in section.pages %}
         <li class="archive-row">
             <a class="archive-link" href="{{ page.permalink | safe }}">
-                <span class="archive-title">{{ page.title }}</span>
                 <span class="archive-date">{{ page.date | date(format="%b %-d") }} <span class="archive-year">{{ page.date | date(format="%Y") }}</span></span>
+                <span class="archive-title">{{ page.title }}</span>
             </a>
         </li>
         {% endfor %}

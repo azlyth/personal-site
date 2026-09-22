@@ -392,45 +392,146 @@
             letter-spacing: 0.05em;
         }
 
-        /* Blog index. The rows sit in weather rather than in a table. This
-           page used to be bare on purpose -- no rules, no cards, spacing
-           doing all the work -- which read as unfinished rather than quiet.
-           It now carries the site's own motif: the voxel clouds the home
-           page launches, softened all the way down to a bloom behind each
-           title, and a horizon hairline in place of a rule. Still no cards
-           and no borders. Nothing here has an edge. */
-        .archive {
-            list-style: none;
-            padding: 0;
-            margin: 1rem 0 0;
-        }
+        /* Blog index. The list lives inside one sky rather than in a table.
 
-        /* isolation makes this the stacking context the bird's negative
-           z-index resolves against. Without it a z-index:-1 child of a
-           plain positioned element drops behind the opaque page background
-           and never paints at all. */
+           The version before this gave every row its own small cloud, which
+           was decoration applied nine times over. This is a single scene
+           that the rows sit in: two parallax layers of cloud drifting at
+           different speeds in opposite directions, a faint vertical wash
+           running from this year at the top toward 2016 at the bottom, and
+           a pair of gulls crossing the whole thing. It is fewer elements
+           than the per-row version, not more, and the seven-year silence
+           between 2017 and 2025 now reads as open sky rather than a hole.
+
+           The sky bleeds to the full viewport while the list stays in the
+           reading column -- the screen is the canvas, the column is only
+           where the words go. See `.bleed` for the same idiom and
+           `body { overflow-x: clip }` for why it does not buy a scrollbar. */
         .archive-sky {
             position: relative;
             isolation: isolate;
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            padding: 2.5rem 0 3rem;
+            /* The scene clips itself. The two cloud layers below are
+               `inset: 0` but animated with `translate` up to 18px, and
+               `translate` contributes to scrollable overflow -- so without
+               this the page gained a real ~10px horizontal scroll at
+               desktop widths, drifting in and out as the animation ran.
+               (`scrollWidth > clientWidth` is not the tell here, since
+               `body`'s own `overflow-x: clip` makes that number report
+               layout overflow rather than scrollability; the honest test is
+               whether `window.scrollTo(400, 0)` moves `scrollX`.)
+               `clip` on the x axis only, so the layers' small vertical
+               drift still shows. Same class of bug as the bird runner,
+               which carries its own clipping layer for the same reason. */
+            overflow-x: clip;
+            /* Feathered at top and bottom, because a hard line where a
+               gradient stops reads as a panel rather than as weather. */
+            background: linear-gradient(to bottom,
+                rgba(116, 196, 231, 0) 0%,
+                rgba(116, 196, 231, 0.05) 9%,
+                rgba(116, 196, 231, 0.12) 88%,
+                rgba(116, 196, 231, 0) 100%);
+        }
+
+        /* The list re-caps itself inside the full-width sky. max-width is
+           700px *plus* the padding, so the words land on exactly the same
+           700px measure as every other page despite the border-box reset. */
+        .archive {
+            list-style: none;
+            max-width: calc(700px + 2rem);
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        /* The two cloud layers. Percentages resolve against the
+           full-viewport sky, so the forms spread across the whole screen
+           and only some of them pass behind the column. Every stop ends in
+           an explicit `rgba(..., 0)` and never in `transparent`: engines
+           interpolate `transparent` through transparent *black* and leave a
+           grey fringe across the fade. */
+        .archive-sky::before,
+        .archive-sky::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        /* Near layer: fewer, larger, a shade stronger, each with an
+           underside in a deeper blue -- a cloud is denser where it sits in
+           its own shade, and without that it has no weight. */
+        .archive-sky::before {
+            z-index: -2;
+            background:
+                radial-gradient(14% 9% at 16% 14%, rgba(116, 196, 231, 0.30), rgba(116, 196, 231, 0) 70%),
+                radial-gradient(9% 12% at 23% 11%, rgba(116, 196, 231, 0.26), rgba(116, 196, 231, 0) 72%),
+                radial-gradient(11% 7% at 30% 16%, rgba(96, 166, 200, 0.15), rgba(96, 166, 200, 0) 76%),
+                radial-gradient(16% 10% at 72% 42%, rgba(116, 196, 231, 0.28), rgba(116, 196, 231, 0) 70%),
+                radial-gradient(10% 13% at 78% 38%, rgba(116, 196, 231, 0.24), rgba(116, 196, 231, 0) 72%),
+                radial-gradient(12% 7% at 84% 45%, rgba(96, 166, 200, 0.13), rgba(96, 166, 200, 0) 76%),
+                radial-gradient(13% 8% at 40% 78%, rgba(116, 196, 231, 0.24), rgba(116, 196, 231, 0) 70%),
+                radial-gradient(8% 11% at 46% 75%, rgba(116, 196, 231, 0.21), rgba(116, 196, 231, 0) 72%);
+        }
+
+        /* Far layer: more of them, smaller, fainter, drifting the other way
+           at two thirds the speed. Two layers moving independently is what
+           makes this read as depth rather than as one sliding texture. */
+        .archive-sky::after {
+            z-index: -3;
+            background:
+                radial-gradient(7% 5% at 8% 30%, rgba(116, 196, 231, 0.16), rgba(116, 196, 231, 0) 74%),
+                radial-gradient(5% 6% at 34% 52%, rgba(116, 196, 231, 0.14), rgba(116, 196, 231, 0) 76%),
+                radial-gradient(8% 5% at 58% 22%, rgba(116, 196, 231, 0.15), rgba(116, 196, 231, 0) 74%),
+                radial-gradient(6% 4% at 66% 64%, rgba(116, 196, 231, 0.13), rgba(116, 196, 231, 0) 76%),
+                radial-gradient(9% 5% at 90% 72%, rgba(116, 196, 231, 0.15), rgba(116, 196, 231, 0) 74%),
+                radial-gradient(4% 5% at 20% 88%, rgba(116, 196, 231, 0.12), rgba(116, 196, 231, 0) 78%),
+                radial-gradient(6% 4% at 52% 92%, rgba(116, 196, 231, 0.12), rgba(116, 196, 231, 0) 76%);
+        }
+
+        /* Very slow, and on `translate` rather than `transform` so nothing
+           here fights anything else. The two durations are deliberately not
+           multiples of each other, so the layers never fall back into step. */
+        @media (prefers-reduced-motion: no-preference) {
+            .archive-sky::before {
+                animation: sky-near 124s ease-in-out infinite;
+            }
+
+            .archive-sky::after {
+                animation: sky-far 187s ease-in-out infinite reverse;
+            }
+        }
+
+        @keyframes sky-near {
+            0% { translate: -18px 0; }
+            27% { translate: -4px -6px; }
+            51% { translate: 14px 2px; }
+            74% { translate: 6px -4px; }
+            100% { translate: -18px 0; }
+        }
+
+        @keyframes sky-far {
+            0% { translate: 10px 0; }
+            33% { translate: 0 4px; }
+            62% { translate: -9px -2px; }
+            100% { translate: 10px 0; }
         }
 
         /* One bird, for the whole list rather than one per row -- a single
-           crossing is a moment you happen to catch, and ten would be
-           wallpaper. It flies behind the rows and behind their clouds,
-           which is where the most distant thing on the page belongs.
-           Present for under a third of its cycle, so most of the time the
+           crossing is a moment you happen to catch, and nine would be
+           wallpaper. It flies in front of the clouds and behind the rows.
+           Present for about a third of its cycle, so most of the time the
            sky is simply empty.
 
            Three nested elements, and the nesting is the whole trick. A
            `translate` percentage resolves against the element's OWN box, so
            animating the 17px bird to `104%` moved it 17px and read as a
            twitch, not a flight. The runner is therefore full width -- 104%
-           of *that* is a crossing -- and the bird graphic hangs off it as a
-           pseudo-element. The path clips, because a runner translated past
-           100% would otherwise extend the page's scrollable area and hand a
-           phone a horizontal scrollbar. Clipping here rather than on
-           .archive-sky keeps the rows' clouds, which spill 1rem sideways on
-           purpose, unclipped. */
+           of *that* is a crossing -- and the gulls hang off it as
+           pseudo-elements. The path clips, because a runner translated past
+           100% would extend the page's scrollable area. */
         .archive-flightpath {
             position: absolute;
             inset: 0;
@@ -450,7 +551,7 @@
 
         /* Two gulls on the one runner, so they share a path and read as a
            pair flying together rather than as two unrelated effects. The
-           companion trails behind and below, and flaps on its own slightly
+           companion trails behind and below and flaps on its own slightly
            longer beat -- synchronised wings look mechanical. */
         .archive-bird::before,
         .archive-bird::after {
@@ -493,19 +594,17 @@
         /* The path rises across the page and bobs on the way, rather than
            tracking a straight line -- a gull works a thermal, it does not
            commute. X is a percentage so the crossing scales with the
-           column. Y is in px, and the values are picked to sit near the row
-           boundaries rather than on the title baselines: the pair flies
-           behind the text either way, but crossing a word at 0.72 opacity
-           looked like a stray diacritic. */
+           screen; Y is in px, biased toward the gaps between rows, because
+           crossing a word at 0.72 opacity looked like a stray diacritic. */
         @keyframes bird-cross {
-            0% { translate: -5% 252px; opacity: 0; }
-            4% { translate: 3% 242px; opacity: 0.72; }
-            11% { translate: 22% 186px; opacity: 0.72; }
-            18% { translate: 44% 193px; opacity: 0.72; }
-            25% { translate: 66% 128px; opacity: 0.66; }
-            31% { translate: 88% 68px; opacity: 0.38; }
-            37% { translate: 105% 20px; opacity: 0; }
-            100% { translate: 105% 20px; opacity: 0; }
+            0% { translate: -5% 296px; opacity: 0; }
+            4% { translate: 3% 286px; opacity: 0.72; }
+            11% { translate: 22% 230px; opacity: 0.72; }
+            18% { translate: 44% 237px; opacity: 0.72; }
+            25% { translate: 66% 172px; opacity: 0.66; }
+            31% { translate: 88% 112px; opacity: 0.38; }
+            37% { translate: 105% 64px; opacity: 0; }
+            100% { translate: 105% 64px; opacity: 0; }
         }
 
         @keyframes bird-flap {
@@ -513,85 +612,38 @@
             to { transform: scaleY(0.55); }
         }
 
-        /* isolation creates a stacking context per row, which contains the
-           cloud's negative z-index inside the row instead of sending it
-           behind the page background. The row is a plain block now: the
-           three-column grid existed to hold a left-hand year gutter, and
-           the year moved into the date cell. */
+        /* isolation creates a stacking context per row, which keeps the
+           hover wash's negative z-index inside the row instead of sending
+           it behind the sky. */
         .archive-row {
             margin: 0;
             position: relative;
             isolation: isolate;
         }
 
-        /* The cloud. Three ellipses at staggered heights rather than one, so
-           the top edge undulates and it reads as a puff instead of a
-           lozenge -- the same triple-puff shape the voxel cloud system
-           draws, at a tenth of the opacity.
-
-           The vertical inset is negative by more than the row's padding on
-           purpose. A cloud sized to its own row is a band, and ten of them
-           is a striped table -- the first attempt at this looked exactly
-           like the card stack it was meant to avoid. Spilling past the row
-           means no cloud shares an edge with the row it sits behind, and
-           the ellipses are short enough to fade out well before they reach
-           a neighbour's text.
-
-           The lobes are centred in the top quarter of that box -- the air
-           above the title, not behind it. Centred on the row instead they
-           landed square on the words and read as blue highlighter. A cloud
-           belongs above the line anyway.
-
-           Every stop ends in rgba(116,196,231,0) and never in
-           `transparent`: engines interpolate `transparent` through
-           transparent *black* and leave a grey fringe across the fade. The
-           gradients reach zero inside the box, so -1rem is the widest this
-           can spread without overflowing a phone viewport -- body padding
-           is exactly 1rem. */
+        /* Hover and press feedback. The per-row cloud used to do this job by
+           brightening; now that the clouds belong to the sky, the row needs
+           its own. One soft wash with no edges, following the same
+           no-boxes rule as the rest of the page. */
         .archive-row::before {
             content: '';
             position: absolute;
-            inset: -1.5rem -1rem;
+            inset: -0.2rem -1rem;
             z-index: -1;
             pointer-events: none;
-            background:
-                radial-gradient(15% 20% at calc(var(--cx, 44%) - 8%) 23%, rgba(116, 196, 231, 0.30), rgba(116, 196, 231, 0) 72%),
-                radial-gradient(11% 26% at var(--cx, 44%) 18%, rgba(116, 196, 231, 0.27), rgba(116, 196, 231, 0) 74%),
-                radial-gradient(16% 18% at calc(var(--cx, 44%) + 9%) 25%, rgba(116, 196, 231, 0.23), rgba(116, 196, 231, 0) 72%),
-                radial-gradient(23% 9% at calc(var(--cx, 44%) + 1%) 32%, rgba(96, 166, 200, 0.13), rgba(96, 166, 200, 0) 78%),
-                radial-gradient(6% 10% at calc(var(--cx, 44%) + 26%) 29%, rgba(116, 196, 231, 0.14), rgba(116, 196, 231, 0) 76%),
-                radial-gradient(3% 6% at calc(var(--cx, 44%) + 34%) 27%, rgba(116, 196, 231, 0.10), rgba(116, 196, 231, 0) 78%);
-            opacity: var(--puff, 0.9);
-            transform: translateX(var(--drift, 0px)) scale(var(--ps, 1));
-            transition: opacity 0.5s ease-out, transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
+            opacity: 0;
+            background: radial-gradient(58% 118% at 32% 50%, rgba(116, 196, 231, 0.3), rgba(116, 196, 231, 0) 72%);
+            transition: opacity 0.35s ease-out;
         }
 
-        /* Scatter, so the column reads as separate clouds drifting past and
-           not as ten copies of one blob. --cx slides the whole puff along
-           the row; it varies the shape rather than the size, because
-           scaling the pseudo-element instead (the first attempt) changed
-           each cloud's width and the differing edges read as steps. The
-           custom properties live on the row and the pseudo-element
-           composes them, which is what lets the hover drift coexist with a
-           per-row offset instead of overwriting it.
+        .archive-row:hover::before,
+        .archive-row:focus-within::before,
+        .archive-row:has(.archive-link:active)::before {
+            opacity: 1;
+        }
 
-           --ps only ever scales *down*. A transform grows the
-           pseudo-element's scrollable overflow area, and this box already
-           reaches exactly the viewport edge on a phone, so scaling any
-           cloud up would buy a horizontal scrollbar. The base size is drawn
-           large enough that shrinking is the whole range needed. */
-        .archive-row:nth-child(3n) { --cx: 66%; --puff: 0.78; --ps: 0.82; }
-        .archive-row:nth-child(4n + 2) { --cx: 27%; --puff: 1; --ps: 0.92; }
-        .archive-row:nth-child(5n + 3) { --cx: 55%; --puff: 0.66; --ps: 0.72; }
-        .archive-row:nth-child(7n + 5) { --cx: 36%; --puff: 0.85; --ps: 1; }
-
-        .archive-row:hover,
-        .archive-row:focus-within { --puff: 1; --drift: 9px; }
-
-        /* The horizon. A hairline that is invisible at both ends, so it
-           separates the rows without ruling them -- and the fade-in happens
-           across the year gutter, which leaves the year marker sitting in
-           open air. */
+        /* The horizon. A hairline invisible at both ends, so it separates
+           the rows without ruling them. */
         .archive-row::after {
             content: '';
             position: absolute;
@@ -610,53 +662,34 @@
             display: none;
         }
 
-        /* Clouds that hold perfectly still are not clouds. The keyframes are
-           spaced unevenly and move on both axes, which is what makes this
-           read as a wander rather than a swing -- an even two-stop
-           alternate, the first version, was visibly a pendulum. The loop
-           closes (0% and 100% match) so it runs `infinite` without
-           `alternate`, and `reverse` on some rows is another free variation.
+        /* Date left, title right, and the title is the part that hangs.
+           The row was `justify-content: space-between`, which actively
+           pushed the two apart -- "Back online" left a 600px void before
+           its date and nothing about the pair read as one record. A fixed
+           date column keeps them adjacent, starts every title on the same
+           vertical line, and gives a wrapped title its hanging indent for
+           free. A ragged right edge also scans down more easily than a
+           justified one.
 
-           It animates `translate`, not `transform`, so it composes with the
-           scatter's scale and the hover's drift instead of silently winning
-           over them. Under 20px of travel across a minute is below the
-           threshold of noticing unless you stare. */
-        @media (prefers-reduced-motion: no-preference) {
-            .archive-row::before {
-                animation: cloud-wander 41s ease-in-out infinite;
-            }
-
-            .archive-row:nth-child(even)::before {
-                animation-duration: 53s;
-                animation-delay: -14s;
-            }
-
-            .archive-row:nth-child(3n)::before {
-                animation-duration: 67s;
-                animation-delay: -31s;
-                animation-direction: reverse;
-            }
-
-            .archive-row:nth-child(4n + 1)::before {
-                animation-duration: 46s;
-                animation-delay: -8s;
-            }
-
-            .archive-row:nth-child(5n + 2)::before {
-                animation-duration: 59s;
-                animation-delay: -22s;
-                animation-direction: reverse;
-            }
+           The padding is on the link and not the row because it is a touch
+           target: on the row the anchor measured 700x26, so a fingertip had
+           to find a 26px strip while the airy space around it did nothing.
+           Don't move it back. */
+        .archive-link {
+            display: grid;
+            grid-template-columns: 5.5rem minmax(0, 1fr);
+            gap: 0 1.25rem;
+            align-items: baseline;
+            padding: 1.05rem 0;
+            text-decoration: none;
+            color: inherit;
         }
 
-        @keyframes cloud-wander {
-            0% { translate: -9px 0; }
-            19% { translate: -3px -3px; }
-            37% { translate: 5px -1px; }
-            52% { translate: 9px 2px; }
-            68% { translate: 4px -2px; }
-            85% { translate: -4px 1px; }
-            100% { translate: -9px 0; }
+        .archive-date {
+            font-size: 0.8rem;
+            color: #8d979c;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
         }
 
         /* The year rides along inside the date cell, a shade lighter, so the
@@ -670,36 +703,19 @@
             color: #b3bfc6;
         }
 
-        /* The padding lives on the link, not on the row, and that is a touch
-           target rather than a style choice. With it on the row the anchor
-           measured 700x26 -- you had to hit a 26px strip and the airy
-           padding above and below it did nothing, which on a phone is well
-           under the 44px a fingertip needs. Baseline alignment is
-           unaffected: the two columns are both inside this flex box. */
-        .archive-link {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 1.5rem;
-            padding: 1.05rem 0;
-            text-decoration: none;
-            color: inherit;
-        }
-
         /* The titles are the only things on this page you can go to, and
-           until now the only thing saying so was a hover colour -- which
-           on a phone is nothing at all. The underline is therefore present
-           at rest, in the gulls' own ink rather than a default link blue,
-           so the affordance belongs to the weather instead of being
-           bolted on.
+           for a long time the only thing saying so was a hover colour --
+           which on a touch screen is nothing at all. The underline is
+           therefore present at rest, in the gulls' own ink rather than a
+           default link blue, so the affordance belongs to the weather
+           instead of being bolted on.
 
-           Deliberately a real `text-decoration` and not a gradient faded
-           at the ends like the row separators: the faded version is
-           prettier and measurably less obviously a link, and this is the
-           one element on the page where being understood beats being
-           handsome. The offset clears the descenders, and
-           `text-decoration-skip-ink` (default `auto`) breaks it around any
-           that still reach. */
+           Deliberately a real `text-decoration` and not a gradient faded at
+           the ends like the row separators: the faded version is prettier
+           and measurably less obviously a link, and this is the one element
+           on the page where being understood beats being handsome. It is
+           also held under full strength -- at solid #5e8798 the nine
+           underlines plus nine row rules read as ruled paper. */
         .archive-title {
             font-family: var(--font-display);
             font-size: 1.25rem;
@@ -723,17 +739,12 @@
         }
 
         /* `:active` is what a tap fires, and on a touch screen it is the
-           only feedback available -- there is no hover to lean on, and a
-           row that looks identical mid-tap feels broken. */
+           only feedback available -- a row that looks identical mid-tap
+           feels broken. */
         .archive-link:active .archive-title {
             color: #004e9c;
             text-decoration-color: #004e9c;
             text-decoration-thickness: 2px;
-        }
-
-        .archive-row:has(.archive-link:active) {
-            --puff: 1;
-            --drift: 9px;
         }
 
         /* No focus style existed anywhere in this file. The ring goes round
@@ -745,15 +756,16 @@
             border-radius: 2px;
         }
 
-        .archive-date {
-            flex: none;
-            font-size: 0.8rem;
-            color: #8d979c;
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-        }
-
         @media (max-width: 600px) {
+            /* Stacked rather than two columns: a 5.5rem date gutter on a
+               380px line pushes the longer titles onto a third wrapped
+               line. Stacking keeps the date and title adjacent and gives
+               the title the full measure. */
+            .archive-link {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 0.15rem 0;
+            }
+
             .archive-title {
                 font-size: 1.0625rem;
             }

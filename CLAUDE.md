@@ -330,7 +330,43 @@ drifts off-center everywhere else.
   Rows align on `align-items: baseline` at the grid level with the padding on
   the row rather than the link, which is what puts the year marker and date on
   the title's baseline.
-- **The index rows sit in weather** (added 2026-09-21) — the page was
+- **The index is one sky, and the list lives inside it** (reworked
+  2026-09-21, replacing the per-row clouds below). `.archive-sky` bleeds to
+  the full viewport while `ul.archive` re-caps itself at the reading
+  measure; the clouds are **two parallax layers** on `.archive-sky`'s
+  `::before` (near: fewer, larger, each with a deeper-blue underside) and
+  `::after` (far: smaller, fainter, drifting the other way), on durations
+  that are deliberately not multiples of each other so they never fall back
+  into step. A faint vertical wash runs from this year at the top toward
+  2016 at the bottom, feathered to transparent at both ends because a hard
+  line where a gradient stops reads as a panel rather than weather. The
+  seven-year silence between 2017 and 2025 now reads as open sky.
+- ⚠ **`.archive-sky` sets `overflow-x: clip` and that is load-bearing.**
+  The cloud layers are `inset: 0` but animated with `translate` up to 18px,
+  and **`translate` contributes to scrollable overflow** — without the clip
+  the page gained a real ~10px horizontal scroll at desktop widths that
+  drifted in and out as the animation ran. Same class of bug as the bird
+  runner, which carries its own `.archive-flightpath` clipping layer for the
+  same reason: **any full-width decorative layer that is translated needs a
+  clipping ancestor.**
+- ⚠ **Diagnosing that class of bug: `scrollWidth > clientWidth` is not the
+  tell.** `body` sets `overflow-x: clip`, which makes `body` not a scroll
+  container, so `scrollWidth` reports *layout* overflow and can exceed
+  `clientWidth` while nothing actually scrolls. The honest test is
+  `window.scrollTo(400, 0)` followed by reading `window.scrollX` — if it
+  stays 0 there is no horizontal scroll. Bisect the culprit by setting
+  `display: none` on candidates and re-reading, remembering that hiding tall
+  content removes the *vertical* scrollbar and grows `clientWidth` by ~15px,
+  which shows up as a misleading negative.
+- **Date left, title right, and the title is what hangs.** The row was
+  `justify-content: space-between`, which actively pushed the pair apart —
+  "Back online" left a 600px void before its date and nothing read as one
+  record. `.archive-link` is now a `5.5rem minmax(0, 1fr)` grid: the pair
+  stays adjacent, every title starts on the same vertical line, and a
+  wrapped title gets its hanging indent for free. **Under 600px it stacks**
+  (`grid-template-columns: minmax(0, 1fr)`), because a 5.5rem date gutter on
+  a 380px line pushes the longer titles onto a third wrapped line.
+- **The per-row clouds this replaced** (added and superseded the same day) — the page was
   deliberately bare (no rules, no cards, spacing doing all the work) and read
   as unfinished. Each row now carries a soft cloud and a fading horizon
   hairline instead of a rule. It is the site's own motif: the same triple-puff
