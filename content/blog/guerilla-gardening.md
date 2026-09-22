@@ -4,7 +4,7 @@ date = 2026-09-20
 draft = false
 +++
 
-<div class="img-row size-medium">
+<div class="img-row size-medium beside-right">
 <img src="https://img.cloudy.nyc/guerilla-gardening/cat-and-chicks-a623affb.jpg" alt="Cat and chicks">
 </div>
 
