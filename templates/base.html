@@ -303,8 +303,13 @@
             letter-spacing: 0.05em;
         }
 
-        /* Blog index. No rules, no cards, no hover motion -- the titles are
-           the only loud thing on the page and spacing does the rest. */
+        /* Blog index. The rows sit in weather rather than in a table. This
+           page used to be bare on purpose -- no rules, no cards, spacing
+           doing all the work -- which read as unfinished rather than quiet.
+           It now carries the site's own motif: the voxel clouds the home
+           page launches, softened all the way down to a bloom behind each
+           title, and a horizon hairline in place of a rule. Still no cards
+           and no borders. Nothing here has an edge. */
         .archive {
             list-style: none;
             padding: 0;
@@ -313,19 +318,132 @@
 
         /* baseline alignment on the row is what puts the year marker on the
            same line as its title -- the padding lives on the row, not the
-           link, so the two columns share a first baseline. */
+           link, so the two columns share a first baseline. isolation
+           contains the cloud's negative z-index inside this row instead of
+           sending it behind the page. */
         .archive-row {
             display: grid;
             grid-template-columns: 4.5rem minmax(0, 1fr);
             gap: 0 1.5rem;
             align-items: baseline;
-            padding: 0.85rem 0;
+            padding: 1.05rem 0;
             margin: 0;
+            position: relative;
+            isolation: isolate;
+        }
+
+        /* The cloud. Three ellipses at staggered heights rather than one, so
+           the top edge undulates and it reads as a puff instead of a
+           lozenge -- the same triple-puff shape the voxel cloud system
+           draws, at a tenth of the opacity.
+
+           The vertical inset is negative by more than the row's padding on
+           purpose. A cloud sized to its own row is a band, and ten of them
+           is a striped table -- the first attempt at this looked exactly
+           like the card stack it was meant to avoid. Spilling past the row
+           means no cloud shares an edge with the row it sits behind, and
+           the ellipses are short enough to fade out well before they reach
+           a neighbour's text.
+
+           The lobes are centred in the top quarter of that box -- the air
+           above the title, not behind it. Centred on the row instead they
+           landed square on the words and read as blue highlighter. A cloud
+           belongs above the line anyway.
+
+           Every stop ends in rgba(116,196,231,0) and never in
+           `transparent`: engines interpolate `transparent` through
+           transparent *black* and leave a grey fringe across the fade. The
+           gradients reach zero inside the box, so -1rem is the widest this
+           can spread without overflowing a phone viewport -- body padding
+           is exactly 1rem. */
+        .archive-row::before {
+            content: '';
+            position: absolute;
+            inset: -1.5rem -1rem;
+            z-index: -1;
+            pointer-events: none;
+            background:
+                radial-gradient(15% 20% at calc(var(--cx, 44%) - 8%) 24%, rgba(116, 196, 231, 0.22), rgba(116, 196, 231, 0) 72%),
+                radial-gradient(11% 26% at var(--cx, 44%) 19%, rgba(116, 196, 231, 0.20), rgba(116, 196, 231, 0) 74%),
+                radial-gradient(16% 18% at calc(var(--cx, 44%) + 9%) 26%, rgba(116, 196, 231, 0.17), rgba(116, 196, 231, 0) 72%),
+                radial-gradient(6% 10% at calc(var(--cx, 44%) + 26%) 30%, rgba(116, 196, 231, 0.12), rgba(116, 196, 231, 0) 76%);
+            opacity: var(--puff, 0.9);
+            transform: translateX(var(--drift, 0px)) scale(var(--ps, 1));
+            transition: opacity 0.5s ease-out, transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
+        }
+
+        /* Scatter, so the column reads as separate clouds drifting past and
+           not as ten copies of one blob. --cx slides the whole puff along
+           the row; it varies the shape rather than the size, because
+           scaling the pseudo-element instead (the first attempt) changed
+           each cloud's width and the differing edges read as steps. The
+           custom properties live on the row and the pseudo-element
+           composes them, which is what lets the hover drift coexist with a
+           per-row offset instead of overwriting it.
+
+           --ps only ever scales *down*. A transform grows the
+           pseudo-element's scrollable overflow area, and this box already
+           reaches exactly the viewport edge on a phone, so scaling any
+           cloud up would buy a horizontal scrollbar. The base size is drawn
+           large enough that shrinking is the whole range needed. */
+        .archive-row:nth-child(3n) { --cx: 66%; --puff: 0.78; --ps: 0.82; }
+        .archive-row:nth-child(4n + 2) { --cx: 27%; --puff: 1; --ps: 0.92; }
+        .archive-row:nth-child(5n + 3) { --cx: 55%; --puff: 0.66; --ps: 0.72; }
+        .archive-row:nth-child(7n + 5) { --cx: 36%; --puff: 0.85; --ps: 1; }
+
+        .archive-row:hover,
+        .archive-row:focus-within { --puff: 1; --drift: 9px; }
+
+        /* The horizon. A hairline that is invisible at both ends, so it
+           separates the rows without ruling them -- and the fade-in happens
+           across the year gutter, which leaves the year marker sitting in
+           open air. */
+        .archive-row::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 1px;
+            background: linear-gradient(to right,
+                rgba(150, 182, 198, 0) 8%,
+                rgba(150, 182, 198, 0.3) 34%,
+                rgba(150, 182, 198, 0.3) 66%,
+                rgba(150, 182, 198, 0) 96%);
+        }
+
+        .archive-row:last-child::after {
+            display: none;
+        }
+
+        /* Clouds that hold perfectly still are not clouds. 14px of travel
+           over half a minute is under the threshold of noticing unless you
+           stare at it, and it animates `translate` rather than `transform`
+           so it does not clobber the scatter and hover above. */
+        @media (prefers-reduced-motion: no-preference) {
+            .archive-row::before {
+                animation: cloud-drift 34s ease-in-out infinite alternate;
+            }
+
+            .archive-row:nth-child(even)::before {
+                animation-duration: 47s;
+                animation-delay: -12s;
+            }
+
+            .archive-row:nth-child(3n)::before {
+                animation-duration: 58s;
+                animation-delay: -25s;
+            }
+        }
+
+        @keyframes cloud-drift {
+            from { translate: -7px 0; }
+            to { translate: 7px 0; }
         }
 
         .archive-year {
             font-size: 0.8rem;
-            color: #b0b0b0;
+            color: #9aa8b0;
             font-variant-numeric: tabular-nums;
         }
 
@@ -352,7 +470,7 @@
         .archive-date {
             flex: none;
             font-size: 0.8rem;
-            color: #999;
+            color: #8d979c;
             font-variant-numeric: tabular-nums;
         }
 

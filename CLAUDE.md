@@ -245,6 +245,34 @@ drifts off-center everywhere else.
   Rows align on `align-items: baseline` at the grid level with the padding on
   the row rather than the link, which is what puts the year marker and date on
   the title's baseline.
+- **The index rows sit in weather** (added 2026-09-21) — the page was
+  deliberately bare (no rules, no cards, spacing doing all the work) and read
+  as unfinished. Each row now carries a soft cloud and a fading horizon
+  hairline instead of a rule. It is the site's own motif: the same triple-puff
+  shape the home page's `VoxelCloudSystem` draws, at a tenth of the opacity,
+  in the same `rgba(116,196,231,…)` sky blue. Three properties are
+  load-bearing, each because its absence looked wrong on screen:
+  - **The cloud spills `-1.5rem` past its row vertically.** Sized to its own
+    row it becomes a band, and ten bands is a striped table — the first
+    attempt looked exactly like the card stack it was meant to avoid.
+    Overflowing means no cloud shares an edge with the row behind it.
+  - **The lobes are centred in the top quarter of that box** — the air *above*
+    the title, not behind it. Centred on the row they landed square on the
+    words and read as blue highlighter.
+  - **Every gradient stop ends in `rgba(116,196,231,0)`, never `transparent`.**
+    Engines interpolate `transparent` through transparent *black* and leave a
+    grey fringe across the fade.
+  Per-row variation rides on custom properties the pseudo-element composes
+  (`--cx` position, `--ps` scale, `--puff` opacity) rather than on `::before`
+  rules directly — that is what lets a row's scatter and the hover drift
+  coexist instead of overwriting each other, and the `:hover` block must stay
+  *after* the `nth-child` scatter since both are specificity (0,2,1).
+  **`--ps` only ever scales down**: a transform grows the pseudo-element's
+  scrollable overflow area and that box already reaches exactly the viewport
+  edge on a phone (`inset: … -1rem`, body padding `1rem`), so scaling any
+  cloud up buys a horizontal scrollbar. The ambient drift animates
+  `translate`, not `transform`, so it does not clobber the scatter, and it is
+  gated behind `prefers-reduced-motion: no-preference`.
 - **Post pages (`page.html`) read at `min(900px, 94vw)`**, not the site's 700px
   default — that is the width the `.img-row`/`.video-row` size presets were
   tuned against. `.container.post-container > nav:not(.post-nav)` is deliberate:
