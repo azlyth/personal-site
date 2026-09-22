@@ -299,6 +299,25 @@ drifts off-center everywhere else.
   shorthand's second declaration just replaces the first. The pair shares one
   runner so they fly a single path, and flap on slightly different beats
   because synchronised wings look mechanical.
+- **The titles carry a rest-state underline, and that is an accessibility fix
+  rather than a style** (added 2026-09-21). They previously sat at `#1a1a1a`
+  with `text-decoration: none` and signalled nothing until `:hover` turned
+  them blue — which on a touch screen is no signal at all. The underline uses
+  the gulls' own ink held at 62% (`rgba(94,135,152,0.62)`) rather than a link
+  blue, so the affordance belongs to the page's palette; at full strength the
+  nine underlines plus nine row rules read as ruled paper, which is why the
+  row rule came down to 0.22 at the same time. It is a real
+  `text-decoration`, not a faded gradient matching the row separators: the
+  faded version is prettier and measurably less obviously a link.
+  `:active` (the only feedback a tap gets) and a `:focus-visible` ring were
+  both missing entirely and now exist.
+- ⚠ **The row's padding lives on `.archive-link`, not on `.archive-row`.**
+  That is a touch target, not a style choice: with the padding on the row the
+  anchor measured **700x26**, so a finger had to find a 26px strip while the
+  airy padding above and below it did nothing — well under the 44px minimum.
+  On the link, the anchor fills the whole 700x60 row. Baseline alignment is
+  unaffected because both columns live inside that flex box. Don't move it
+  back.
 - ⚠ **The nav's `marquee` animation is the one thing on these pages that
   ignores `prefers-reduced-motion`.** Everything the blog index adds stops
   under `reduce` (the bird settles at opacity 0 rather than freezing

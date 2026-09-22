@@ -43,9 +43,16 @@
         }
 
 
+        /* flow-root contains the floated photo/video rows (.beside-* below).
+           Without a block formatting context here, a float taller than the
+           paragraphs beside it escapes the post entirely and overlaps
+           whatever follows on the page. `overflow: hidden` would contain it
+           too, at the cost of clipping the photo rows that spill sideways on
+           purpose. */
         .container {
             max-width: 700px;
             margin: 0 auto;
+            display: flow-root;
         }
 
         /* One scale for the whole site. h1 and h2 used to be 1.6 and 1.5rem,
@@ -56,6 +63,11 @@
             color: #1a1a1a;
             font-weight: 500;
             line-height: 1.25;
+            /* A heading starts a new band of the page, so it never sits
+               beside a floated photo/video row (.beside-* below) -- it drops
+               below it instead. editor/app.py refuses to pair a heading with
+               a row for this reason. */
+            clear: both;
         }
 
         h1 {
@@ -181,6 +193,49 @@
         .video-row.size-small { max-width: 240px; }
         .video-row.size-medium { max-width: 420px; }
         .video-row.size-full { max-width: 100%; }
+
+        /* A row floated beside the text that follows it -- the answer to "a
+           vertical clip next to some words" without inventing a two-column
+           block. The float is orthogonal to the size: a row is "medium,
+           floated right", which is why `beside-*` is its own class rather
+           than three more size presets.
+
+           `margin: 0` on the float's text side replaces the `auto` the
+           centred row carries -- an auto margin on a float resolves to zero
+           anyway, but writing it out keeps the asymmetric gutter obvious.
+           The top margin is smaller than the centred row's 1.5rem so the
+           clip's top edge lines up with the paragraph's first line rather
+           than starting below it.
+
+           There is deliberately no `beside-*` at full width: a row capped at
+           100% leaves the text no column to flow into, so the pair would
+           render as a plain stack. editor/videos.py refuses the combination
+           outright rather than letting it be written. */
+        .img-row.beside-left,
+        .video-row.beside-left {
+            float: left;
+            margin: 0.4rem 1.5rem 1rem 0;
+        }
+
+        .img-row.beside-right,
+        .video-row.beside-right {
+            float: right;
+            margin: 0.4rem 0 1rem 1.5rem;
+        }
+
+        @media (max-width: 700px) {
+            /* Below the reading column's own width there is no room for two
+               things side by side -- even the 240px small preset leaves an
+               unreadable measure beside it -- so a floated row goes back to
+               being an ordinary centred one. */
+            .img-row.beside-left,
+            .img-row.beside-right,
+            .video-row.beside-left,
+            .video-row.beside-right {
+                float: none;
+                margin: 1.5rem auto;
+            }
+        }
 
         a {
             color: #0066cc;
@@ -430,7 +485,6 @@
            three-column grid existed to hold a left-hand year gutter, and
            the year moved into the date cell. */
         .archive-row {
-            padding: 1.05rem 0;
             margin: 0;
             position: relative;
             isolation: isolate;
@@ -513,8 +567,8 @@
             height: 1px;
             background: linear-gradient(to right,
                 rgba(150, 182, 198, 0) 2%,
-                rgba(150, 182, 198, 0.3) 18%,
-                rgba(150, 182, 198, 0.3) 82%,
+                rgba(150, 182, 198, 0.22) 18%,
+                rgba(150, 182, 198, 0.22) 82%,
                 rgba(150, 182, 198, 0) 98%);
         }
 
@@ -582,24 +636,79 @@
             color: #b3bfc6;
         }
 
+        /* The padding lives on the link, not on the row, and that is a touch
+           target rather than a style choice. With it on the row the anchor
+           measured 700x26 -- you had to hit a 26px strip and the airy
+           padding above and below it did nothing, which on a phone is well
+           under the 44px a fingertip needs. Baseline alignment is
+           unaffected: the two columns are both inside this flex box. */
         .archive-link {
             display: flex;
             justify-content: space-between;
             align-items: baseline;
             gap: 1.5rem;
+            padding: 1.05rem 0;
             text-decoration: none;
             color: inherit;
         }
 
+        /* The titles are the only things on this page you can go to, and
+           until now the only thing saying so was a hover colour -- which
+           on a phone is nothing at all. The underline is therefore present
+           at rest, in the gulls' own ink rather than a default link blue,
+           so the affordance belongs to the weather instead of being
+           bolted on.
+
+           Deliberately a real `text-decoration` and not a gradient faded
+           at the ends like the row separators: the faded version is
+           prettier and measurably less obviously a link, and this is the
+           one element on the page where being understood beats being
+           handsome. The offset clears the descenders, and
+           `text-decoration-skip-ink` (default `auto`) breaks it around any
+           that still reach. */
         .archive-title {
             font-family: var(--font-display);
             font-size: 1.25rem;
             line-height: 1.3;
             color: #1a1a1a;
+            text-decoration: underline;
+            text-decoration-color: rgba(94, 135, 152, 0.62);
+            text-decoration-thickness: 1px;
+            text-underline-offset: 0.24em;
+            transition:
+                color 0.18s ease-out,
+                text-decoration-color 0.18s ease-out,
+                text-decoration-thickness 0.18s ease-out;
         }
 
-        .archive-link:hover .archive-title {
+        .archive-link:hover .archive-title,
+        .archive-link:focus-visible .archive-title {
             color: #0066cc;
+            text-decoration-color: #0066cc;
+            text-decoration-thickness: 2px;
+        }
+
+        /* `:active` is what a tap fires, and on a touch screen it is the
+           only feedback available -- there is no hover to lean on, and a
+           row that looks identical mid-tap feels broken. */
+        .archive-link:active .archive-title {
+            color: #004e9c;
+            text-decoration-color: #004e9c;
+            text-decoration-thickness: 2px;
+        }
+
+        .archive-row:has(.archive-link:active) {
+            --puff: 1;
+            --drift: 9px;
+        }
+
+        /* No focus style existed anywhere in this file. The ring goes round
+           the whole row because the anchor *is* the whole row -- ringing
+           just the title would misreport where you can click. */
+        .archive-link:focus-visible {
+            outline: 2px solid #0066cc;
+            outline-offset: 2px;
+            border-radius: 2px;
         }
 
         .archive-date {
