@@ -4,6 +4,10 @@ date = 2026-09-22
 draft = true
 +++
 
+<div class="clear-beside"></div>
+
+A paragraph after the stop.
+
 Closing paragraph.
 
 Intro paragraph.
@@ -15,7 +19,3 @@ Intro paragraph.
 Text that wraps beside the floated row.
 
 More text still beside it.
-
-<div class="clear-beside"></div>
-
-A paragraph after the stop.
