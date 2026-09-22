@@ -53,19 +53,21 @@ I also started doing little litter patrols in the neighborhood.
 </div>
 <div class="pair-text">
 
+<div class="post-spacer"></div>
+
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass.
 
 So I swept it all up.
 
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
 
+<div class="post-spacer"></div>
+
 </div>
 </div>
 
 <div class="post-spacer"></div>
 
-<div class="pair pair-right size-medium">
-<div class="pair-media">
 <div class="video-row size-medium">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop-c31c0f9f.mp4" type="video/mp4">
@@ -74,8 +76,6 @@ There are only the city-planted trees and dirty dirt in those tree beds, but the
 <source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop-68edd3a2.mp4" type="video/mp4">
 </video>
 </div>
-</div>
-<div class="pair-text">
 
 ## Make it pretty, with bricks
 
@@ -85,8 +85,7 @@ So I thought, why not make them prettier? Have them spark a little joy.
 
 I took a walk around the neighborhood for some inspiration, looked at a few different nice tree bed setups, and decided: a nice simple red brick border. If it didn't go higher than 2 inches, then I wouldn't even need a permit to do so. Perfect.
 
-</div>
-</div>
+<div class="clear-beside"></div>
 
 Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work later, we had a pretty red brick border on the two tree beds framing my apartment courtyard entrance.
 
