@@ -563,6 +563,13 @@ drifts off-center everywhere else.
 - **`/` (`index.html`)** widens to `min(1080px, 92vw)` at ≥1000px and flows its
   sections into two columns via **`column-count`, not a grid** — the browser
   balances them, so adding a section later doesn't need the split re-hardcoded.
+  **Its nav and footer run that full width too** (fixed 2026-09-22) — they were
+  capped back to 700px and re-centred, the way post pages do it, which left
+  them inset 190px on each side of the page they belong to at 1280px wide: the
+  nav links started well right of "Welcome." and the footer's rule began and
+  ended in mid-air. Uncapped, the links share the heading's left edge and the
+  site title lands exactly on the photo's right edge. The post-page cap stays —
+  there the body is a reading column, not a full-width layout.
   `.home-intro` is a `flow-root`: without it the floated photo escapes the
   intro and the multi-column box shrinks sideways to avoid the float instead of
   using the full width. The "Author of" list links **live sites, not repos**,

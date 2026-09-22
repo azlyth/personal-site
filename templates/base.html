@@ -818,16 +818,6 @@
             margin-top: 1.5rem;
         }
 
-        /* Home: the project lists are short-line content that just leaves the
-           right half of a wide screen empty. Widen the page and let them run
-           in two columns once there is actually room for two. */
-        .container.home-container nav,
-        .container.home-container footer {
-            max-width: 700px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
         /* Contains the floated photo. Without this the float escapes the
            intro, and the multi-column box below shrinks sideways to avoid it
            instead of using the full width. */
@@ -835,6 +825,18 @@
             display: flow-root;
         }
 
+        /* Home: the project lists are short-line content that just leaves the
+           right half of a wide screen empty. Widen the page and let them run
+           in two columns once there is actually room for two.
+
+           Unlike post pages, nav and footer are NOT capped back to 700px
+           inside this wider container. Everything on the home page --
+           "Welcome.", the prose, the two columns -- starts at the container's
+           own left edge and the photo ends at its right edge, so a narrower
+           centred nav sat visibly inset from the page it belongs to (190px in
+           on each side at 1280px wide), and the footer's rule started and
+           ended in mid-air. At full width the nav links share the heading's
+           left edge and the site title shares the photo's right edge. */
         @media (min-width: 1000px) {
             .container.home-container {
                 max-width: min(1080px, 92vw);
