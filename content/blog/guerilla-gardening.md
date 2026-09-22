@@ -78,15 +78,15 @@ Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work la
 
 <div class="clear-beside"></div>
 
-<div class="pair pair-left size-small">
-<div class="pair-media">
-<div class="video-row size-small">
+<div class="video-row size-small beside-left">
 <video autoplay loop muted playsinline data-sync-loop="4">
 <source src="https://img.cloudy.nyc/guerilla-gardening/compost-bags-loop-f1b2bdb2.mp4" type="video/mp4">
 </video>
 </div>
-</div>
-<div class="pair-text">
+
+
+
+ 
 
 ## Make it pretty, with dirt
 
@@ -98,10 +98,7 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 4 bags of organic compost per tree bed. I used my new cultivator, and mixed the compost into the tree beds. It's amazing how even just fresh, rich dirt alone made the tree beds look better. Healthier.
 
-</div>
-</div>
-
-
+<div class="clear-beside"></div>
 
 ## Make it pretty, with flowers
 
