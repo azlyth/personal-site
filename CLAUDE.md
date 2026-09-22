@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make dev          # Start development server (Zola + lab backend) - ports 1111 & 3001
 make prod         # Build and serve production with nginx on port 8080
-make check        # Validate site structure
+make check        # Validate site structure (zola check + check-fit)
+make check-fit    # Pages meant to be one screenful still fit one (FIT_URL=... to retarget)
 make logs         # View container logs
 make stop         # ⚠ STOPS PRODUCTION TOO - see below
 make clean        # Clean up containers and images
@@ -374,6 +375,69 @@ read as the same level.
 Changing font metrics is **not** cosmetic here: `/timeline` positions its cards
 absolutely with hand-tuned percentages, so re-check that page (desktop *and*
 mobile) for card overlap after any type change.
+
+### Scaling on large displays (added 2026-09-22)
+
+Past ~1600px wide the page used to float in a growing white field — a 700px
+reading column is 27% of a 2560px screen. The root font size now scales, and
+because everything here is already sized in `rem` that is a **zoom rather than
+a re-layout**: type, spacing and the column caps grow together, so **the measure
+in characters never changes**. That is the reason to scale instead of widening
+— a wider column at the same type size is a worse line to read.
+
+One rule on `html` in `templates/base.html` does it:
+
+```css
+--fit-cap: calc(100vh / 63);
+font-size: clamp(1rem, min(calc(0.375rem + 0.625vw), var(--fit-cap)), 1.375rem);
+```
+
+- **`rem` on the root's own `font-size` resolves against the BROWSER's default**,
+  not the rule's own output — no recursion — so a reader running a 20px default
+  keeps their multiplier instead of having it stomped by a px value.
+- **The width term** is flat 16px to 1600px, ramps, and tops out at 22px from
+  2560px. Below 1600px every width is byte-identical to before the change.
+- **The height term stops the page outgrowing the window.** Scaling by width
+  alone pushed the home page's footer just off the bottom of a 1440p screen.
+  There is no circular dependency to solve, because scaling does not change how
+  many LINES a page has, only how big they are — so **a page's height measured
+  in rem is a constant** (drift measured at 1.5% across the range) and "fits the
+  window" is just `root <= viewportHeight / thatConstant`, i.e. a plain `vh`
+  value. No JS, no runtime measuring, no feedback loop.
+- **63 is the home page's height in rem** — the tallest page that ought to fit.
+  ⚠ It is a MEASUREMENT of today's content, not a constant of nature. Add a
+  project to the home list and the real number climbs past it and the footer
+  clips again. **`make check` runs `scripts/verify-fit.py`**, which drives
+  Chromium at five window sizes and fails if any capped page can scroll.
+- **Posts opt out** via `{% block html_class %}page-scrolls{% endblock %}` in
+  `page.html`, which sets `--fit-cap: 100vh` — always larger than the ceiling, so
+  `min()` ignores it. A post is ~370 rem tall and can never fit a window, so
+  capping it would shrink the one page you are here to read for nothing. The
+  accepted cost: a post renders a step larger than the home page, so **the chrome
+  band is not the same width on both** — a deliberate exception to the "one width
+  everywhere" rule below. `/lab/#<game>` is likewise uncapped in practice: an open
+  board is 64–68 rem, so that page can still scroll a little.
+- ⚠ **The caps that had to become `rem` each carry a "scales" note** —
+  `.container`, `.post-container`, `.home-container`, the chrome band, `.archive`,
+  `.bleed-inner`, the gantt (including its fixed height), the image/video/pair
+  size presets, the home portrait, the marquee, the lab board and tile grid. A px
+  value left among them does not look like a style nit; it pins that element at
+  laptop size while the text around it grows past it. **The marquee's 20px track
+  heights were the sharp edge** — left in px they clip 22px text.
+  Hairlines, radii, shadows and optical nudges stay px on purpose.
+- ⚠ **CSS COMMENTS DO NOT NEST, and that silently disabled this whole feature
+  once.** The explanatory comment above the rule contained a literal
+  `/* scales */`; its inner close-marker ended the comment early, the remaining
+  prose parsed as a declaration, and it swallowed the `font-size` under it. No
+  console error — the rule simply vanished and every measurement read as a no-op.
+  Don't write a nested comment in there.
+- ⚠ **`documentElement.scrollHeight` is clamped UP to the viewport height**, so
+  the obvious "is the page taller than the window" comparison passes for every
+  page at every size. The first version of `verify-fit.py` shipped exactly that
+  and proved nothing. The honest test is to scroll to the bottom and read
+  `window.scrollY` — which is also the complaint stated literally. The script
+  keeps a CANARY (a long post, which must report an overflow) so a future break
+  in that measurement fails loudly instead of turning every check green.
 
 ### Responsive layout (reworked 2026-09-20)
 

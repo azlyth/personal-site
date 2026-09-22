@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image upload-video build-site publish-site editor-install editor-restart editor-logs
+.PHONY: help dev prod build logs clean stop check check-fit open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image upload-video build-site publish-site editor-install editor-restart editor-logs
 
 # Colors for help output
 CYAN = \033[36m
@@ -122,6 +122,20 @@ stop:
 # Check if site builds successfully
 check:
 	docker compose -f compose.dev.yaml run --rm zola check
+	$(MAKE) check-fit
+
+# The root font size scales up on big displays but stops before a page grows
+# taller than the window, using a constant in base.html that encodes today's
+# home page height. This catches that constant going stale.
+#
+# It needs a SERVED site, so it checks the live one by default. To check the
+# working tree instead, start the dev server and point it there:
+#   docker compose -f compose.dev.yaml up -d zola
+#   make check-fit FIT_URL=http://127.0.0.1:1111
+#   docker rm -f personal-site-zola-1
+FIT_URL ?= https://cloudy.nyc
+check-fit:
+	python3 scripts/verify-fit.py $(FIT_URL)
 
 EDITOR_SERVICE := blog-editor.service
 

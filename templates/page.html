@@ -4,6 +4,11 @@
 
 {% block container_class %} post-container{% endblock container_class %}
 
+{# Opts this page out of the fit-the-window cap on the root font size.
+   See the html rule in base.html -- a post is far taller than any
+   window, so capping it to fit would only shrink it for nothing. #}
+{% block html_class %}page-scrolls{% endblock html_class %}
+
 {% block content %}
 <h1>{{ page.title }}</h1>
 <div class="post-meta">{{ page.date | date(format="%B %d, %Y") }}</div>

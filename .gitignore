@@ -52,3 +52,6 @@ node_modules
 
 # Editor scratch: per-post undo snapshots (see editor/history.py)
 /editor/.history
+
+# Zola build output from `zola check` -- 25MB of HTML and multi-MB PNGs.
+.build-test/
