@@ -38,6 +38,12 @@ I also started doing little litter patrols in the neighborhood.
 
 I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass. So I swept it all up.
 
+<div class="video-row size-small">
+<video autoplay loop muted playsinline data-sync-loop="4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night-loop-32c89139.mp4" type="video/mp4">
+</video>
+</div>
+
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
 
 ## Make it pretty, with bricks
@@ -52,10 +58,10 @@ Went to Home Depot, bought 45 bricks, and one Saturday afternoon of hard work la
 
 <div class="video-row size-medium">
 <video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/digging-dirt-loop-c31c0f9f.mp4" type="video/mp4">
 </video>
 <video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/prepping-bed-loop-68edd3a2.mp4" type="video/mp4">
 </video>
 </div>
 
@@ -71,7 +77,7 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 
 <div class="video-row size-small">
 <video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/compost-bags-loop.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/compost-bags-loop-f1b2bdb2.mp4" type="video/mp4">
 </video>
 </div>
 
@@ -91,16 +97,13 @@ After another Saturday afternoon of manual labor, with the help of my lovely gir
 
 <div class="video-row size-full">
 <video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1-loop.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-1-loop-24c0fc0e.mp4" type="video/mp4">
 </video>
 <video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-1-loop.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-1-loop-a0d4cda0.mp4" type="video/mp4">
 </video>
 <video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2-loop.mp4" type="video/mp4">
-</video>
-<video autoplay loop muted playsinline data-sync-loop="4">
-<source src="https://img.cloudy.nyc/guerilla-gardening/sweeping-night-loop.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/guerilla-gardening/flowers-2-loop-7b763169.mp4" type="video/mp4">
 </video>
 </div>
 
