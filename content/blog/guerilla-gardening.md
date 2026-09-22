@@ -22,6 +22,8 @@ I created the mess, so I needed to clean it up. I bought a broom and dustpan, an
 
 It was satisfying. I was hooked.
 
+<div class="clear-beside"></div>
+
 ## Courtyard, sidewalk, tree beds
 
 Litter would build up by the two entrances to my courtyard. Plastic of all sorts, vapes, bags. So I swept them up.
@@ -46,7 +48,9 @@ I also started doing little litter patrols in the neighborhood.
 </div>
 <div class="pair-text">
 
-I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass. So I swept it all up.
+I started cleaning the tree beds in front of the building. I've learned that untended tree beds become de facto trash cans. Lots of small plastic containers, bottle caps, glass.
+
+So I swept it all up.
 
 There are only the city-planted trees and dirty dirt in those tree beds, but they deserve to be cared for.
 
@@ -97,15 +101,13 @@ So after a bunch of unfruitful trips to Home Depot and Big Reuse, I secured some
 </div>
 </div>
 
-<div class="pair pair-right size-medium">
-<div class="pair-media">
-<div class="img-row size-medium">
-<img src="https://img.cloudy.nyc/guerilla-gardening/flowers-in-trunk.jpg" alt="The trunk of a rented SUV packed with potted purple and orange flowers and lilyturf">
-</div>
-</div>
-<div class="pair-text">
+
 
 ## Make it pretty, with flowers
+
+<div class="img-row size-medium beside-right">
+<img src="https://img.cloudy.nyc/guerilla-gardening/flowers-in-trunk.jpg" alt="The trunk of a rented SUV packed with potted purple and orange flowers and lilyturf">
+</div>
 
 Litter, cleaned regularly. Bricks, laid. Organic compost, all set.
 
@@ -115,8 +117,7 @@ I rented a Toyota 4Runner through Zipcar and made another visit to Home Depot.
 
 Bought twelve lilyturf, four orange aster, four light purple aster. To be split between the two tree beds.
 
-</div>
-</div>
+<div class="clear-beside"></div>
 
 After another Saturday afternoon of manual labor, with the help of my lovely girlfriend Anne and my friend David, the plants were planted.
 
