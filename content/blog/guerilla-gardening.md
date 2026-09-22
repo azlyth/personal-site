@@ -141,10 +141,12 @@ I rented a Toyota 4Runner through Zipcar and made another visit to Home Depot.
 
 Bought twelve lilyturf, four orange aster, four light purple aster. To be split between the two tree beds.
 
+</div>
+</div>
+
 After another Saturday afternoon of manual labor, with the help of my lovely girlfriend Anne and my friend David, the plants were planted.
 
-</div>
-</div>
+<div class="clear-beside"></div>
 
 <div class="video-row size-full">
 <video autoplay loop muted playsinline data-sync-loop="4">
