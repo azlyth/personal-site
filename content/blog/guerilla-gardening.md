@@ -8,9 +8,13 @@ This summer, my hobby has been cleaning and beautifying my corner in Astoria.
 
 It began with a mourning dove nest under my AC.
 
-<div class="img-row size-medium beside-right">
+<div class="pair pair-right size-medium">
+<div class="pair-media">
+<div class="img-row size-medium">
 <img src="https://img.cloudy.nyc/guerilla-gardening/cat-and-chicks-a623affb.jpg" alt="Cat and chicks">
 </div>
+</div>
+<div class="pair-text">
 
 ## Dove nest, bird mites
 
@@ -22,7 +26,8 @@ I created the mess, so I needed to clean it up. I bought a broom and dustpan, an
 
 It was satisfying. I was hooked.
 
-<div class="clear-beside"></div>
+</div>
+</div>
 
 ## Courtyard, sidewalk, tree beds
 

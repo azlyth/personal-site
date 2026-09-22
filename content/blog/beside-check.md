@@ -6,6 +6,8 @@ draft = true
 
 <div class="clear-beside"></div>
 
+<div class="post-spacer"></div>
+
 A paragraph after the stop.
 
 Closing paragraph.
