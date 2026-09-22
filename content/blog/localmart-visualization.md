@@ -107,9 +107,8 @@ class NeighborhoodVisualization {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         
-        // Set up camera (fixed isometric view)
-        this.camera.position.set(25, 30, 25);
-        this.camera.lookAt(0, 0, 0);
+        // Set up camera (fixed isometric angle, distance fits the box)
+        this.fitCamera();
         
         // Add lighting
         const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
@@ -1679,8 +1678,44 @@ class NeighborhoodVisualization {
         this.renderer.render(this.scene, this.camera);
     }
     
+    /* The scene was composed for a roughly 3:2 box. Now that the container
+       bleeds to the full viewport, a fixed camera distance leaves the
+       neighbourhood exactly the size it always was while the extra width
+       turns into empty sky -- so pull the camera in as the box widens.
+       Scaling the position vector, rather than moving the camera, keeps the
+       isometric angle identical; only the distance changes.
+
+       It compensates partway and is clamped, on purpose. A true width-fit
+       needs about 2.5x at ultrawide, and because the frame's height shrinks
+       at exactly the rate its width grows, that crops the plate top and
+       bottom. The exponent takes most of the visible gain before that bites.
+       Below the reference aspect the multiplier is exactly 1, so a phone and
+       anything inside the old reading column are pixel-for-pixel unchanged. */
+    fitCamera() {
+        const REFERENCE_ASPECT = 1.55;
+        const aspect = this.container.offsetWidth / this.container.offsetHeight;
+        const zoom = Math.pow(REFERENCE_ASPECT / Math.max(aspect, REFERENCE_ASPECT), 0.25);
+        const k = Math.max(0.85, zoom);
+        this.camera.position.set(25 * k, 30 * k, 25 * k);
+        /* Aim slightly below the origin as we zoom in. Zooming alone ran the
+           plate's bottom vertex off the bottom edge while a band of empty
+           sky sat above the towers doing nothing; looking lower lifts the
+           whole composition into that band, which is what pays for the
+           extra scale.
+
+           Both numbers are held back from what looks best at a single
+           width, because the two failures are at opposite ends: too much
+           zoom runs the plate off the bottom, and too much lift clips the
+           CORPORATIONS label off the top. Past about 3.5:1 the frame is too
+           short to hold both at full strength, so the ultrawide case keeps
+           its side sky rather than losing content -- a square isometric
+           plate cannot fill a 3.7:1 frame, and that is geometry, not a bug. */
+        this.camera.lookAt(0, -10 * (1 - k), 0);
+    }
+
     onWindowResize() {
         this.camera.aspect = this.container.offsetWidth / this.container.offsetHeight;
+        this.fitCamera();
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(this.container.offsetWidth, this.container.offsetHeight);
     }

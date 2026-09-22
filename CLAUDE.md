@@ -345,15 +345,32 @@ drifts off-center everywhere else.
   box just fans the field of view out flat. Its control panel is pinned with
   `right: max(20px, calc(50% - 440px))`, which parks it at the *post column's*
   right edge on a wide screen instead of flinging it to the far side of a 27"
-  monitor. ⚠ **The scene itself does not grow with the viewport** — camera
-  distance is fixed, so past roughly 1600px the extra width becomes empty
-  sky. Fixing that means scaling camera distance with aspect in the post's
-  own JS.
+  monitor. **The scene grows with the viewport** via `fitCamera()`, called from
+  `init()` and `onWindowResize()`: it scales the camera's *position vector*
+  (which keeps the isometric angle identical — only distance changes) by
+  `max(0.85, (1.55 / aspect) ** 0.25)`, and aims `lookAt` slightly below the
+  origin by `10 * (1 - k)`. Both numbers are held back from what looks best
+  at any single width, because the two failure modes sit at opposite ends:
+  **too much zoom runs the plate's bottom vertex off the bottom edge, and too
+  much lift clips the CORPORATIONS label off the top.** The lift exists to
+  spend the dead sky above the towers, which is what pays for the extra
+  scale. Below the 1.55 reference aspect the multiplier is exactly 1 and the
+  lift exactly 0, so phones and tablet-portrait are bit-identical to the old
+  fixed camera. Past roughly 3.5:1 the frame is too short to hold the label
+  and the plate at full strength, so the ultrawide case keeps its side sky
+  rather than losing content — a square isometric plate cannot fill a 3.7:1
+  frame, and that is geometry rather than a bug.
 - ⚠ **Testing this page headless needs software WebGL.** With plain
   `--disable-gpu` the renderer throws `Error creating WebGL context` and the
   canvas silently stays at its default `300x150` while CSS stretches it to
   fill — which looks exactly like a sizing bug in the page. Add
   `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader`.
+  ⚠ **And reap the browser properly.** `Popen.terminate()` on the parent
+  kills only the root process; the renderer, network, storage and (with
+  swiftshader) a 400–700MB GPU process are left orphaned on PID 1. Three
+  abandoned runs took this 8GB machine down to 463MB available. Kill the root
+  PID, wait, then kill any remaining chromium PIDs **by PID** — never
+  `pkill -f chromium`, per the machine-wide rule about name-matched kills.
 - **Post pages (`page.html`) read at `min(900px, 94vw)`**, not the site's 700px
   default — that is the width the `.img-row`/`.video-row` size presets were
   tuned against. `.container.post-container > nav:not(.post-nav)` is deliberate:
