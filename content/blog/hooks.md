@@ -32,10 +32,6 @@ The app is simple. It works as follows:
 I myself have started to use this for a few things, including making sure all the containers are
 running properly on this server.
 
-<p align="center">
-<img src="/content/images/2016/11/demo.gif" alt="How it works" style="width:250px;">
-</p>
-
 ## What I learned
 
 This was the first time I used React and it's libraries. I have to say that using it, particularly

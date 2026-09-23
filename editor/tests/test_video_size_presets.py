@@ -34,7 +34,7 @@ def test_video_row_size_presets_match_between_site_and_editor():
 
     # Fails loudly (rather than vacuously passing on two empty dicts) if
     # either file's markup changes shape and the regex stops matching.
-    assert site_sizes["video-row"] == {"small": "240px", "medium": "420px", "full": "100%"}
+    assert site_sizes["video-row"] == {"small": "15rem", "medium": "26.25rem", "full": "100%"}
     assert editor_sizes["video-row"] == site_sizes["video-row"]
 
 
@@ -47,8 +47,32 @@ def test_img_row_size_presets_match_between_site_and_editor():
 
     # Same widths as the video presets -- there's no reason a photo row
     # should cap at a different size than a video row.
-    assert site_sizes["img-row"] == {"small": "240px", "medium": "420px", "full": "100%"}
+    assert site_sizes["img-row"] == {"small": "15rem", "medium": "26.25rem", "full": "100%"}
     assert editor_sizes["img-row"] == site_sizes["img-row"]
+
+
+_PAIR_RE = re.compile(
+    r"\.pair\.size-(?P<name>[a-z]+)\s+\.pair-media\s*\{\s*width:\s*(?P<value>[^;]+?)\s*;"
+)
+
+
+def _pair_widths(text: str) -> dict[str, str]:
+    """`width: auto` is skipped -- that's the narrow-screen reset, which is a
+    grouped selector and would otherwise overwrite the real width."""
+    out: dict[str, str] = {}
+    for m in _PAIR_RE.finditer(text):
+        if m.group("value") != "auto":
+            out[m.group("name")] = m.group("value")
+    return out
+
+
+def test_pair_media_widths_match_between_site_and_editor():
+    """The pair's picture column drifted in exactly the way the row presets
+    did (px here, rem there) and had no test to say so."""
+    site_css, editor_css = _css_pair()
+
+    assert _pair_widths(site_css) == {"small": "15rem", "medium": "26.25rem"}
+    assert _pair_widths(editor_css) == _pair_widths(site_css)
 
 
 # --- the float ("beside") rules are duplicated across the same two files ----
@@ -198,7 +222,10 @@ def test_a_floated_block_measures_the_row_it_holds():
     widths = dict(
         re.findall(r"\.block\.size-(\w+)\s*\{\s*--row-w:\s*([^;]+?)\s*;", editor_css)
     )
-    assert widths == {"small": "240px", "medium": "420px", "full": "100%"}
+    # Compared against the row presets rather than re-listing the numbers: a
+    # third hand-written copy is a third place to forget, which is the exact
+    # failure this file exists to catch.
+    assert widths == _sizes(editor_css)["img-row"]
 
     sized = re.search(r"\.block\.beside-left,\s*\.block\.beside-right\s*\{(?P<body>[^}]*)\}", editor_css)
     assert sized, "no shared rule for a floated block"

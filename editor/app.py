@@ -29,7 +29,14 @@ from editor.blocks import (
     replace_block,
     spacer_is_desktop_only,
 )
-from editor.frontmatter import join_post, read_meta, set_meta, split_post
+from editor.frontmatter import (
+    clear_extra,
+    join_post,
+    read_meta,
+    set_extra,
+    set_meta,
+    split_post,
+)
 from editor.guard import assert_not_publicly_routed
 from editor.images import image_key, markdown_for, parse_images, process_image, upload
 from editor.publish import _has_unpushed_commits, publish
@@ -269,6 +276,11 @@ def get_post(slug: str):
             "title": meta.get("title", slug),
             "date": str(meta.get("date", "")),
             "draft": bool(meta.get("draft", False)),
+            # The photo pinned as this post's link preview, or "" for the
+            # default (templates/macros/preview.html falls back to the last
+            # photo in the post). Empty string rather than null so the
+            # client can compare it to an image URL without a null guard.
+            "preview_image": meta.get("extra", {}).get("preview_image", ""),
         },
         "hash": hashlib.sha256(raw_bytes).hexdigest(),
         # Drives the Undo button's enabled state. Included in EVERY post
@@ -1209,6 +1221,11 @@ class MetaEdit(BaseModel):
     title: str | None = None
     date: str | None = None
     draft: bool | None = None
+    # Lands in `[extra]`, not at the top level -- see edit_meta. The empty
+    # string is meaningful here: it CLEARS the override and puts the post
+    # back on the default preview photo, which is why the field can't just
+    # be dropped when it's falsy.
+    preview_image: str | None = None
 
 
 class Rename(BaseModel):
@@ -1231,6 +1248,18 @@ def edit_meta(slug: str, edit: MetaEdit):
 
     updates = edit.model_dump(exclude={"hash"}, exclude_none=True)
     for key, value in updates.items():
+        if key == "preview_image":
+            # Zola's own frontmatter fields are top-level; anything the
+            # templates invent lives under [extra]. "" means "no override",
+            # and that has to REMOVE the key rather than write an empty
+            # string -- the template tests `extra.preview_image` for truth,
+            # so an empty one would read as set-but-blank and produce an
+            # og:image pointing at the site root.
+            frontmatter = (
+                set_extra(frontmatter, key, value) if value
+                else clear_extra(frontmatter, key)
+            )
+            continue
         if key == "date":
             try:
                 value = datetime.date.fromisoformat(value)

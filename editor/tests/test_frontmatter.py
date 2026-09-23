@@ -134,3 +134,77 @@ def test_plusses_inside_body_code_block_do_not_affect_split():
     assert fm == 'title = "x"'
     assert body == "\n```\n+++\n```\n"
     assert join_post(fm, body) == POST_WITH_PLUSSES_IN_BODY_CODE_BLOCK
+
+
+# --- [extra] ------------------------------------------------------------
+#
+# `extra.preview_image` -- the photo the editor's star button pins as a
+# post's link preview -- is the first nested value the editor writes, so
+# these cover the table-creation cases `set_meta` never had to.
+
+POST_WITH_EXTRA = (
+    "+++\n"
+    'title = "Has Extra"\n'
+    "date = 2026-09-22\n"
+    "draft = false\n"
+    "\n"
+    "[extra]\n"
+    'preview_image = "https://img.cloudy.nyc/a/one.jpg"\n'
+    "+++\n"
+    "\n"
+    "Body.\n"
+)
+
+
+def test_set_extra_creates_the_table_when_there_is_none():
+    from editor.frontmatter import set_extra
+
+    out = set_extra(split_post(POST)[0], "preview_image", "https://img/x.jpg")
+
+    assert read_meta(out)["extra"]["preview_image"] == "https://img/x.jpg"
+    assert read_meta(out)["title"] == "Guerrilla Gardening"
+
+
+def test_set_extra_replaces_an_existing_value():
+    from editor.frontmatter import set_extra
+
+    out = set_extra(split_post(POST_WITH_EXTRA)[0], "preview_image", "https://img/two.jpg")
+
+    assert read_meta(out)["extra"]["preview_image"] == "https://img/two.jpg"
+
+
+def test_clear_extra_removes_the_key():
+    from editor.frontmatter import clear_extra
+
+    out = clear_extra(split_post(POST_WITH_EXTRA)[0], "preview_image")
+
+    # And the table itself, now that it holds nothing -- an empty `[extra]`
+    # left behind is noise in every future diff of the post.
+    assert "extra" not in read_meta(out)
+    assert read_meta(out)["title"] == "Has Extra"
+
+
+def test_clear_extra_is_a_no_op_when_there_is_no_table():
+    from editor.frontmatter import clear_extra
+
+    out = clear_extra(split_post(POST)[0], "preview_image")
+
+    assert read_meta(out)["title"] == "Guerrilla Gardening"
+
+
+def test_a_top_level_key_set_after_extra_exists_stays_top_level():
+    """The trap TOML tables set for anything that appends.
+
+    Once `[extra]` is in the document, a naively appended `draft = true`
+    lands INSIDE it -- Zola then sees no draft flag at all and publishes a
+    post that was meant to stay hidden. scripts/build-site.sh documents the
+    same hazard for its generated feed keys.
+    """
+    from editor.frontmatter import set_extra
+
+    out = set_extra(split_post(POST)[0], "preview_image", "https://img/x.jpg")
+    out = set_meta(out, "draft", True)
+
+    meta = read_meta(out)
+    assert meta["draft"] is True
+    assert "draft" not in meta["extra"]

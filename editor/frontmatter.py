@@ -52,7 +52,60 @@ def read_meta(frontmatter_toml: str) -> dict:
     return tomlkit.parse(frontmatter_toml).unwrap()
 
 
+def _is_table(item) -> bool:
+    return isinstance(item, (tomlkit.items.Table, tomlkit.items.AoT))
+
+
 def set_meta(frontmatter_toml: str, key: str, value) -> str:
+    """Set a TOP-LEVEL frontmatter key, creating it if it isn't there."""
     doc = tomlkit.parse(frontmatter_toml)
+    if key in doc:
+        doc[key] = value
+        return tomlkit.dumps(doc)
+
+    # A brand-new key, and TOML has no way to say "top level" after the
+    # fact: everything following a `[table]` header belongs to that table,
+    # so appending `draft = true` to a document that already has `[extra]`
+    # writes it INSIDE extra and Zola never sees the flag. Lift the tables
+    # out, add the key, put them back on the end.
+    # (scripts/build-site.sh hits the same trap generating feed keys.)
+    tables = [(k, doc[k]) for k in list(doc.keys()) if _is_table(doc[k])]
+    for name, _ in tables:
+        del doc[name]
     doc[key] = value
+    for name, table in tables:
+        doc[name] = table
+    return tomlkit.dumps(doc)
+
+
+def set_extra(frontmatter_toml: str, key: str, value) -> str:
+    """Set a key inside the `[extra]` table, creating the table if needed.
+
+    `[extra]` is Zola's namespace for fields it doesn't define itself --
+    the templates read `page.extra.preview_image` from here.
+    """
+    doc = tomlkit.parse(frontmatter_toml)
+    if "extra" not in doc:
+        # No blank line before the header: tomlkit renders a new table
+        # flush against the last key and ignores both `doc.add(nl())` and
+        # the table's own `trivia.indent`. Cosmetic only -- not worth
+        # hand-splicing the serialised output to fix.
+        doc["extra"] = tomlkit.table()
+    doc["extra"][key] = value
+    return tomlkit.dumps(doc)
+
+
+def clear_extra(frontmatter_toml: str, key: str) -> str:
+    """Remove a key from `[extra]`, and the table with it if it empties.
+
+    A no-op when either is already absent, so clearing a value that was
+    never set doesn't need a caller-side guard.
+    """
+    doc = tomlkit.parse(frontmatter_toml)
+    extra = doc.get("extra")
+    if extra is None or key not in extra:
+        return tomlkit.dumps(doc)
+    del extra[key]
+    if not extra:
+        del doc["extra"]
     return tomlkit.dumps(doc)

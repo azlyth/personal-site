@@ -149,6 +149,11 @@ async function saveMeta(fields) {
 function renderMeta(meta) {
   els.meta.innerHTML = '';
 
+  // The photo pinned as this post's link preview, "" for the default. Kept
+  // on `state` because the star buttons live down in the block editors and
+  // are built long after this runs -- see previewPickButton().
+  state.previewImage = meta.preview_image || '';
+
   const date = document.createElement('input');
   date.type = 'date';
   date.value = meta.date;
@@ -191,6 +196,75 @@ function renderMeta(meta) {
   }
 
   els.meta.append(date, draftLabel, renameBtn, live);
+
+  // The override, where you can see it. A pinned photo is otherwise only
+  // visible by opening the block that holds it, and the whole point of an
+  // override is that it is not the one the default rule would have picked.
+  // Nothing shows when it isn't pinned: the default is "the last photo in
+  // the post", which the templates derive from the RENDERED page, and
+  // re-deriving it here from the source blocks would be a second
+  // implementation to keep in step with the first.
+  if (state.previewImage) {
+    const chip = document.createElement('span');
+    chip.className = 'preview-chip';
+
+    const thumb = document.createElement('img');
+    thumb.src = state.previewImage;
+    thumb.alt = '';
+
+    const label = document.createElement('span');
+    label.textContent = 'preview';
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.textContent = '×';
+    clear.title = 'Stop pinning this photo — go back to the default (the last photo in the post)';
+    clear.addEventListener('click', () => saveMeta({ preview_image: '' }));
+
+    chip.append(thumb, label, clear);
+    els.meta.append(chip);
+  }
+
+  refreshPreviewPicks();
+}
+
+// A star pinning one photo as the post's link preview -- the picture Reddit,
+// iMessage and a feed reader show for it. Unpinned, the site falls back to
+// the last photo in the post (templates/macros/preview.html), which is right
+// often enough that this is an override rather than a required step.
+//
+// It commits immediately rather than joining the row editor's local working
+// copy, for the same reason "Split out" does: it isn't a property of the row
+// at all, it's a frontmatter field, and the row's Done would have no place
+// to put it.
+function previewPickButton(url) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'preview-pick';
+  btn.dataset.url = url;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    saveMeta({ preview_image: btn.dataset.url === state.previewImage ? '' : url });
+  });
+  paintPreviewPick(btn);
+  return btn;
+}
+
+function paintPreviewPick(btn) {
+  const pinned = btn.dataset.url === state.previewImage;
+  btn.classList.toggle('is-pinned', pinned);
+  btn.textContent = pinned ? '★' : '☆';
+  btn.setAttribute('aria-pressed', String(pinned));
+  btn.title = pinned
+    ? "This is the post's link preview — tap to go back to the default"
+    : "Use this photo as the post's link preview";
+}
+
+// Repaint in place rather than re-rendering the blocks: pinning happens from
+// inside an OPEN photo editor, and renderBlocks() would close it and throw
+// away every un-saved alt-text edit and reorder sitting in its working copy.
+function refreshPreviewPicks() {
+  document.querySelectorAll('.preview-pick').forEach(paintPreviewPick);
 }
 
 async function renameSlug() {
@@ -1272,6 +1346,11 @@ function startEditingImages(el, content, block) {
       preview.alt = img.alt;
       thumb.appendChild(preview);
 
+      // Overlaid on the picture rather than added to the controls row below
+      // it: that row is already three 44px buttons across a 140px thumb, and
+      // the comment on "Split out" spells out what a fourth one costs.
+      thumb.appendChild(previewPickButton(img.url));
+
       const altInput = document.createElement('input');
       altInput.type = 'text';
       altInput.className = 'image-alt-input';
@@ -1481,11 +1560,28 @@ function startEditingPair(el, content, block) {
 
   const preview = document.createElement('div');
   preview.className = 'pair-edit-media';
-  preview.innerHTML = (block.images || block.videos || [])
-    .map((item) => (block.images
-      ? `<img src="${item.url}" alt="">`
-      : `<video src="${item.url}" muted playsinline></video>`))
-    .join('');
+  // Built as nodes rather than one innerHTML string so a photo can carry the
+  // preview star. A pair's picture needs it as much as a row's does -- the
+  // photos in guerilla-gardening are mostly inside pairs -- and a <video>
+  // deliberately doesn't get one: og:image has to be a picture a crawler can
+  // fetch, not a frame nobody has rendered.
+  (block.images || block.videos || []).forEach((item) => {
+    const cell = document.createElement('div');
+    cell.className = 'pair-edit-thumb';
+    if (block.images) {
+      const img = document.createElement('img');
+      img.src = item.url;
+      img.alt = '';
+      cell.append(img, previewPickButton(item.url));
+    } else {
+      const clip = document.createElement('video');
+      clip.src = item.url;
+      clip.muted = true;
+      clip.playsInline = true;
+      cell.appendChild(clip);
+    }
+    preview.appendChild(cell);
+  });
   content.appendChild(preview);
 
   const area = document.createElement('textarea');

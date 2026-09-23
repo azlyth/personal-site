@@ -351,6 +351,115 @@ and … %}`, because **Zola renders `404.html` without `current_path` in the
 context** and an unguarded `current_path == "/"` hard-fails the whole build.
 Any new `base.html` use of a page-scoped variable needs the same guard.
 
+### Link previews and the feed (added 2026-09-22)
+
+A post is usually **read as a card before it is read as a page** — pasted into
+Reddit, sent in iMessage, listed in a feed reader. Before this the site had
+**no `og:`/`twitter:`/`description` tags at all**, so a crawler found a
+`<title>` and nothing else and rendered a blank card; and Zola's built-in feed
+template put the **whole rendered post** in `<description>`, `.pair` wrappers
+and `<img>` tags included, which is the "summary" every aggregator showed.
+
+**`templates/macros/preview.html` derives the two values, and both `base.html`
+and `templates/rss.xml` import it.** One definition on purpose: the failure
+mode of writing it twice is the card and the feed slowly disagreeing about
+what a post is, and neither is visible from the site itself.
+
+- **`description(page)`** — a frontmatter `description` if present, else the
+  text **between the first `<p>` and its `</p>`**. Between, not "everything up
+  to the first `</p>`": splice-audio opens with a heading, and the leading
+  slice glued "The goal" onto the front of the sentence. Truncated at 200
+  characters **on a word boundary**, with `config.description` as the last
+  resort for a post that renders no paragraph at all.
+- **`image(page)`** — `extra.preview_image` if pinned (the editor's star),
+  else the **last `<img src="` in the post**, else `/og-card.jpg`. Last rather
+  than first because a post here builds towards its closing photo. A relative
+  src goes through `get_url`; a `<source src="">` inside a `<video>`
+  deliberately does not match, since a crawler can't fetch a video frame.
+
+**`static/og-card.jpg` is the fallback, and `scripts/build-og-card.py` cuts
+it** from `static/home.jpg` (added 2026-09-23). It is **1200x630**, which is
+what Facebook, Slack, iMessage and X all crop `summary_large_image` to — a
+square source gets centre-cropped by each of them slightly differently, so
+the framing is decided in that script rather than by whoever renders the
+card. The crop is measured, not centred (`CROP_TOP = 660`): centred clips the
+cat's ears against the top edge. Re-run the script after changing home.jpg.
+It is the og:image for **every page but Guerrilla Gardening** — home, /blog,
+/lab, /timeline, 404 and all eight text-only posts — so a broken one is a
+broken card across the whole site, which is why a test asserts its
+dimensions.
+
+⚠ **`hooks.md` carried a dead `<img src="/content/images/2016/11/demo.gif">`**
+— a leftover from the old Ghost blog; the file has never been in this repo and
+404s. It had been an invisible broken image on the live page since 2016, and
+it only surfaced because this feature dutifully picked it as that post's
+preview. Removed 2026-09-23. No site-relative image references remain in
+`content/blog/`; anything new goes to S3 via the upload path below.
+
+Four things in there are load-bearing, each because its absence shipped a real
+bug in the first pass:
+
+- ⚠ **The macros emit raw text (`| safe` on every output) and the CALLER
+  escapes once, with `| escape_xml | safe`.** Tera's default escaper turns `/`
+  into `&#x2F;`, so `og:image` first shipped reading
+  `https:&#x2F;&#x2F;img.cloudy.nyc&#x2F;…`. A conforming parser decodes it,
+  but every crawler that reaches for a URL with a regex gets it wrong.
+  `escape_xml` handles `& < > " '` and leaves the slashes alone.
+- ⚠ **The `replace` that collapses newlines holds a REAL NEWLINE inside its
+  quotes.** Tera does not process escape sequences in string literals, so the
+  tidier-looking `from="\n"` matches a literal backslash-n and silently does
+  nothing — a markdown-soft-wrapped paragraph then spans four lines inside a
+  `content="…"` attribute.
+- **Rendered HTML still holds entities, so the description decodes them** —
+  `don&#x27;t` is what a quote inside a code span becomes, and a card would
+  print it literally. `&amp;` is decoded LAST, or `&amp;lt;` turns into a
+  real `<`.
+- **`base.html` computes the values with `set_global`, not `set`.** Tera
+  scopes a plain `set` to the block it appears in, so the page/section
+  branches would compute values the markup underneath them can't see. The
+  `{% if page is defined %}` / `{% elif section is defined %}` / else chain
+  also covers `404.html`, which Zola renders with neither.
+
+**`templates/rss.xml` overrides the built-in feed**: `<description>` is now
+that same one-line summary, the full post moved to `<content:encoded>` (in
+CDATA, where readers look for it), and `<media:content>`/`<media:thumbnail>`
+give the list a picture. Both extra namespaces are declared on `<rss>`.
+`<link rel="alternate">` in the head is new too — the footer had always linked
+`rss.xml`, but a reader handed "cloudy.nyc" looks for the tag and nothing else.
+
+**The editor pins the override with a star.** Each photo thumbnail — in the
+row editor and in a pair's media column — carries a `★` overlaid on the
+picture; tapping writes `extra.preview_image` through the ordinary
+`PUT .../meta` route, tapping the pinned one clears it back to the default. A
+chip in the post-meta row shows the pinned photo with an `×`, so an override
+is visible without opening the block that holds it.
+
+- **Overlaid rather than added to the controls row** for the reason "Split
+  out" documents: that row is already three 44px buttons across a 140px
+  thumb. Unpinned is a bare shadowed glyph on a transparent target, not a
+  chip — a white box on every thumbnail turned a three-photo row into three
+  boxes.
+- **It commits immediately** and repaints the stars in place
+  (`refreshPreviewPicks`) rather than calling `renderBlocks()`: pinning
+  happens from inside an OPEN photo editor, and a re-render would close it
+  and discard the working copy's un-saved alt text and reordering.
+- **Nothing is shown when the photo isn't pinned.** The default is derived
+  from the RENDERED page, and re-deriving "the last photo" in the client from
+  the source blocks would be a second implementation to keep in step.
+- ⚠ **`extra.preview_image` is the editor's first nested frontmatter value,
+  and TOML tables are a trap for anything that appends.** Once `[extra]` is in
+  the document, a naively appended `draft = true` lands INSIDE it and Zola
+  sees no draft flag at all. `frontmatter.set_meta` now lifts the tables out,
+  adds the new top-level key and puts them back; `set_extra`/`clear_extra`
+  own the nested half, and clearing removes the table when it empties.
+- `editor/tests/test_preview_tags.py` builds the real templates with Zola
+  against a **copy** of the site (fixtures replacing `content/blog`), because
+  `build-site.sh` and the editor's Publish both render the working tree — a
+  publish racing the test would put "Preview fixture" on cloudy.nyc.
+
+⚠ **None of this reaches a crawler until `make publish-site`.** Pages sit in
+the Cloudflare edge cache for 30 days; the purge is what publishes.
+
 ### Typography (added 2026-09-21)
 
 Everything used to be the system font stack at every size, which is what made
@@ -1241,6 +1350,15 @@ edits), Discard (back to the last published version), and "↗ View live".
   published site) and `editor/web/editor.css` (the editor). A test asserts they
   match; without it a one-sided edit looks right while editing and wrong once
   published. If you add a size, change both.
+  **They are `rem` in both files** (`15rem`/`26.25rem`), which is the one
+  thing about them that looks like a pointless unit choice in the editor: the
+  site scales its root font size past 1600px so its caps grow with the page,
+  while the editor's root stays at the browser default and 15rem renders as
+  exactly the 240px it always was. The unit exists so the two files can be
+  compared literally. The 2026-09-22 scaling work converted base.html and left
+  editor.css in px, so `test_video_size_presets.py` was **red for a day**
+  (fixed 2026-09-23). The pair's `.pair-media` widths drifted identically and
+  had no test at all; they do now.
 - **Block controls live in a sibling node to the content** (`.block-content`),
   because opening an editor used to `innerHTML = ''` the whole block and take
   the controls with it. Cancel restores by calling `renderBlocks()`, not by

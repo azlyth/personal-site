@@ -1,0 +1,38 @@
+{% import "macros/preview.html" as preview %}<?xml version="1.0" encoding="UTF-8"?>
+{#- Overrides Zola's built-in feed template.
+
+    The built-in puts the WHOLE rendered post in <description>, escaped --
+    every `<div class="pair">` wrapper and every <img> tag, as one blob of
+    text. Aggregators treat <description> as the summary, so the preview
+    they showed for a post was a wall of markup.
+
+    So: <description> is the same one-line summary the page's og:description
+    carries (macros/preview.html derives both), and the full post moves to
+    <content:encoded>, which is where feed readers look for it. Readers that
+    understand both show the summary in the list and the post when opened.
+    <media:content> gives the list a picture to go with it. -#}
+<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+    <channel>
+        <title>{{ config.title }}</title>
+        <link>{{ config.base_url | safe }}</link>
+        <description>{{ config.description }}</description>
+        <generator>Zola</generator>
+        <language>{{ lang }}</language>
+        <atom:link href="{{ feed_url | safe }}" rel="self" type="application/rss+xml"/>
+        <lastBuildDate>{{ last_updated | date(format="%a, %d %b %Y %H:%M:%S %z") }}</lastBuildDate>
+        {%- for page in pages %}
+        <item>
+            <title>{{ page.title }}</title>
+            <pubDate>{{ page.date | date(format="%a, %d %b %Y %H:%M:%S %z") }}</pubDate>
+            <author>{{ page.authors[0] | default(value=config.author) }}</author>
+            <link>{{ page.permalink | safe }}</link>
+            <guid>{{ page.permalink | safe }}</guid>
+            {%- set item_image = preview::image(page=page) %}
+            <description>{{ preview::description(page=page) | escape_xml | safe }}</description>
+            <content:encoded><![CDATA[{{ page.content | safe }}]]></content:encoded>
+            <media:content url="{{ item_image | escape_xml | safe }}" medium="image"/>
+            <media:thumbnail url="{{ item_image | escape_xml | safe }}"/>
+        </item>
+        {%- endfor %}
+    </channel>
+</rss>

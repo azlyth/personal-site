@@ -1,0 +1,90 @@
+{# The two values a link preview needs, derived once and shared.
+
+   A post is usually READ as a card first -- on Reddit, in iMessage, in a
+   feed reader -- and the card is built from `og:description` and
+   `og:image`. base.html renders those into the page head and rss.xml
+   renders the same two values into the feed, so they live here rather
+   than in both: the failure mode of duplicating them is that the feed and
+   the card slowly disagree about what a post is, which nobody notices
+   because neither is visible from the site itself.
+
+   BOTH MACROS EMIT RAW TEXT (`| safe` on every output). Escaping is the
+   caller's job, once, with `| escape_xml | safe` -- see base.html. Letting
+   autoescape run inside the macro AND at the call site is how `og:image`
+   first shipped reading `https:&#x2F;&#x2F;img.cloudy.nyc&#x2F;...`, and
+   the default escaper mangles `/` in every URL on the site. #}
+
+{# The picture. An explicit `extra.preview_image` (what the editor's star
+   button writes) wins; otherwise the LAST photo in the post, which is the
+   one a post has usually been building towards; otherwise the site's own
+   image, so a text-only post still shares as a card rather than a blank.
+
+   The last-photo scan matches `<img src="` because that is the only shape
+   this site emits -- Zola's markdown renderer and the editor's
+   `images.markdown_for` both write the src first. A `<source src="">`
+   inside a <video> deliberately does not match: a video frame is not
+   something a crawler can fetch. #}
+{%- macro image(page) -%}
+{%- if page.extra.preview_image is defined and page.extra.preview_image -%}
+{{ page.extra.preview_image | safe }}
+{%- elif '<img src="' in page.content -%}
+{%- set src = page.content | split(pat='<img src="') | last | split(pat='"') | first -%}
+{%- if src is starting_with("http") -%}{{ src | safe }}{%- else -%}{{ get_url(path=src) | safe }}{%- endif -%}
+{%- else -%}
+{{ get_url(path="og-card.jpg") | safe }}
+{%- endif -%}
+{%- endmacro image -%}
+
+{# The words. A hand-written `description` in frontmatter wins; otherwise
+   the post's first paragraph, which is where this site's posts put the
+   sentence that explains them.
+
+   Strictly the text BETWEEN the first `<p>` and its `</p>`, not everything
+   up to the first `</p>`: splice-audio opens with a heading, and taking
+   the leading slice glued "The goal" onto the front of the sentence.
+   Anything before the first paragraph -- a heading, a photo row, a pair
+   wrapper -- is skipped by construction.
+
+   Newlines collapse to spaces because a markdown source paragraph is
+   soft-wrapped and those wraps survive into the rendered `<p>`; a meta
+   tag's content spanning four lines is not something to hand a crawler.
+   THE `replace` BELOW HOLDS A REAL NEWLINE INSIDE ITS QUOTES ON PURPOSE.
+   Tera does not process escape sequences in string literals, so the
+   tidier-looking `from="\n"` matches a literal backslash-n and silently
+   does nothing.
+
+   Entities come back to characters because this is a plain-text field --
+   `don&#x27;t` is what the rendered HTML holds for a quote inside a code
+   span, and a crawler would print it literally. `&amp;` is decoded LAST,
+   or `&amp;lt;` would turn into a real `<`. #}
+{%- macro description(page) -%}
+{%- if page.description -%}
+{{ page.description | safe }}
+{%- elif "<p>" in page.content -%}
+{%- set text = page.content
+      | split(pat="<p>") | nth(n=1)
+      | split(pat="</p>") | first
+      | striptags
+      | replace(from="
+", to=" ")
+      | trim
+      | replace(from="&#x27;", to="'")
+      | replace(from="&#39;", to="'")
+      | replace(from="&quot;", to='"')
+      | replace(from="&lt;", to="<")
+      | replace(from="&gt;", to=">")
+      | replace(from="&amp;", to="&") -%}
+{%- if not text -%}
+{{ config.description | safe }}
+{%- elif text | length > 200 -%}
+{#- Cut on a word boundary: dropping the (probably half-) last word of a
+    200-character slice reads as an abbreviation, where a mid-word cut
+    reads as a bug. -#}
+{{ text | truncate(length=200, end="") | split(pat=" ") | slice(end=-1) | join(sep=" ") | safe }}…
+{%- else -%}
+{{ text | safe }}
+{%- endif -%}
+{%- else -%}
+{{ config.description | safe }}
+{%- endif -%}
+{%- endmacro description -%}
