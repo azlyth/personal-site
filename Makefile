@@ -1,4 +1,4 @@
-.PHONY: help dev prod build logs clean stop check check-fit open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image upload-video build-site publish-site editor-install editor-restart editor-logs
+.PHONY: help dev prod build logs clean stop check check-links check-fit open-local open-gh deploy-up deploy-down deploy-restart deploy-ps install uninstall upload-image upload-video build-site publish-site editor-install editor-restart editor-logs
 
 # Colors for help output
 CYAN = \033[36m
@@ -119,23 +119,38 @@ stop:
 	docker compose down
 	docker compose -f compose.dev.yaml down
 
-# Check if site builds successfully
+# Both checks always run, and `check` fails if EITHER did.
+#
+# They are not chained with make's usual prerequisite ordering on purpose:
+# check-links has exited non-zero for years (see below), which would abort the
+# target before check-fit ever ran -- a check that can never execute is worse
+# than no check at all.
 check:
+	@rc=0; \
+	$(MAKE) --no-print-directory check-links || rc=1; \
+	$(MAKE) --no-print-directory check-fit || rc=1; \
+	exit $$rc
+
+# Does the site build, and do its links resolve.
+# ⚠ This currently FAILS, and has since long before it was split out: `zola
+# check` validates EXTERNAL links too, and six of them in posts from 2016-2017
+# point at sites that have since died (ptrvldz.me, redub.audio, a pulled Play
+# Store listing). The failure is real and the links are genuinely dead; fixing
+# them means editing old posts, which is a content decision, not a build one.
+check-links:
 	docker compose -f compose.dev.yaml run --rm zola check
-	$(MAKE) check-fit
 
 # The root font size scales up on big displays but stops before a page grows
 # taller than the window, using a constant in base.html that encodes today's
 # home page height. This catches that constant going stale.
 #
-# It needs a SERVED site, so it checks the live one by default. To check the
-# working tree instead, start the dev server and point it there:
-#   docker compose -f compose.dev.yaml up -d zola
-#   make check-fit FIT_URL=http://127.0.0.1:1111
-#   docker rm -f personal-site-zola-1
-FIT_URL ?= https://cloudy.nyc
+# It needs a SERVED site and defaults to serving the WORKING TREE, starting and
+# stopping a dev server itself if one isn't already up -- checking the live site
+# would only tell you about the last thing you published. To check that instead:
+#   make check-fit FIT_URL=https://cloudy.nyc
+FIT_URL ?=
 check-fit:
-	python3 scripts/verify-fit.py $(FIT_URL)
+	@./scripts/check-fit.sh $(FIT_URL)
 
 EDITOR_SERVICE := blog-editor.service
 

@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make dev          # Start development server (Zola + lab backend) - ports 1111 & 3001
 make prod         # Build and serve production with nginx on port 8080
-make check        # Validate site structure (zola check + check-fit)
-make check-fit    # Pages meant to be one screenful still fit one (FIT_URL=... to retarget)
+make check        # check-links + check-fit; fails if either does
+make check-links  # zola check. ⚠ ALREADY FAILS on dead external links in old posts
+make check-fit    # One-screenful pages still fit one screen (serves the working tree)
 make logs         # View container logs
 make stop         # ⚠ STOPS PRODUCTION TOO - see below
 make clean        # Clean up containers and images
@@ -518,6 +519,16 @@ font-size: clamp(1rem, min(calc(0.375rem + 0.625vw), var(--fit-cap)), 1.375rem);
   project to the home list and the real number climbs past it and the footer
   clips again. **`make check` runs `scripts/verify-fit.py`**, which drives
   Chromium at five window sizes and fails if any capped page can scroll.
+  `scripts/check-fit.sh` wraps it and **serves the working tree by default**,
+  starting and stopping a dev server if one isn't up (leaving a running one
+  alone) — checking the live site would only report the last thing you
+  published. `make check-fit FIT_URL=https://cloudy.nyc` checks that instead.
+- ⚠ **`check` deliberately does not chain its two halves as prerequisites.**
+  `check-links` (`zola check`) has exited non-zero for years — it validates
+  EXTERNAL links and six in 2016-2017 posts point at sites that have since died
+  — so ordinary make ordering aborted the target before `check-fit` ever ran.
+  A check that cannot execute is worse than no check. `check` runs both and
+  fails if either did.
 - **Posts opt out** via `{% block html_class %}page-scrolls{% endblock %}` in
   `page.html`, which sets `--fit-cap: 100vh` — always larger than the ceiling, so
   `min()` ignores it. A post is ~370 rem tall and can never fit a window, so
