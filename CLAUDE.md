@@ -424,7 +424,10 @@ bug in the first pass:
 **`templates/rss.xml` overrides the built-in feed**: `<description>` is now
 that same one-line summary, the full post moved to `<content:encoded>` (in
 CDATA, where readers look for it), and `<media:content>`/`<media:thumbnail>`
-give the list a picture. Both extra namespaces are declared on `<rss>`.
+give the list a picture. ⚠ **`<content:encoded>` carries
+`xml:base="<permalink>"`**: the body has root-relative links (`/gone/…`) and a
+reader has nothing to resolve them against otherwise. The built-in template
+set it; the first version of this override silently dropped it. Both extra namespaces are declared on `<rss>`.
 `<link rel="alternate">` in the head is new too — the footer had always linked
 `rss.xml`, but a reader handed "cloudy.nyc" looks for the tag and nothing else.
 
@@ -460,6 +463,56 @@ is visible without opening the block that holds it.
 
 ⚠ **None of this reaches a crawler until `make publish-site`.** Pages sit in
 the Cloudflare edge cache for 30 days; the purge is what publishes.
+
+### Dead links land on /gone/ (added 2026-09-23)
+
+The 2016 posts linked to things that no longer exist. **Three were domains
+that have lapsed entirely** (`ptrvldz.me`, `git.ptrvldz.me`, `redub.audio` —
+no DNS at all), which is the case that made this worth doing: anyone can
+register them today, and a post still linking there sends readers to
+whatever the next owner puts up. So each dead destination is a page in
+`content/gone/`, and the post links there instead, **keeping the old address
+as its link text** so the reader still sees what it was.
+
+- **One tiny page per dead destination**, not one page reading a query
+  string: static, no JavaScript (like the rest of the blog), and each can
+  say something specific. Frontmatter carries `extra.was` (the dead URL),
+  `extra.from` (the post that links to it), `extra.line` (the one sentence),
+  and `extra.wayback` where the Wayback Machine has a real capture.
+- **`templates/gone.html`**: the hand-drawn cat (`/favicon.svg`, large and
+  tilted — its eyes already look off at wherever the thing used to be), an
+  `h1` reading "<address> is gone.", the line, a big **"Back to <post
+  title>"** button, and a smaller home link plus the Wayback link. Each dead
+  link is used by exactly one post, so `get_page(path=page.extra.from)` knows
+  where the reader came from without a referrer.
+- ⚠ **A gone page never links to `extra.was`.** The dead address appears as
+  words only. A test enforces it — that's the whole point of the page.
+- **Hidden:** `render = false` on the section (no `/gone/` index), a
+  `noindex` robots tag via a new `{% block head_extra %}` in `base.html`,
+  nothing in the nav. The pages carry no date, and Zola's feed takes only
+  dated pages, so they stay out of `rss.xml` — a test pins that rather than
+  trusting it.
+- **Wayback links point at a specific capture from the years the thing was
+  real**, chosen by hand from archive.org's CDX API and checked (by page
+  title) to be the real site, not a squatter's page. Only three had
+  captures; `git.ptrvldz.me` and the Play Store listing never did, so their
+  pages offer no link to an archive page that says "not archived". The CDX
+  API rate-limits hard (429s) — space requests a few seconds apart.
+- **A moved link is repointed, not gone.** sircmpwn's "Electron considered
+  harmful" moved to drewdevault.com; working-with-electron.md now links there.
+- The main button has `border-radius: 1.375rem`, not 999px: it carries the
+  post's title, and a long one wraps on a phone — a full pill squashed that
+  into a lozenge. On narrow screens the two secondary links stack, because
+  inline they wrapped mid-link.
+- **Adding one:** a new `content/gone/<slug>.md`, repoint the post's link to
+  `/gone/<slug>/`, and add the slug to `EXPECTED` in
+  `editor/tests/test_gone_pages.py` (and to `ARCHIVED` if it has a capture).
+  `zola check` flags dead external links, so it's how the next one gets found.
+
+`editor/tests/zola_site.py::build_copy` is the shared "build the real
+templates against a disposable copy of the site" helper; both
+`test_preview_tags.py` (fixture posts) and `test_gone_pages.py` (the real
+posts, unmodified) use it.
 
 ### Typography (added 2026-09-21)
 

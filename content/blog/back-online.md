@@ -14,5 +14,5 @@ But in the end, all I'd do was think and not do.
 
 So today, simple beginnings:
 
-- A blog at [ptrvldz.me](https://ptrvldz.me)
-- A git repo at [git.ptrvldz.me](https://git.ptrvldz.me) 
+- A blog at [ptrvldz.me](/gone/ptrvldz-me/)
+- A git repo at [git.ptrvldz.me](/gone/git-ptrvldz-me/) 

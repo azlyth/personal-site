@@ -29,7 +29,11 @@
             <guid>{{ page.permalink | safe }}</guid>
             {%- set item_image = preview::image(page=page) %}
             <description>{{ preview::description(page=page) | escape_xml | safe }}</description>
-            <content:encoded><![CDATA[{{ page.content | safe }}]]></content:encoded>
+            {#- xml:base because the body has root-relative links (/gone/...,
+                old relative images) and a reader has no page URL to
+                resolve them against otherwise. The built-in template set
+                it; the first version of this override dropped it. #}
+            <content:encoded xml:base="{{ page.permalink | escape_xml | safe }}"><![CDATA[{{ page.content | safe }}]]></content:encoded>
             <media:content url="{{ item_image | escape_xml | safe }}" medium="image"/>
             <media:thumbnail url="{{ item_image | escape_xml | safe }}"/>
         </item>

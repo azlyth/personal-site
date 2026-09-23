@@ -5,7 +5,7 @@ draft = false
 +++
 
 Working with [Electron](https://electron.atom.io/) is a pleasure. I just built an
-app called [Redub](http://redub.audio) with it. For the uninitiated, here is how the
+app called [Redub](/gone/redub-audio/) with it. For the uninitiated, here is how the
 creators describe Electron:
 
 > Electron is a framework for creating native applications with web technologies like JavaScript,
@@ -17,7 +17,7 @@ cross-platform desktop apps.
 Electron gets a
 [lot](https://josephg.com/blog/electron-is-flash-for-the-desktop/)
 [of](https://medium.com/@caspervonb/electron-is-cancer-b066108e6c32)
-[crap](http://sircmpwn.github.io/2016/11/24/Electron-considered-harmful.html)
+[crap](https://drewdevault.com/2016/11/24/Electron-considered-harmful.html)
 for being too resource intensive and for enabling lazy developers. The haters say that better
 frameworks for desktop apps already exist and that you should use those instead.
 

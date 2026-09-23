@@ -17,15 +17,11 @@ from __future__ import annotations
 import html
 import re
 import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
 
-REPO = Path(__file__).resolve().parents[2]
-BASE_URL = "https://cloudy.nyc"
-ZOLA_IMAGE = "personal-site-zola"
+from editor.tests.zola_site import BASE_URL, REPO, build_copy
 
 # Every fixture is `draft = false` and dated, so all of them reach the feed.
 FIXTURES = {
@@ -166,47 +162,20 @@ def og(page: str, prop: str) -> str | None:
 
 @pytest.fixture(scope="module")
 def site() -> dict[str, str]:
-    """Build the site from a copy and return {output path: text}."""
-    if shutil.which("docker") is None:
-        pytest.skip("docker is needed to run Zola")
+    """The site built with `content/blog` replaced by FIXTURES."""
 
-    with tempfile.TemporaryDirectory(prefix="preview-tags-") as tmp:
-        root = Path(tmp)
-        shutil.copy(REPO / "config.toml", root / "config.toml")
-        shutil.copytree(REPO / "templates", root / "templates")
-        shutil.copytree(REPO / "static", root / "static")
-        shutil.copytree(REPO / "content", root / "content")
-
+    def prepare(root: Path) -> None:
         blog = root / "content" / "blog"
-        for post in blog.glob("*.md"):
-            if post.name != "_index.md":
-                post.unlink()
+        for existing in blog.glob("*.md"):
+            if existing.name != "_index.md":
+                existing.unlink()
         for name, text in FIXTURES.items():
             (blog / name).write_text(text)
+        # The gone pages name the real post that links to each of them, and
+        # the real posts were just removed -- they have their own test file.
+        shutil.rmtree(root / "content" / "gone", ignore_errors=True)
 
-        out = root / "out"
-        result = subprocess.run(
-            [
-                "docker", "run", "--rm",
-                "--user", f"{__import__('os').getuid()}:{__import__('os').getgid()}",
-                "-e", "HOME=/tmp",
-                "-v", f"{root}:/project",
-                "-w", "/project",
-                "--entrypoint", "zola",
-                ZOLA_IMAGE,
-                "build", "--base-url", BASE_URL,
-                "--output-dir", "/project/out", "--force",
-            ],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            pytest.fail(f"zola build failed:\n{result.stdout}\n{result.stderr}")
-
-        return {
-            str(path.relative_to(out)): path.read_text()
-            for path in out.rglob("*")
-            if path.is_file() and path.suffix in (".html", ".xml")
-        }
+    return build_copy(prepare)
 
 
 def post(site: dict[str, str], slug: str) -> str:
@@ -364,9 +333,18 @@ def test_the_feed_description_is_the_summary_not_the_whole_post(site):
 
 def test_the_feed_still_carries_the_full_post(site):
     item = feed_item(site, "Two Photos")
-    encoded = re.search(r"<content:encoded>(.*?)</content:encoded>", item, re.S).group(1)
+    encoded = re.search(r"<content:encoded[^>]*>(.*?)</content:encoded>", item, re.S).group(1)
     assert "A second paragraph that must not appear in the description." in encoded
     assert "img.cloudy.nyc/t/two.jpg" in encoded
+
+
+def test_the_feed_resolves_relative_links_against_the_post(site):
+    """The body carries root-relative links (/gone/..., a relative <img>),
+    and a feed reader has no page URL to resolve them against unless the
+    feed says one. Zola's built-in template set xml:base; the override has
+    to keep doing it."""
+    item = feed_item(site, "Two Photos")
+    assert f'<content:encoded xml:base="{BASE_URL}/blog/two-photos/">' in item
 
 
 def test_the_feed_carries_the_preview_image(site):

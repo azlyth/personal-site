@@ -31,7 +31,7 @@ pod:
 in duplicate libraries in XCode
 
 After this didn't work, I decided to go with the manual installation methods listed by a few other
-libraries (specifically [react-native-lock](https://github.com/auth0/react-native-lock), thanks
+libraries (specifically [react-native-lock](/gone/react-native-lock/), thanks
 auth0). So as it stands, after npm-installing **react-native-ssh**, you have to:
 
 - run **react-native link** to include the library

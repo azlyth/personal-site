@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{#- WHERE A DEAD LINK LANDS (added 2026-09-23).
+
+    The 2016 posts linked to things that no longer exist, and three of them
+    were DOMAINS that have lapsed -- no DNS at all, free for anyone to
+    register. A post still linking there sends readers to whatever the next
+    owner puts up. So each dead destination is a page in content/gone/, and
+    the post links here instead, keeping the old address as its link text so
+    the reader still sees what it was.
+
+    Deliberately never an href to `page.extra.was`: the dead address appears
+    only as words. The Wayback link goes to archive.org's copy from the years
+    it was real, and only exists where a capture does. -#}
+
+{% block title %}{{ page.title }} is gone - Peter @ WWW{% endblock title %}
+
+{% block head_extra %}<meta name="robots" content="noindex">{% endblock head_extra %}
+
+{% block content %}
+{#- Each dead link is used by exactly one post, so the page knows where the
+    reader came from without a referrer or any JavaScript. -#}
+{%- set source = get_page(path=page.extra.from) -%}
+{#- The root section's permalink rather than get_url(path='/'), which drops
+    the trailing slash. Bound to a variable because Tera can't read an
+    attribute straight off a function call. -#}
+{%- set home = get_section(path="_index.md") -%}
+<style>
+    /* Centred, unlike every other page: this is a dead end, not something
+       to read, and the eye should land on the button. */
+    .gone {
+        text-align: center;
+        max-width: 30rem;  /* scales */
+        margin: 1.5rem auto 0;
+    }
+    /* Two classes deep to outrank `.container img`'s margin, the same way
+       `.home-photo .home-image` does. The cat's eyes already look off to
+       one side, at wherever the thing used to be. */
+    .gone .gone-cat {
+        display: block;
+        width: 8.5rem;  /* scales */
+        height: auto;
+        margin: 0 auto 1.25rem;
+        transform: rotate(-4deg);
+    }
+    .gone h1 {
+        margin: 0 0 0.75rem;
+        overflow-wrap: anywhere;  /* a long address must not force a scroll */
+    }
+    .gone-line {
+        color: #555;
+        margin: 0 auto 1.75rem;
+    }
+    .gone-actions { margin: 0 0 1rem; }
+    .gone-back {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.75rem;  /* the 44px touch target, in rem so it scales */
+        padding: 0.55rem 1.4rem;
+        line-height: 1.3;
+        text-align: center;
+        /* Half the one-line height, not 999px: the button carries the post's
+           title, and "A mobile app to run scripts on servers" wraps on a
+           phone -- a full pill squashed that into a lozenge. At one line
+           this is still a pill. */
+        border-radius: 1.375rem;
+        background: #0066cc;
+        color: #fff;
+        font-weight: 500;
+        text-decoration: none;
+    }
+    /* `a:hover` (0,1,1) outranks a bare class, so the hover state has to
+       say both things itself -- see the note about this in CLAUDE.md. */
+    .gone-back:hover {
+        background: #004e9c;
+        color: #fff;
+        text-decoration: none;
+    }
+    .gone-back:focus-visible {
+        outline: 2px solid #0066cc;
+        outline-offset: 3px;
+    }
+    .gone-more {
+        font-size: 0.9375rem;
+        color: #888;
+        margin: 0;
+    }
+    /* On a phone the pair wrapped MID-LINK ("See it on the Wayback" /
+       "Machine") with the dot dangling between; stacked, each link stays
+       whole and is its own tap target. */
+    @media (max-width: 600px) {
+        .gone-more a { display: block; padding: 0.35rem 0; }
+        .gone-sep { display: none; }
+    }
+</style>
+<div class="gone">
+    <img class="gone-cat" src="{{ get_url(path='favicon.svg') | safe }}" alt="" width="262" height="262">
+    <h1>{{ page.title }} is gone.</h1>
+    <p class="gone-line">{{ page.extra.line }}</p>
+    <p class="gone-actions">
+        <a class="gone-back" href="{{ source.permalink | escape_xml | safe }}">Back to “{{ source.title }}”</a>
+    </p>
+    <p class="gone-more">
+        <a href="{{ home.permalink | escape_xml | safe }}">Or go to the home page</a>
+        {%- if page.extra.wayback %}
+        <span class="gone-sep">&middot;</span> <a href="{{ page.extra.wayback | escape_xml | safe }}">See it on the Wayback Machine</a>
+        {%- endif %}
+    </p>
+</div>
+{% endblock content %}
