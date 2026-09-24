@@ -28,6 +28,7 @@
     {%- if preview_source is defined -%}
         {%- set_global preview_description = preview::description(page=preview_source) -%}
         {%- set_global preview_image = preview::image(page=preview_source) -%}
+        {%- set_global preview_image_alt = preview::image_alt(page=preview_source) -%}
     {%- else -%}
         {#- The 404 page, and anything else rendered without a page or a
             section behind it. -#}
@@ -35,6 +36,7 @@
         {%- set_global preview_title = config.title -%}
         {%- set_global preview_description = config.description -%}
         {%- set_global preview_image = get_url(path="og-card.jpg") -%}
+        {%- set_global preview_image_alt = config.extra.og_card_alt -%}
     {%- endif -%}
     <meta name="description" content="{{ preview_description | escape_xml | safe }}">
     <meta property="og:type" content="{{ preview_type }}">
@@ -42,6 +44,19 @@
     <meta property="og:title" content="{{ preview_title | escape_xml | safe }}">
     <meta property="og:description" content="{{ preview_description | escape_xml | safe }}">
     <meta property="og:image" content="{{ preview_image | escape_xml | safe }}">
+    {#- Dimensions only for the fallback card, the one image whose size is
+        known at build time (scripts/build-og-card.py cuts it to 1200x630,
+        a test pins it). Post photos live in S3 and Zola can't measure a
+        remote file; a crawler fetches those to find out. Stating them lets
+        Facebook render the card on the very first share instead of after
+        its async fetch. -#}
+    {%- if "/og-card.jpg" in preview_image %}
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    {%- endif %}
+    {%- if preview_image_alt %}
+    <meta property="og:image:alt" content="{{ preview_image_alt | escape_xml | safe }}">
+    {%- endif %}
     {%- if current_url %}
     <meta property="og:url" content="{{ current_url | safe }}">
     <link rel="canonical" href="{{ current_url | safe }}">
@@ -57,6 +72,9 @@
     <meta name="twitter:title" content="{{ preview_title | escape_xml | safe }}">
     <meta name="twitter:description" content="{{ preview_description | escape_xml | safe }}">
     <meta name="twitter:image" content="{{ preview_image | escape_xml | safe }}">
+    {%- if preview_image_alt %}
+    <meta name="twitter:image:alt" content="{{ preview_image_alt | escape_xml | safe }}">
+    {%- endif %}
 
     {#- Feed autodiscovery. The footer has always linked rss.xml, but a
         reader handed "cloudy.nyc" looks for this tag and nothing else. -#}

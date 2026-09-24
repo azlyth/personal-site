@@ -378,6 +378,18 @@ what a post is, and neither is visible from the site itself.
   src goes through `get_url`; a `<source src="">` inside a `<video>`
   deliberately does not match, since a crawler can't fetch a video frame.
 
+- **`image_alt(page)`** (added 2026-09-24) — the `alt` of whichever `<img>`
+  `image()` picked, for `og:image:alt`/`twitter:image:alt`; the fallback card's
+  alt is `config.extra.og_card_alt`. **`og:image:width`/`height` (1200x630) are
+  emitted only for the fallback card** — Zola can't measure a remote S3 photo,
+  so a post photo's size is left for the crawler to fetch rather than guessed.
+
+**`templates/sitemap.xml` overrides the built-in sitemap only to drop
+`/gone/`** (added 2026-09-24): those pages are `noindex`, and a noindexed URL
+in a submitted sitemap is an error in Search Console. ⚠ The XML declaration
+must be the file's first bytes — a Tera comment above it leaves a leading
+newline, which makes the sitemap invalid XML.
+
 **`static/og-card.jpg` is the fallback, and `scripts/build-og-card.py` cuts
 it** from `static/home.jpg` (added 2026-09-23). It is **1200x630**, which is
 what Facebook, Slack, iMessage and X all crop `summary_large_image` to — a

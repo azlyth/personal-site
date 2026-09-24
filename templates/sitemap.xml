@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+{#- Overrides Zola's built-in sitemap for one reason: the /gone/ pages.
+    They are real rendered pages (so Zola lists them), but each carries a
+    `noindex` robots tag (templates/gone.html) -- they exist for readers
+    following a dead link out of an old post, not for search. Listing a
+    URL in the sitemap while telling the crawler not to index it is a
+    contradiction Search Console reports as an error ("Submitted URL
+    marked 'noindex'"). Everything else is the built-in template. -#}
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    {%- for sitemap_entry in entries %}
+    {%- if sitemap_entry.permalink is not containing("/gone/") %}
+    <url>
+        <loc>{{ sitemap_entry.permalink | escape_xml | safe }}</loc>
+        {%- if sitemap_entry.updated %}
+        <lastmod>{{ sitemap_entry.updated }}</lastmod>
+        {%- endif %}
+    </url>
+    {%- endif %}
+    {%- endfor %}
+</urlset>

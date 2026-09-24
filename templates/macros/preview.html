@@ -35,6 +35,40 @@
 {%- endif -%}
 {%- endmacro image -%}
 
+{# The picture's alt text, for `og:image:alt` / `twitter:image:alt` -- the
+   words a screen reader speaks for the card, and what X shows when the
+   image fails to load. Same three cases as image(), in the same order:
+
+   - pinned: the alt of the <img> in the post whose src IS the pinned URL;
+   - otherwise the alt of the LAST <img>, which is the one image() picked;
+   - otherwise the fallback card's own description.
+
+   Only the text of this one tag is searched (up to its `>`), so a tag
+   with no alt yields nothing rather than borrowing the next image's.
+   Emits raw text, like the other two: the caller escapes. Empty output
+   means "no alt known"; base.html then omits the tags. #}
+{%- macro image_alt(page) -%}
+{%- if page.extra.preview_image is defined and page.extra.preview_image -%}
+{%- set marker = 'src="' ~ page.extra.preview_image ~ '"' -%}
+{%- if marker in page.content -%}
+{%- set tag = page.content | split(pat=marker) | nth(n=1) | split(pat=">") | first -%}
+{%- endif -%}
+{%- elif '<img src="' in page.content -%}
+{%- set tag = page.content | split(pat='<img src="') | last | split(pat=">") | first -%}
+{%- else -%}
+{{ config.extra.og_card_alt | safe }}
+{%- endif -%}
+{%- if tag is defined and 'alt="' in tag -%}
+{{ tag | split(pat='alt="') | nth(n=1) | split(pat='"') | first
+      | replace(from="&#x27;", to="'")
+      | replace(from="&#39;", to="'")
+      | replace(from="&quot;", to='"')
+      | replace(from="&lt;", to="<")
+      | replace(from="&gt;", to=">")
+      | replace(from="&amp;", to="&") | safe }}
+{%- endif -%}
+{%- endmacro image_alt -%}
+
 {# The words. A hand-written `description` in frontmatter wins; otherwise
    the post's first paragraph, which is where this site's posts put the
    sentence that explains them.

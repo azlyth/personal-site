@@ -145,3 +145,15 @@ def test_gone_pages_stay_out_of_the_feed(site):
 def test_the_gone_section_has_no_index_page(site):
     """Hidden: the only way in is a post's dead link."""
     assert "gone/index.html" not in site
+
+
+def test_gone_pages_stay_out_of_the_sitemap(site):
+    """A noindexed URL in the sitemap is a contradiction Search Console
+    flags as an error, so templates/sitemap.xml filters them out -- while
+    every real post stays in."""
+    locs = re.findall(r"<loc>([^<]*)</loc>", site["sitemap.xml"])
+    assert not [loc for loc in locs if "/gone/" in loc]
+    for md in BLOG.glob("*.md"):
+        if md.name != "_index.md":
+            assert f"{BASE_URL}/blog/{md.stem}/" in locs
+    assert site["sitemap.xml"].startswith("<?xml")

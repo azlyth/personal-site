@@ -29,3 +29,6 @@ highlight_code = false
 [extra]
 # Put all your custom variables here
 description = "Personal blog and technical writings"
+# og:image:alt for static/og-card.jpg, the link-preview image of every page
+# without a photo of its own (templates/macros/preview.html).
+og_card_alt = "A tabby cat walking across a keyboard by a window at sunset, the city skyline behind it"

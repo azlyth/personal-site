@@ -305,6 +305,26 @@ def test_the_home_page_is_a_website_with_the_site_image(site):
     assert og(html, "description") == "Personal blog and technical writings"
 
 
+def test_the_fallback_card_states_its_size_and_alt(site):
+    """Only the fallback's size is known at build time, so only it says so."""
+    for page in (site["index.html"], post(site, "no-photos")):
+        assert og(page, "image:width") == "1200"
+        assert og(page, "image:height") == "630"
+        assert og(page, "image:alt").startswith("A tabby cat")
+        assert _meta(page, "name", "twitter:image:alt") == og(page, "image:alt")
+
+
+def test_a_photo_card_carries_that_photos_alt_and_no_guessed_size(site):
+    page = post(site, "two-photos")
+    assert og(page, "image:alt") == "Two"
+    assert _meta(page, "name", "twitter:image:alt") == "Two"
+    assert og(page, "image:width") is None
+
+
+def test_a_chosen_photo_carries_its_own_alt(site):
+    assert og(post(site, "chosen-photo"), "image:alt") == "One"
+
+
 def test_every_page_advertises_the_feed(site):
     for name in ("index.html", "blog/two-photos/index.html"):
         assert (
