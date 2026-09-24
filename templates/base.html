@@ -1429,6 +1429,13 @@
             background: white;
         }
 
+        /* The marquee is the home link. Keep it looking like the title, not a link. */
+        a.marquee-container,
+        a.marquee-container:hover {
+            color: inherit;
+            text-decoration: none;
+        }
+
         .marquee-line {
             width: 2px;  /* a hairline rule stays a hairline */
             height: 1.25rem;  /* scales -- was 20px */
@@ -2525,13 +2532,13 @@
                 <a href="{{ get_url(path='/lab/') }}"{% if current_path is defined and current_path is starting_with("/lab") %} class="active"{% endif %}>Lab</a>
             </div>
             <div class="site-title">
-                <div class="marquee-container">
+                <a class="marquee-container" href="{{ get_url(path='/') }}">
                     <div class="marquee-line"></div>
                     <div class="marquee-scroll-area">
                         <div class="marquee-text">Peter's World Wide Website</div>
                     </div>
                     <div class="marquee-line"></div>
-                </div>
+                </a>
             </div>
         </nav>
         {% block content %}{% endblock content %}
