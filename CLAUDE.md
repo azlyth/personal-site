@@ -797,6 +797,12 @@ drifts off-center everywhere else.
   ignores `prefers-reduced-motion`.** Everything the blog index adds stops
   under `reduce` (the bird settles at opacity 0 rather than freezing
   mid-flight); the scrolling site title does not, on any page.
+- **The marquee is the home link** (added 2026-09-24). `.marquee-container` is
+  an `<a href="/">`, so the whole box is the click target, bars included, not
+  just the moving text. `a.marquee-container` resets `color` and hover
+  `text-decoration` because the global `a` rule would otherwise make the title
+  blue and underline it on hover. It should still look like a title, not a
+  link.
 - **`.bleed` opts any block out of the reading column and across the whole
   viewport** (added 2026-09-21; first use is the localmart three.js
   visualization). It is the same two-layer idiom `lab.html` documents —
