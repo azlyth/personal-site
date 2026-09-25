@@ -53,5 +53,11 @@ node_modules
 # Editor scratch: per-post undo snapshots (see editor/history.py)
 /editor/.history
 
+# Editor auth: SMTP creds (personal-cloud-infra `make sync-blog-editor` writes
+# this) and the sqlite file holding login tokens/sessions. Neither may ever
+# be committed.
+/.editor-smtp.env
+/.editor-auth.db
+
 # Zola build output from `zola check` -- 25MB of HTML and multi-MB PNGs.
 .build-test/
