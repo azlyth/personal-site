@@ -1105,6 +1105,94 @@ drifts off-center everywhere else.
   ⚠ The service refuses to start if `edit.cloudy.nyc` is ever added to the
   cloudflared tunnel config — it must stay LAN-only.
 
+### The editor requires magic-link sign-in (added 2026-09-24, branch `editor-magic-link-auth`)
+
+LAN-only stopped being enough on its own once the editor could commit to git,
+push to GitHub and write to S3 from anyone on the network — so it now also
+gates every route behind an allowlisted email magic link. Design mirrors
+**spruce**'s auth (`app/services/auth.py` + `app/core/security.py` +
+`app/deps.py` + `app/routers/auth.py`) almost exactly, simplified for a
+single-operator app with no per-user account table.
+
+- **`editor/auth/`** is the whole thing: `security.py` (32-byte urlsafe
+  tokens; only the sha256 hash is ever stored), `store.py` (stdlib sqlite3,
+  gitignored `.editor-auth.db` at the repo root — `EDITOR_AUTH_DB`
+  overrides), `mailer.py` (SMTP STARTTLS on 587; **if SMTP isn't configured
+  it logs the link instead of sending — that's dev mode**, not a failure),
+  `service.py` (request/verify orchestration + an in-memory per-email/per-IP
+  rate limiter, 5/15min and 30/15min), `deps.py`, `routes.py`
+  (`POST /auth/request`, `GET /auth/verify`, `POST /auth/logout`), and
+  `middleware.py` — an **app-wide gate** added via `app.add_middleware`, so
+  every route in `app.py` requires a valid session by construction unless
+  its exact path is in `middleware.PUBLIC_EXACT` or starts with a
+  `PUBLIC_PREFIXES` entry. A route added later with no auth thought at all
+  is protected automatically; `tests/test_auth.py`'s
+  `test_every_route_requires_auth_unless_explicitly_public` walks the live
+  FastAPI route table and 401-probes every one to prove it.
+- **Tokens**: 15-minute expiry, single-use with a 60s reuse grace window
+  (anchored to the first redemption — a device that fetches the same link
+  twice moments apart, e.g. an email app's link-preview fetch then the real
+  tap, gets logged in both times rather than "link expired" on the second).
+  **Sessions**: opaque random ids, 30 days, in an HttpOnly/SameSite=Lax
+  cookie (`editor_session`) that's `Secure` unless `EDITOR_COOKIE_SECURE=false`
+  (tests set this — a `Secure` cookie is silently dropped by an http://
+  TestClient).
+- **The allowlist is `EDITOR_ALLOWED_EMAILS`** (comma-separated, default
+  `ptr.vldz@gmail.com`). A non-allowlisted address gets the byte-identical
+  `{"ok": true, "message": "Check your email for a sign-in link."}`
+  response — no email sent, no token minted, no way to distinguish it from
+  a real send by watching the API.
+- **`/` and `/edit/{slug}` are on the public path list but aren't actually
+  public content** — they're the one deliberate case where "public path"
+  means "the middleware lets the request through" rather than "no auth
+  applies at all". `app.py`'s `editor_page` reads
+  `request.state.user_email` (set by the middleware on every request,
+  including these two) and renders `editor/web/signin.html` — a plain
+  centered card, no editor content, no post list — instead of the real
+  shell when signed out. Every other route (`/api/*`, the upload routes)
+  401s outright when signed out.
+- **`EDITOR_BASE_URL`** (default `https://edit.cloudy.nyc`) is what
+  `/auth/verify?token=` links point at — distinct from `SITE_BASE_URL`,
+  which is the *published blog's* origin.
+- **SMTP creds**: `.editor-smtp.env` at the repo root (gitignored, same
+  `KEY=VALUE` convention as `.aws.env`, read via `config.load_smtp_env`) —
+  `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/`SMTP_PASSWORD`/`MAIL_FROM`
+  (`login@edit.cloudy.nyc`). `personal-cloud-infra`'s
+  **`make sync-blog-editor`** is what writes it, chmod 600. **Never commit
+  it** — it was gitignored in the very first commit of the auth branch, before
+  any code that could touch it existed.
+- **A small "Sign out" control** sits in the editor's top bar (`editor.js`
+  POSTs `/auth/logout`, then reloads — the page route itself decides what
+  to show next based on whether a session is still live).
+- **Tests**: `tests/test_auth.py` covers request→verify→session→access, the
+  allowlist miss, expiry, single-use + grace-window reuse, logout, 401s on
+  API/upload routes, and the route-coverage walk. `tests/conftest.py` gives
+  every pre-existing test file's module-level `client = TestClient(app)` a
+  valid session automatically (an autouse fixture keyed on the literal name
+  `client`) — auth-specific tests use a differently-named local client so
+  they aren't touched by it. Runs `EDITOR_AUTH_DB` against a throwaway tmp
+  file so the suite never seeds the real gitignored auth database. All 542
+  tests pass with this in place.
+- **NOT deployed as of 2026-09-24.** The branch is `editor-magic-link-auth`
+  in this checkout; `blog-editor.service` and its systemd unit are
+  untouched. **Deploy order matters**: sync the SMTP creds BEFORE
+  restarting the service, or the first deploy locks Peter out with no way
+  to receive a login link.
+  ```
+  # 1. In personal-cloud-infra: provision the SES identity for
+  #    login@edit.cloudy.nyc if it doesn't exist yet, then
+  make sync-blog-editor   # writes personal-site/.editor-smtp.env, chmod 600
+
+  # 2. Back in personal-site, on main (after reviewing + merging the branch):
+  git checkout main && git merge editor-magic-link-auth
+  make editor-restart      # sudo systemctl restart blog-editor.service
+  make editor-logs         # confirm clean startup, then request a link
+  ```
+  A restart with `.editor-smtp.env` absent is still safe to test with —
+  `mailer.send_login_link` logs the link to the unit's journal instead of
+  sending, so `make editor-logs` shows it. Just don't leave it that way for
+  real use.
+
 ### How the editor edits (the rules that keep it from eating posts)
 
 `editor/` is a FastAPI service; `docs/superpowers/specs/2026-09-20-blog-editor-design.md`
