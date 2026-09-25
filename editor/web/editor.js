@@ -25,6 +25,7 @@ const els = {
   undo: document.getElementById('undo'),
   discard: document.getElementById('discard'),
   publish: document.getElementById('publish'),
+  signOut: document.getElementById('sign-out'),
 };
 
 function setStatus(text) {
@@ -1941,6 +1942,19 @@ async function newPost() {
 els.picker.addEventListener('change', () => loadPost(els.picker.value));
 els.newPost.addEventListener('click', newPost);
 els.title.addEventListener('click', startEditingTitle);
+
+// The session cookie is HttpOnly, so this can't check "am I signed in" --
+// it just asks the server to drop the session and reloads. A signed-out
+// reload lands back on the sign-in card via editor_page's own check.
+els.signOut.addEventListener('click', async () => {
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+  } catch {
+    // Reload regardless -- a failed logout still lands wherever the
+    // current session actually is.
+  }
+  location.reload();
+});
 
 (async function main() {
   try {

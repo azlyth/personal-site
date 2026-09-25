@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Peter's blog editor</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/editor.css">
+</head>
+<body class="signin-body">
+  <main class="signin-card">
+    <h1>Sign in</h1>
+    <p class="signin-lead">Enter your email. We'll send you a link.</p>
+    <form id="signin-form">
+      <input type="email" id="signin-email" name="email" placeholder="you@example.com" required autofocus>
+      <button type="submit">Send link</button>
+    </form>
+    <p id="signin-message" class="signin-message" hidden>Check your email for a sign-in link.</p>
+  </main>
+  <script>
+    const form = document.getElementById('signin-form');
+    const message = document.getElementById('signin-message');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('signin-email').value.trim();
+      form.querySelector('button').disabled = true;
+      try {
+        await fetch('/auth/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+      } catch {
+        // A network error looks the same as any other outcome here, on
+        // purpose -- there's nothing more useful to tell an anonymous
+        // visitor either way.
+      }
+      form.hidden = true;
+      message.hidden = false;
+    });
+  </script>
+</body>
+</html>

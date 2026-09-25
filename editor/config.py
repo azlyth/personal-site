@@ -20,11 +20,36 @@ BLOG_DIR = REPO / "content" / "blog"
 SITE_BASE_URL = os.environ.get("SITE_BASE_URL", "https://cloudy.nyc")
 WEB_DIR = REPO / "editor" / "web"
 
+# --- auth ------------------------------------------------------------------
 
-def load_aws_env() -> dict:
-    """Read the gitignored .aws.env written by personal-cloud-infra."""
+# Only this address gets a magic link by default; anyone else's request
+# still returns the same "check your email" response (see editor/auth) but
+# nothing is sent. Comma-separated so a second address can be added without
+# a code change.
+ALLOWED_EMAILS = frozenset(
+    e.strip().lower()
+    for e in os.environ.get("EDITOR_ALLOWED_EMAILS", "ptr.vldz@gmail.com").split(",")
+    if e.strip()
+)
+
+# Where auth.verify's links point. Distinct from SITE_BASE_URL, which is the
+# published *blog's* origin -- this one is the editor's own.
+BASE_URL = os.environ.get("EDITOR_BASE_URL", "https://edit.cloudy.nyc")
+
+# A small gitignored sqlite file holding login tokens (hashed) and sessions.
+AUTH_DB = Path(os.environ.get("EDITOR_AUTH_DB", str(REPO / ".editor-auth.db")))
+
+
+def cookie_secure() -> bool:
+    """Read live (not cached at import) so tests can flip it via monkeypatch
+    -- a `Secure` cookie is silently dropped by an http:// TestClient, the
+    same reason spruce's test suite disables it in tests."""
+    return os.environ.get("EDITOR_COOKIE_SECURE", "true").lower() != "false"
+
+
+def _read_env_file(name: str) -> dict:
     env: dict[str, str] = {}
-    path = REPO / ".aws.env"
+    path = REPO / name
     if not path.exists():
         return env
     for line in path.read_text().splitlines():
@@ -34,3 +59,17 @@ def load_aws_env() -> dict:
         key, value = line.split("=", 1)
         env[key] = value
     return env
+
+
+def load_aws_env() -> dict:
+    """Read the gitignored .aws.env written by personal-cloud-infra."""
+    return _read_env_file(".aws.env")
+
+
+def load_smtp_env() -> dict:
+    """Read the gitignored .editor-smtp.env written by personal-cloud-infra's
+    `make sync-blog-editor`: SMTP_HOST/PORT/USERNAME/PASSWORD/MAIL_FROM. Same
+    KEY=VALUE parsing as load_aws_env. Absent -- a fresh checkout, a test
+    run, dev before the sync has run -- means "log the link instead of
+    sending it" (see editor/auth/mailer.py)."""
+    return _read_env_file(".editor-smtp.env")

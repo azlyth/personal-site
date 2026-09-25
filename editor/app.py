@@ -21,6 +21,8 @@ from PIL import UnidentifiedImageError
 import tomlkit
 
 from editor import config, history, pairs, videos
+from editor.auth.middleware import AuthMiddleware
+from editor.auth.routes import router as auth_router
 from editor.blocks import (
     delete_block,
     insert_block,
@@ -44,6 +46,11 @@ from editor.publish import _has_unpushed_commits, publish
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
 
 app = FastAPI(title="blog editor")
+
+# Applies to every route below by construction -- see editor/auth/middleware.py
+# for the public-path allowlist and why the page routes are on it.
+app.add_middleware(AuthMiddleware)
+app.include_router(auth_router)
 
 BLOG_PREFIX = "content/blog/"
 
@@ -1332,10 +1339,28 @@ _ASSET_REF = re.compile(r'(?P<attr>href|src)="/static/(?P<stem>[\w.-]+?)\.(?P<ex
 _HASHED_ASSET = re.compile(r"^(?P<stem>[\w.-]+?)-(?P<hash>[0-9a-f]{8})\.(?P<ext>\w+)$")
 
 
+def _stamp_assets(html: str) -> str:
+    def stamp(match: re.Match) -> str:
+        stem, ext = match.group("stem"), match.group("ext")
+        asset = config.WEB_DIR / f"{stem}.{ext}"
+        if not asset.exists():
+            return match.group(0)
+        digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:8]
+        return f'{match.group("attr")}="/static/{stem}-{digest}.{ext}"'
+
+    return _ASSET_REF.sub(stamp, html)
+
+
 @app.get("/")
 @app.get("/edit/{slug}")
-def editor_page(slug: str | None = None):
-    """Serve the shell with content-addressed asset paths.
+def editor_page(request: Request, slug: str | None = None):
+    """Serve the sign-in card if signed out, else the shell.
+
+    Every page route shows only a sign-in page when signed out -- there is
+    no editor content, block list, or post title to leak to an anonymous
+    request. `request.state.user_email` is set by AuthMiddleware for every
+    request (including these two public-to-the-middleware routes), so this
+    handler is the one place that turns "no session" into "no editor".
 
     `RevalidatedStaticFiles` only governs responses served from now on; it
     cannot reach a copy the browser already holds under an earlier heuristic
@@ -1349,20 +1374,9 @@ def editor_page(slug: str | None = None):
     heuristically cached shell would keep naming the OLD hashes and defeat
     the whole scheme.
     """
-    html = (config.WEB_DIR / "index.html").read_text(encoding="utf-8")
-
-    def stamp(match: re.Match) -> str:
-        stem, ext = match.group("stem"), match.group("ext")
-        asset = config.WEB_DIR / f"{stem}.{ext}"
-        if not asset.exists():
-            return match.group(0)
-        digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:8]
-        return f'{match.group("attr")}="/static/{stem}-{digest}.{ext}"'
-
-    return HTMLResponse(
-        _ASSET_REF.sub(stamp, html),
-        headers={"Cache-Control": "no-cache"},
-    )
+    template = "index.html" if request.state.user_email else "signin.html"
+    html = (config.WEB_DIR / template).read_text(encoding="utf-8")
+    return HTMLResponse(_stamp_assets(html), headers={"Cache-Control": "no-cache"})
 
 
 class RevalidatedStaticFiles(StaticFiles):
