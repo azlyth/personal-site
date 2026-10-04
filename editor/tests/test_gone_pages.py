@@ -154,6 +154,11 @@ def test_gone_pages_stay_out_of_the_sitemap(site):
     locs = re.findall(r"<loc>([^<]*)</loc>", site["sitemap.xml"])
     assert not [loc for loc in locs if "/gone/" in loc]
     for md in BLOG.glob("*.md"):
-        if md.name != "_index.md":
+        if md.name == "_index.md":
+            continue
+        # Drafts are never built, so they're never in the sitemap. One sitting
+        # in content/blog (Platen's send-to-blog makes them) isn't a failure.
+        meta = tomllib.loads(split_post(md.read_text())[0])
+        if not meta.get("draft"):
             assert f"{BASE_URL}/blog/{md.stem}/" in locs
     assert site["sitemap.xml"].startswith("<?xml")
