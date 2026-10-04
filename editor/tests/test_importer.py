@@ -27,11 +27,17 @@ def test_no_h1_falls_back_to_the_doc_name():
     assert body == "Just a paragraph.\n"
 
 
-def test_h1_not_on_the_first_line_is_demoted_not_taken_as_title():
+def test_an_h1_not_on_the_first_line_is_still_taken_as_the_title():
     title, body = convert("Intro.\n\n# Later\n\nMore.\n", "doc")
-    assert title == "doc"
-    assert body == "Intro.\n\n## Later\n\nMore.\n"
-    assert kinds(body) == ["paragraph", "heading", "paragraph"]
+    assert title == "Later"
+    assert body == "Intro.\n\nMore.\n"
+    assert kinds(body) == ["paragraph", "paragraph"]
+
+
+def test_only_the_first_h1_is_the_title():
+    title, body = convert("# One\n\nA.\n\n# Two\n\nB.\n", "doc")
+    assert title == "One"
+    assert body == "A.\n\n## Two\n\nB.\n"
 
 
 def test_leading_blank_lines_before_the_title_are_ignored():

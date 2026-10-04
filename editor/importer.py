@@ -7,9 +7,9 @@ inline **strong**, *em* and `code` (the only things its renderer knows).
 The blog editor treats each top-level markdown block as one editable block,
 so the job here is to make every heading and every paragraph its own block:
 
-- The first non-blank line, if it is `# Title`, becomes the post title. The
-  title is the page's h1, so it leaves the body. Otherwise the doc's name is
-  the title.
+- The first `# Title` line anywhere in the document becomes the post title.
+  The title is the page's h1, so it leaves the body. Otherwise the doc's name
+  is the title.
 - Every non-blank line becomes its own block, separated by one blank line.
   A single line break would otherwise be a soft break that merges lines into
   one paragraph -- the "one giant block" this exists to prevent.
@@ -38,11 +38,12 @@ def convert(text: str, name: str) -> tuple[str, str]:
     lines = [line.strip() for line in raw if line.strip()]
 
     title = ""
-    if lines:
-        match = _H1.match(lines[0])
+    for i, line in enumerate(lines):
+        match = _H1.match(line)
         if match:
             title = match.group(1).strip()
-            lines = lines[1:]
+            lines = lines[:i] + lines[i + 1 :]
+            break
     if not title:
         title = re.sub(r"\.md$", "", name.strip())
 

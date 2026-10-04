@@ -35,9 +35,9 @@ Output: `(title, body_markdown)`.
 1. Normalize `\r\n` to `\n`, strip leading and trailing whitespace on each
    line. (Four spaces of indent is a code block in CommonMark; Platen has no
    code blocks, so an indented line must still post as a paragraph.)
-2. **Title.** If the first non-blank line is `# <text>`, `<text>` is the
-   title and that line is removed from the body. Otherwise the title is the
-   doc name with a trailing `.md` removed.
+2. **Title.** The first `# <text>` line anywhere in the document: `<text>` is
+   the title and that line is removed from the body. Otherwise the title is
+   the doc name with a trailing `.md` removed.
 3. **Splitting.** Every non-blank line becomes its own block: lines are
    joined with exactly one blank line between them. So a single line break
    is a paragraph break, and runs of blank lines collapse to one. (Platen's
