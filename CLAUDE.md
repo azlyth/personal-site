@@ -1606,21 +1606,51 @@ edits), Discard (back to the last published version), and "↗ View live".
     block (which saves this one first, then opens that one); blur does
     nothing, and a tap on the block's padding keeps focus;
   - `renderBlocks()` puts an open text editor back with its unsaved text and
-    caret (`captureOpenText`/`restoreOpenText`, matching the block by
-    source within one index, so an insert above it follows it down; Undo,
-    move mode and Delete close it);
+    caret (`captureOpenText`/`restoreOpenText`); move mode and deleting the
+    open block close it;
   - Publish, the post picker, + New, Sign out and the tab hiding
     (`visibilitychange`/`pagehide`, `keepalive` fetch) flush first;
   - while open, the block's controls, Done and the insert menu sit in a rail:
     a 72px column right of the block when the window has the room and the
     block spans the column (not when a float narrows it), else a row under
     the field. Never on top of the text.
-  - `flushPendingEdit` reads the open editor from `openText`, NOT "a
+  - `flushPendingEdit` reads the open editor from `openEditor`, NOT "a
     textarea inside `.block.editing`": that selector also matched a pair's
     prose field and saved the prose over the whole pair, deleting its
     picture, on any control tap with the pair editor open.
+  - **Known, left as is:** after tapping another block, the new textarea is
+    focused after a network round trip, so iOS may want a second tap to
+    raise the keyboard. Undo closes the editor when it puts older text back
+    into its block (the text was saved before Undo ran).
+  - **Review fixes** (same day; each was a way to lose typing):
+    - *Re-attach by index, not by text.* `parse_blocks` rstrips every
+      block, so a saved "Hello " comes back as "Hello" and an exact text
+      match failed, closing the editor mid-sentence. After its own save the
+      editor re-attaches to the index it PUT to (the first piece, if the
+      save split "# Heading\ntext" in two -- keeping the full text there
+      would write the second piece twice on the next save). An insert or
+      delete names the shift up front (`expectShift`); matching by text,
+      `trimEnd()` on both sides, is only the fallback for writes that
+      don't say (merge, Undo). Guessing by text put the editor on a freshly
+      inserted "New paragraph." beside an identical one.
+    - *One `openEditor` for every kind.* Text, pair, photo and clip editors
+      all register `{dirty(), save()}`, so the same flush covers them and
+      only one is ever open. A pair saves through its own route; a photo or
+      clip strip has no typing, so a flush `confirm()`s before dropping its
+      list changes. Rail CSS is scoped to `.text-editing`, so the other
+      editors keep their hover-only controls.
+    - *A flush loops.* Awaiting a save that is already in flight isn't
+      enough when typing carried on after it started; it re-checks and
+      saves again (one module-level `saveInFlight`).
+    - *localStorage is the backstop.* Dirty text is mirrored per post +
+      block index + source hash + page load; a 409-then-reload or iOS
+      killing a hidden tab otherwise lost it. A strip above the post offers
+      Restore/Discard, or shows the text to copy when its block changed.
+    - Row-mode rail is `position: sticky; bottom: 0`, so Done stays on
+      screen under a field taller than the window.
   `scripts/verify-edit-tap.py` drives all of this in headless Chromium at
-  1024x1366, 1366x1024 and 820x1180 (system `python3`, ~3 min; not in
+  1024x1366, 1366x1024 and 820x1180, review cases included (system
+  `python3`, ~5 min; not in
   pytest, since the venv has no websocket-client).
 
 

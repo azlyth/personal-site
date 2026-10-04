@@ -361,6 +361,172 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
           'class="pair pair-right' in POST.read_text() and "a cat" in POST.read_text(),
           POST.read_text()[-400:])
 
+    run_review_cases(cdp, base, w, h, check)
+
+CARET_END = ("(() => { const t = document.querySelector('.block.editing textarea');"
+             " t.focus(); t.setSelectionRange(t.value.length, t.value.length); })()")
+PLUS = '.block.editing .block-controls button[title="Insert a paragraph"]'
+
+
+def flush_via_plus(cdp) -> None:
+    """Tap + (which saves first) and then the menu's Cancel."""
+    cdp.tap_el(PLUS, 1.0)
+    cdp.tap_el(".insert-choice .insert-cancel", 0.6)
+
+
+def run_review_cases(cdp, base, w, h, check):
+    """Ways an independent review found to lose typed text."""
+
+    def case_1():
+        # 1a. Trailing whitespace: saved "Hello " comes back as "Hello".
+        load(cdp, base)
+        open_long(cdp)
+        cdp.js(CARET_END)
+        cdp("Input.insertText", text=" Hello ")
+        flush_via_plus(cdp)
+        s = state(cdp)
+        check("review 1: trailing space survives a save, editor stays open",
+              s["editing"] == LONG_IDX and (s["value"] or "").endswith("Hello "), s)
+        cdp.js(CARET_END)
+        cdp("Input.insertText", text="world")
+        cdp.tap_el(".block.editing .edit-done", 1.0)
+        check("review 1: typing after it saves too", "Hello world" in POST.read_text())
+
+    def case_2():
+        # 1b. A save that splits the block ("# Heading" + a paragraph).
+        load(cdp, base)
+        cdp.tap_el(block_sel(FIRST), 0.6)
+        cdp.js("(() => { const t = document.querySelector('.block.editing textarea'); t.select(); })()")
+        cdp("Input.insertText", text="# Split heading\nSplit body.")
+        flush_via_plus(cdp)
+        s = state(cdp)
+        check("review 1: a save that splits the block keeps editing its first piece",
+              s["editing"] == FIRST and s["value"] == "# Split heading", s)
+        cdp.tap_el(".block.editing .edit-done", 1.0)
+        text = POST.read_text()
+        check("review 1: split text saved once, nothing duplicated",
+              text.count("Split heading") == 1 and text.count("Split body.") == 1, text[:300])
+
+    def case_3():
+        # 2. Pair prose: saved through the pair route on a control tap and on
+        # switching blocks, picture intact.
+        load(cdp, base)
+        cdp.tap_el(block_sel(PAIR_IDX), 0.6)
+        cdp.js("(() => { const t = document.querySelector('.block.editing textarea'); t.focus();"
+               " t.setSelectionRange(t.value.length, t.value.length); })()")
+        cdp("Input.insertText", text=" Extra prose.")
+        cdp.tap_el(block_sel(FIRST), 1.5)
+        text = POST.read_text()
+        s = state(cdp)
+        check("review 2: switching blocks saves the pair's prose via the pair route",
+              "Extra prose." in text and 'class="pair pair-right' in text and "a cat" in text,
+              text[-400:])
+        check("review 2: and opens the tapped block", s["editing"] == FIRST, s)
+
+        load(cdp, base)
+        cdp.tap_el(block_sel(PAIR_IDX), 0.6)
+        cdp.js("(() => { const t = document.querySelector('.block.editing textarea'); t.focus();"
+               " t.setSelectionRange(t.value.length, t.value.length); })()")
+        cdp("Input.insertText", text=" Moved prose.")
+        cdp.js(f"document.querySelector('{block_sel(PAIR_IDX)} .block-controls "
+               "button[title=\"Move this block\"]').click()")
+        time.sleep(1.2)
+        text = POST.read_text()
+        check("review 2: a control tap saves the pair's prose, picture intact",
+              "Moved prose." in text and 'class="pair pair-right' in text and "a cat" in text,
+              text[-400:])
+
+    def case_4():
+        # 3. Insert Above next to an identical "New paragraph.": the editor must
+        # follow its own block, not the new one with the same text.
+        load(cdp, base)
+        open_long(cdp)
+        cdp.tap_el(PLUS, 1.0)
+        cdp.tap_el(".insert-choice button:nth-of-type(2)", 1.2)  # ↓ Below
+        cdp.tap_el(".block.editing .edit-done", 1.0)
+        cdp.tap_el(block_sel(LONG_IDX + 1), 0.6)  # the new "New paragraph."
+        cdp.tap_el(PLUS, 1.0)
+        cdp.tap_el(".insert-choice button", 1.2)  # ↑ Above
+        s = state(cdp)
+        check("review 3: Above keeps the editor on its own block",
+              s["editing"] == LONG_IDX + 2, s)
+
+    def case_5():
+        # 4. A 409 then a reload: the typing comes back from localStorage.
+        load(cdp, base)
+        open_long(cdp)
+        cdp.js(CARET_END)
+        cdp("Input.insertText", text=" Draft text.")
+        POST.write_text(POST.read_text() + "\nChanged on disk.\n")
+        cdp.tap_el(".block.editing .edit-done", 1.0)
+        s = state(cdp)
+        check("review 4: a 409 leaves the editor open with its text",
+              s["editing"] == LONG_IDX and "Draft text." in (s["value"] or ""), s)
+        cdp("Page.reload")
+        time.sleep(2.0)
+        offered = cdp.rect(".draft-offer")
+        restored = cdp.tap_el(".draft-offer button", 1.0)  # Restore
+        s = state(cdp)
+        check("review 4: after reload the draft is offered and restores",
+              offered and restored and s["editing"] == LONG_IDX
+              and "Draft text." in (s["value"] or ""), s)
+        cdp.tap_el(".block.editing .edit-done", 1.0)
+        check("review 4: and then saves", "Draft text." in POST.read_text())
+        cdp.js("localStorage.clear()")
+
+    def case_6():
+        # 5. Typing after a save started must not be dropped by Done.
+        load(cdp, base)
+        open_long(cdp)
+        cdp.js(CARET_END)
+        cdp("Input.insertText", text=" First.")
+        # A slow network holds the first save in flight while the typing
+        # and the Done tap happen.
+        cdp("Network.emulateNetworkConditions", offline=False, latency=1500,
+            downloadThroughput=-1, uploadThroughput=-1)
+        try:
+            cdp.js("(() => { flushPendingEdit(); const t = document.querySelector('.block.editing textarea');"
+                   " t.value += ' Late.'; t.dispatchEvent(new Event('input')); })()")
+            cdp.tap_el(".block.editing .edit-done", 8.0)
+        finally:
+            cdp("Network.emulateNetworkConditions", offline=False, latency=0,
+                downloadThroughput=-1, uploadThroughput=-1)
+        text = POST.read_text()
+        check("review 5: text typed during an in-flight save is saved by Done",
+              "First." in text and "Late." in text, text[:400])
+
+    def case_7():
+        # 7. Row mode: Done is on screen while the field is taller than the
+        # window (keyboard up).
+        if w < 1000:
+            load(cdp, base)
+            cdp("Emulation.setDeviceMetricsOverride", width=w, height=300,
+                deviceScaleFactor=1, mobile=True)
+            time.sleep(0.4)
+            cdp.js(f"document.querySelector('{block_sel(LONG_IDX)}').scrollIntoView({{block: 'start'}});"
+                   "scrollBy(0, -80)")
+            time.sleep(0.3)
+            b = cdp.rect(block_sel(LONG_IDX))
+            cdp.tap(b["x"] + b["w"] / 2, b["y"] + 30)
+            cdp.js(f"document.querySelector('{block_sel(LONG_IDX)}').scrollIntoView({{block: 'start'}})")
+            time.sleep(0.3)
+            r = cdp.rect(".block.editing .edit-done")
+            check("review 7: Done stays on screen under a tall field",
+                  r and r["y"] + r["h"] <= 300 + 1 and r["y"] >= 0, r or state(cdp))
+            cdp("Emulation.setDeviceMetricsOverride", width=w, height=h,
+                deviceScaleFactor=1, mobile=True)
+
+    # Each case reports a FAIL rather than crashing the run when the code
+    # under test doesn't even get far enough to measure.
+    for case in [case_1, case_2, case_3, case_4, case_5, case_6, case_7]:
+        try:
+            case()
+        except Exception as exc:  # noqa: BLE001
+            check(f"review case {case.__name__} ran", False, repr(exc))
+        cdp.js("localStorage.clear()")
+        cdp("Emulation.setDeviceMetricsOverride", width=w, height=h,
+            deviceScaleFactor=1, mobile=True)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()

@@ -90,6 +90,7 @@ async function loadPost(slug) {
   if (data.slug !== state.slug) state.linksOpen = false;
   applyPost(data);
   setStatus('');
+  offerDrafts();
 }
 
 // Render a whole post payload -- the initial load, and any write whose
@@ -622,13 +623,13 @@ function renderBlocks() {
 
     el.addEventListener('click', async () => {
       if (el.classList.contains('editing')) return;
-      // One editor at a time: tapping another block saves the open text
-      // block first, then opens this one. A save that fails leaves the
-      // open one as it is, text and all.
-      if (openText && openText.el !== el) {
-        const from = openText.index;
+      // One editor at a time: tapping another block saves the open one
+      // first (or, for a photo/clip strip with changes, asks), then opens
+      // this one. A save that fails leaves the open one as it is.
+      if (openEditor && openEditor.el !== el) {
+        const from = openEditor.index;
         const count = state.blocks.length;
-        if (!(await closeTextEditor())) return;
+        if (!(await closeEditor())) return;
         // A blank line typed into the saved block splits it into several,
         // which shifts every block after it.
         const target = block.index > from ? block.index + state.blocks.length - count : block.index;
@@ -1009,33 +1010,49 @@ async function mergeBlock(index) {
   await applyWrite(res);
 }
 
-// If the text editor is open with unsaved changes, save it -- and report
-// whether that actually landed. It stays open: a save re-renders the list,
-// and renderBlocks() puts the editor back around the saved text.
+// If an editor is open with unsaved changes, save it -- and report whether
+// that actually landed. A text editor stays open (the save re-renders the
+// list and renderBlocks() puts it back); a pair editor closes, as on its own
+// Done. A photo/clip strip has no route to save from here and no typing to
+// lose, so it asks before its changes are dropped.
 //
-// Every control-bar action below calls this first, as do Publish, switching
-// posts and the tab going away. Blur no longer saves (it no longer does
-// anything -- an open block closes on its Done), so without an explicit
-// flush an action's own renderBlocks() would rebuild the page from `state`,
-// which never saw the edit.
+// Every control-bar action calls this first, as do Publish, Undo, switching
+// posts and the tab going away. Blur saves nothing, so without it an
+// action's own renderBlocks() would rebuild the page from `state`, which
+// never saw the edit.
 //
-// It looks only at `openText`, never at "a textarea inside .block.editing":
-// a paired section's editor has one too, holding just its prose, and the
-// old selector saved that prose over the WHOLE pair block -- deleting its
-// picture -- whenever a control was tapped with the pair editor open.
+// It reads `openEditor`, never "a textarea inside .block.editing": that
+// selector also matched a paired section's prose field, and saved the prose
+// over the WHOLE pair block -- deleting its picture.
+//
+// It loops because a save can be in flight already (started by another
+// flush): awaiting that one isn't enough when typing carried on after it
+// started, so it checks again and saves again until nothing is left.
+let saveInFlight = null;
+
 async function flushPendingEdit(options = {}) {
-  const ed = openText;
-  if (!ed || !ed.textarea.isConnected) return true;
-  if (ed.saving) return await ed.saving;
-  const value = ed.textarea.value;
-  if (value === ed.original) return true;
-  ed.savingSource = value;
-  ed.saving = saveBlock(ed.index, value, options);
-  try {
-    return await ed.saving;
-  } finally {
-    ed.saving = null;
+  for (let round = 0; round < 8; round++) {
+    if (saveInFlight) {
+      if (!(await saveInFlight)) return false;
+      continue;
+    }
+    const ed = openEditor;
+    if (!ed || !ed.el.isConnected) return true;
+    if (!ed.dirty()) return true;
+    if (!ed.save) {
+      if (options.keepalive) return true;
+      return confirm(`Discard your unsaved changes to this ${ed.kind === 'videos' ? 'clip' : 'photo'} row?`);
+    }
+    saveInFlight = ed.save(options);
+    let ok;
+    try {
+      ok = await saveInFlight;
+    } finally {
+      saveInFlight = null;
+    }
+    if (!ok) return false;
   }
+  return false;
 }
 
 // The stop-wrap marker's exact source -- must match blocks.py's _CLEAR_RE,
@@ -1094,10 +1111,14 @@ function blockControls(block) {
   del.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (!confirm('Delete this block?')) return;
-    if (!(await flushPendingEdit())) return;
-    // Don't let the editor reattach to a neighbour that happens to hold the
-    // same text (two "New paragraph." blocks).
-    if (openText && openText.index === block.index) openText.closing = true;
+    // Deleting the open block closes it first (saved, so Undo has it);
+    // deleting another one tells the open editor where its block went.
+    if (openEditor && openEditor.index === block.index) {
+      if (!(await closeEditor())) return;
+    } else {
+      if (!(await flushPendingEdit())) return;
+      expectShift(block.index, -1);
+    }
     removeBlock(block.index);
   });
 
@@ -1311,6 +1332,7 @@ function pickImages(index) {
     form.append('alts', JSON.stringify(alts));
     form.append('index', index);
     form.append('hash', state.hash);
+    expectShift(index, 1);
 
     setStatus(`uploading ${input.files.length} photo(s)…`);
     let res;
@@ -1357,9 +1379,11 @@ function insertChoice(block) {
     btn.type = 'button';
     btn.textContent = text;
     btn.addEventListener('mousedown', (e) => e.preventDefault());
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      if (!(await flushPendingEdit())) return;
       state.pendingInsert = null;
+      expectShift(at, 1);
       insertBlock(at, source);
     });
     wrap.appendChild(btn);
@@ -1413,6 +1437,9 @@ async function removeBlock(index) {
 }
 
 async function applyWrite(res) {
+  // A write that doesn't land doesn't move anything, so the open editor's
+  // expectation of where its block will be is void.
+  if (!res.ok && openEditor) openEditor.expect = null;
   if (res.status === 409) {
     setStatus('changed on disk — reload');
     return false;
@@ -1558,29 +1585,160 @@ els.publish.addEventListener('click', async () => {
   await refreshStatus();
 });
 
-// The one open text editor (startEditing), or null:
-// {index, original, textarea, el, closing, saving, savingSource}.
-// `original` is the block's source as the server has it, so "unsaved" is
-// `textarea.value !== original`. Only the plain-text editor lives here --
-// the photo, clip and pair editors keep a local working copy and write it
-// on their own Done, so there is nothing of theirs to flush.
-let openText = null;
+// The one open editor, or null. Every kind -- text, pair, photo strip, clip
+// strip -- registers here, so "save or ask before going on" is one call
+// (flushPendingEdit) and only one is ever open:
+//   {kind, el, index, dirty(), save(options) | null, draftKey, expect}
+// `save` resolves true once the write landed. Photo/clip strips have none:
+// their changes are a list, not typing, and flushPendingEdit asks first.
+// `expect` is set by whoever is about to change the block list, naming the
+// index the open text block will have afterwards (see restoreOpenText).
+let openEditor = null;
 
 // Room the side rail needs: its 72px column (editor.css) plus the 8px gap
 // to the block.
 const RAIL_ROOM = 80;
+
+function isTextEditable(block) {
+  return block && !block.images && !block.videos
+    && !(block.kind === 'pair' && block.text !== undefined);
+}
+
+// The open text block will move by `delta` if the list changes at `at`
+// (an insert at or above it, a delete above it).
+function expectShift(at, delta) {
+  const ed = openEditor;
+  if (!ed || ed.kind !== 'text') return;
+  const moves = delta > 0 ? at <= ed.index : at < ed.index;
+  ed.expect = { index: ed.index + (moves ? delta : 0) };
+}
+
+// --- unsaved text survives a reload ------------------------------------
+// Typing is mirrored into localStorage, keyed by post + block index + the
+// block's source as it was opened, until it is saved. A 409 ("changed on
+// disk -- reload") would otherwise lose it on the reload, and iOS can kill
+// a backgrounded tab before a keepalive save lands. Offered back on load.
+const DRAFT_PREFIX = 'editor-draft:';
+// Per page load, so opening a block never overwrites (or, while clean,
+// clears) a draft an earlier load left behind and hasn't offered back yet.
+const DRAFT_SESSION = Math.random().toString(36).slice(2, 8);
+
+function draftKey(slug, index, original) {
+  let h = 5381;
+  for (let i = 0; i < original.length; i++) h = ((h * 33) ^ original.charCodeAt(i)) >>> 0;
+  return `${DRAFT_PREFIX}${slug}:${index}:${h.toString(36)}:${DRAFT_SESSION}`;
+}
+
+function rememberDraft(ed, text, original) {
+  try {
+    if (ed.dirty()) {
+      localStorage.setItem(ed.draftKey, JSON.stringify({
+        kind: ed.kind, index: ed.index, original, text, at: Date.now(),
+      }));
+    } else {
+      localStorage.removeItem(ed.draftKey);
+    }
+  } catch {
+    // Private mode or a full quota: the editor still works, just without
+    // the net under it.
+  }
+}
+
+function forgetDraft(key) {
+  try { if (key) localStorage.removeItem(key); } catch { /* see above */ }
+}
+
+function savedDrafts(slug) {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key.startsWith(`${DRAFT_PREFIX}${slug}:`)) continue;
+      try {
+        out.push({ key, ...JSON.parse(localStorage.getItem(key)) });
+      } catch {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch { /* see above */ }
+  return out;
+}
+
+// A small strip above the post for each draft left behind: Restore reopens
+// its block with the text, Discard drops it. If the block has changed since
+// (so it can't be found), the text is shown to copy rather than lost.
+function offerDrafts() {
+  document.querySelectorAll('.draft-offer').forEach((n) => n.remove());
+  savedDrafts(state.slug).forEach((draft) => {
+    const box = document.createElement('div');
+    box.className = 'draft-offer';
+    const when = new Date(draft.at).toLocaleString();
+    const target = findDraftBlock(draft);
+    const msg = document.createElement('span');
+    msg.textContent = target
+      ? `Unsaved text from ${when} in block ${draft.index + 1}.`
+      : `Unsaved text from ${when}. Its block has changed since, so copy what you need:`;
+    box.appendChild(msg);
+    if (!target) {
+      const text = document.createElement('textarea');
+      text.readOnly = true;
+      text.value = draft.text;
+      box.appendChild(text);
+    }
+    const buttons = document.createElement('div');
+    buttons.className = 'draft-offer-buttons';
+    if (target) {
+      const restore = document.createElement('button');
+      restore.type = 'button';
+      restore.textContent = 'Restore';
+      restore.addEventListener('click', async () => {
+        if (!(await closeEditor())) return;
+        const block = findDraftBlock(draft);
+        const el = block && els.blocks.querySelector(`.block[data-index="${block.index}"]`);
+        if (!el) return;
+        const content = el.querySelector(':scope > .block-content');
+        if (draft.kind === 'pair') startEditingPair(el, content, block, draft.text);
+        else startEditing(el, content, block, {
+          value: draft.text, start: draft.text.length, end: draft.text.length, focused: true,
+        });
+        // The editor now owns it under the same key; this only drops a key
+        // left over from a different index.
+        if (openEditor && openEditor.draftKey !== draft.key) forgetDraft(draft.key);
+        box.remove();
+      });
+      buttons.appendChild(restore);
+    }
+    const discard = document.createElement('button');
+    discard.type = 'button';
+    discard.textContent = 'Discard';
+    discard.addEventListener('click', () => {
+      forgetDraft(draft.key);
+      box.remove();
+    });
+    buttons.appendChild(discard);
+    box.appendChild(buttons);
+    els.blocks.before(box);
+  });
+}
+
+function findDraftBlock(draft) {
+  const same = (b) => b && b.source.trimEnd() === draft.original.trimEnd()
+    && (draft.kind === 'pair' ? b.kind === 'pair' && b.text !== undefined : isTextEditable(b));
+  if (same(state.blocks[draft.index])) return state.blocks[draft.index];
+  return state.blocks.find(same) || null;
+}
 
 // An open text block stays open until its Done button (or opening another
 // block, which saves it first). Blur used to close it, and on a tablet
 // almost any tap blurs: the block's own padding, a menu's Cancel, the line
 // under a short field. See "Text editors close on Done" in CLAUDE.md.
 //
-// `resume` is set when renderBlocks() is rebuilding the page under an open
-// editor (a menu opened or cancelled, a save landed): it carries the
-// in-progress text, caret and focus so the rebuild is invisible.
+// `resume` is set when the editor is being put back after renderBlocks()
+// rebuilt the list (a menu opened or cancelled, a save landed), or from a
+// saved draft: it carries the in-progress text, caret and focus.
 function startEditing(el, content, block, resume = null) {
   if (el.classList.contains('editing')) return;
-  el.classList.add('editing');
+  el.classList.add('editing', 'text-editing');
   content.innerHTML = '';
 
   const textarea = document.createElement('textarea');
@@ -1589,15 +1747,31 @@ function startEditing(el, content, block, resume = null) {
   textarea.rows = 2;
   content.appendChild(textarea);
 
-  openText = {
-    index: block.index, original: block.source, textarea, el,
-    closing: false, saving: null, savingSource: null,
+  const ed = {
+    kind: 'text', el, index: block.index, textarea,
+    original: block.source,
+    blocks: state.blocks,
+    draftKey: draftKey(state.slug, block.index, block.source),
+    expect: resume && resume.expect ? resume.expect : null,
+    savingSource: resume ? resume.savingSource || null : null,
+    // parse_blocks stores each block rstripped, so "Hello " saved comes
+    // back as "Hello": compare without trailing whitespace on both sides.
+    dirty: () => textarea.value.trimEnd() !== block.source.trimEnd(),
+    save: (options) => {
+      const source = textarea.value;
+      ed.savingSource = source;
+      // The PUT targets this index, so that is where the block is after
+      // it -- even if the save split it in two (a blank line typed in).
+      ed.expect = { index: ed.index, own: true, count: state.blocks.length, source };
+      return saveBlock(ed.index, source, options);
+    },
   };
+  openEditor = ed;
 
   // The block's controls, a Done button and any menu those controls open
   // move into one rail: a column beside the block when the window has room
-  // for one, a row under the field when it doesn't. Either way nothing sits
-  // on top of the text being edited.
+  // for one, a row under the field (sticky to the bottom of the window)
+  // when it doesn't. Either way nothing sits on top of the text.
   const rail = document.createElement('div');
   rail.className = 'edit-rail';
   const inner = document.createElement('div');
@@ -1609,7 +1783,7 @@ function startEditing(el, content, block, resume = null) {
   done.title = 'Save and stop editing';
   done.addEventListener('click', (e) => {
     e.stopPropagation();
-    closeTextEditor();
+    closeEditor();
   });
   inner.appendChild(done);
   const bar = el.querySelector(':scope > .block-controls');
@@ -1627,10 +1801,11 @@ function startEditing(el, content, block, resume = null) {
     const column = els.blocks.getBoundingClientRect();
     const full = r.right >= column.right;
     const room = document.documentElement.clientWidth - r.right;
-    el.classList.toggle('rail-side', full && room >= RAIL_ROOM);
+    const side = full && room >= RAIL_ROOM;
+    el.classList.toggle('rail-side', side);
     // Stick below the toolbar, whose height depends on its own contents.
     const toolbar = document.querySelector('.bar');
-    inner.style.top = `${(toolbar ? toolbar.offsetHeight : 0) + 8}px`;
+    inner.style.top = side ? `${(toolbar ? toolbar.offsetHeight : 0) + 8}px` : '';
   };
 
   // Sized to its content, not to its count of source lines. A paragraph is
@@ -1640,19 +1815,26 @@ function startEditing(el, content, block, resume = null) {
   // next tap "on the text" landed outside the field (reproduced over CDP:
   // scripts/verify-edit-tap.py). Re-fit on input and on resize: a narrower
   // window (rotation, the keyboard on browsers that resize the layout)
-  // rewraps the text.
+  // rewraps the text. The `auto` step briefly shrinks the page, which near
+  // the end of a long post clamps the scroll position -- so put it back.
   const fit = () => {
     if (!textarea.isConnected) {
       window.removeEventListener('resize', fit);
       return;
     }
     placeRail();
+    const y = window.scrollY;
     textarea.style.height = 'auto';
     textarea.style.height = `${textarea.scrollHeight}px`;
+    if (window.scrollY !== y) window.scrollTo(window.scrollX, y);
   };
   fit();
-  textarea.addEventListener('input', fit);
+  textarea.addEventListener('input', () => {
+    fit();
+    rememberDraft(ed, textarea.value, block.source);
+  });
   window.addEventListener('resize', fit);
+  rememberDraft(ed, textarea.value, block.source);
 
   if (!resume || resume.focused) {
     textarea.focus({ preventScroll: Boolean(resume) });
@@ -1671,38 +1853,38 @@ function startEditing(el, content, block, resume = null) {
   });
 }
 
-// Save the open text block if it changed, then close it. Resolves false,
-// leaving the editor open with its text, when the save didn't land (a 409,
-// a network error) -- the caller must not go on as if it had.
-async function closeTextEditor() {
-  const ed = openText;
-  if (!ed) return true;
-  ed.closing = true;
-  if (!(await flushPendingEdit())) {
-    ed.closing = false;
-    return false;
-  }
-  // A save already re-rendered without it; an unchanged one still needs
-  // the block put back.
-  if (openText === ed) {
-    openText = null;
+// Save the open editor if it changed, then close it. Resolves false,
+// leaving it open with its text, when the save didn't land (a 409, a
+// network error) or a photo strip's changes were kept -- the caller must
+// not go on as if it had closed.
+async function closeEditor() {
+  if (!openEditor) return true;
+  if (!(await flushPendingEdit())) return false;
+  // A text save put the editor back around the saved text; a pair save
+  // already closed it. Either way, whatever is still open is now clean.
+  const ed = openEditor;
+  if (ed) {
+    forgetDraft(ed.draftKey);
+    openEditor = null;
     renderBlocks();
   }
   return true;
 }
 
 // What renderBlocks() needs to put the open text editor back after it
-// rebuilds the list, or null when there's nothing to put back.
+// rebuilds the list, or null. Any other kind of editor is simply closed by
+// the rebuild -- every path that rebuilds with one open flushed it first.
 function captureOpenText() {
-  const ed = openText;
-  openText = null;
-  if (!ed || ed.closing || !ed.textarea.isConnected || state.moveIndex !== null) return null;
+  const ed = openEditor;
+  openEditor = null;
+  if (!ed || ed.kind !== 'text' || !ed.textarea.isConnected || state.moveIndex !== null) {
+    return null;
+  }
   const ta = ed.textarea;
   return {
-    index: ed.index,
-    // Its block is whichever block now holds the text as the server had it,
-    // as it is being saved, or as typed (a save that just landed).
-    sources: [ed.original, ed.savingSource, ta.value].filter((v) => v !== null),
+    index: ed.index, original: ed.original, blocks: ed.blocks,
+    expect: ed.expect, savingSource: ed.savingSource,
+    draftKey: ed.draftKey,
     value: ta.value,
     start: ta.selectionStart,
     end: ta.selectionEnd,
@@ -1711,18 +1893,50 @@ function captureOpenText() {
 }
 
 function restoreOpenText(resume) {
-  // The nearest match within one place: an insert or delete just above it
-  // shifts its index by one. Anything further, or a block whose text no
-  // longer matches (Undo put an older version back), closes it -- the text
-  // was flushed before any of those actions ran.
-  const block = [resume.index, resume.index - 1, resume.index + 1]
-    .map((i) => state.blocks[i])
-    .find((b) => b && resume.sources.includes(b.source) && !b.images && !b.videos
-      && !(b.kind === 'pair' && b.text !== undefined));
-  if (!block) return;
+  let block = null;
+  let value = resume.value;
+  const expect = resume.expect;
+  if (state.blocks === resume.blocks) {
+    // Nothing was written: the list is the one it was opened on.
+    block = state.blocks[resume.index];
+  } else if (expect) {
+    // Whoever changed the list said where this block went.
+    block = state.blocks[expect.index];
+    if (expect.own && block) {
+      resume.expect = null;
+      const split = state.blocks.length - expect.count;
+      if (split > 0) {
+        // The save split it ("# Heading" + a paragraph). The rest is now
+        // blocks of its own below, so this editor keeps the first piece --
+        // plus anything typed after the save started, which no block has.
+        const extra = value.startsWith(expect.source) ? value.slice(expect.source.length) : null;
+        value = extra === null ? value : block.source + extra;
+      }
+    } else {
+      resume.expect = null;
+    }
+  } else {
+    // A write that didn't say (merge, Undo, pair...): the block that still
+    // holds this text, within one place. Undo putting an older version
+    // back closes it -- the text was flushed before Undo ran.
+    const texts = [resume.original, resume.savingSource, resume.value]
+      .filter((v) => v !== null).map((v) => v.trimEnd());
+    block = [resume.index, resume.index + 1, resume.index - 1]
+      .map((i) => state.blocks[i])
+      .find((b) => b && texts.includes(b.source.trimEnd())) || null;
+  }
+  if (!isTextEditable(block)) {
+    // Closed under it. Every path that gets here flushed first, so the
+    // text is saved -- but if it somehow isn't, the draft stays and is
+    // offered back on the next load.
+    if (resume.value.trimEnd() === resume.original.trimEnd()) forgetDraft(resume.draftKey);
+    return;
+  }
   const el = els.blocks.querySelector(`.block[data-index="${block.index}"]`);
   if (!el) return;
-  startEditing(el, el.querySelector(':scope > .block-content'), block, resume);
+  startEditing(el, el.querySelector(':scope > .block-content'), block, { ...resume, value });
+  // A save moves the draft to a new key (new source) or clears it.
+  if (openEditor && openEditor.draftKey !== resume.draftKey) forgetDraft(resume.draftKey);
 }
 
 async function saveBlock(index, source, { keepalive = false } = {}) {
@@ -1946,6 +2160,12 @@ function startEditingImages(el, content, block) {
   actions.append(done, cancel);
   content.appendChild(actions);
 
+  const before = JSON.stringify([images, framing.size, framing.side]);
+  openEditor = {
+    kind: 'images', el, index: block.index, save: null,
+    dirty: () => JSON.stringify([images, framing.size, framing.side]) !== before,
+  };
+
   renderThumbs();
 }
 
@@ -1974,7 +2194,7 @@ async function saveBlockImages(index, images, size, side) {
 // is the prose, which is edited as markdown in one textarea rather than as
 // separate blocks. That's the trade the pair makes: a section becomes one
 // thing, so it is edited as one thing.
-function startEditingPair(el, content, block) {
+function startEditingPair(el, content, block, draftText = null) {
   if (el.classList.contains('editing')) return;
   el.classList.add('editing');
   content.innerHTML = '';
@@ -2011,8 +2231,8 @@ function startEditingPair(el, content, block) {
 
   const area = document.createElement('textarea');
   area.className = 'pair-text-input';
-  area.value = block.text;
-  area.rows = Math.max(6, block.text.split('\n').length + 1);
+  area.value = draftText === null ? block.text : draftText;
+  area.rows = Math.max(6, area.value.split('\n').length + 1);
   content.appendChild(area);
 
   const framing = framingControls(block.size, block.side, { sides: ['left', 'right'] });
@@ -2063,7 +2283,7 @@ function startEditingPair(el, content, block) {
       alert('A paired section needs some text. Unpair it if you want just the picture.');
       return;
     }
-    saveBlockPair(block.index, area.value, framing.size, framing.side, chosen, media);
+    closeEditor();
   });
 
   const cancel = document.createElement('button');
@@ -2072,15 +2292,48 @@ function startEditingPair(el, content, block) {
   cancel.textContent = 'Cancel';
   cancel.addEventListener('click', (e) => {
     e.stopPropagation();
+    // Cancel is the one way to throw the prose away on purpose.
+    forgetDraft(ed.draftKey);
+    openEditor = null;
     renderBlocks();
   });
 
   actions.append(done, cancel);
   content.appendChild(actions);
+
+  // Registered like the text editor, so every flush path saves the prose
+  // through the PAIR route -- never the plain block PUT, which would write
+  // the prose over the whole pair and drop its picture.
+  const ed = {
+    kind: 'pair', el, index: block.index,
+    draftKey: draftKey(state.slug, block.index, block.source),
+    dirty: () => area.value.trimEnd() !== block.text.trimEnd()
+      || framing.size !== block.size || framing.side !== block.side
+      || chosen !== (block.justify || 'center'),
+    save: async (options) => {
+      // An empty section is refused by the server; keep the editor open
+      // rather than let an action go on without the save.
+      if (!area.value.trim()) {
+        if (!options.keepalive) {
+          alert('A paired section needs some text. Unpair it if you want just the picture.');
+        }
+        return false;
+      }
+      const text = area.value;
+      const ok = await saveBlockPair(block.index, text, framing.size, framing.side, chosen, media, options);
+      // Saved, so the editor closed with the re-render; clear the draft
+      // unless typing carried on while the save was in flight.
+      if (ok && area.value === text) forgetDraft(ed.draftKey);
+      return ok;
+    },
+  };
+  openEditor = ed;
+  area.addEventListener('input', () => rememberDraft(ed, area.value, block.source));
+  if (draftText !== null) rememberDraft(ed, area.value, block.source);
   area.focus();
 }
 
-async function saveBlockPair(index, text, size, side, justify, media) {
+async function saveBlockPair(index, text, size, side, justify, media, { keepalive = false } = {}) {
   setStatus('saving…');
   let res;
   try {
@@ -2088,12 +2341,13 @@ async function saveBlockPair(index, text, size, side, justify, media) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, size, side, justify, ...media, hash: state.hash }),
+      keepalive,
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);
-    return;
+    return false;
   }
-  await applyWrite(res);
+  return await applyWrite(res);
 }
 
 // Row editor for a `video` block. Same shape as startEditingImages above --
@@ -2272,6 +2526,12 @@ function startEditingVideos(el, content, block) {
   actions.append(done, cancel);
   content.appendChild(actions);
 
+  const before = JSON.stringify([clips, framing.size, framing.side]);
+  openEditor = {
+    kind: 'videos', el, index: block.index, save: null,
+    dirty: () => JSON.stringify([clips, framing.size, framing.side]) !== before,
+  };
+
   renderThumbs();
 }
 
@@ -2337,7 +2597,7 @@ async function splitBlockVideo(index, clips, size, side, split) {
 async function newPost() {
   const title = prompt('Title for the new post:');
   if (!title) return;
-  if (!(await closeTextEditor())) return;
+  if (!(await closeEditor())) return;
 
   setStatus('creating…');
   let res;
@@ -2366,7 +2626,7 @@ async function newPost() {
 
 els.picker.addEventListener('change', async () => {
   const next = els.picker.value;
-  if (!(await closeTextEditor())) {
+  if (!(await closeEditor())) {
     els.picker.value = state.slug;
     return;
   }

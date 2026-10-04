@@ -252,14 +252,20 @@ a { color: #0066cc; }
    keeps the whole column. */
 /* Sized to its text by startEditing, so a drag handle would only fight it. */
 .block textarea.block-source { resize: none; overflow: hidden; }
-.edit-rail { margin-top: 0.5rem; }
+/* Row mode sticks to the bottom of the window, so Done is reachable under a
+   field taller than the screen instead of somewhere below it. */
+.edit-rail {
+    position: sticky; bottom: 0; z-index: 2;
+    margin-top: 0.25rem; padding: 0.4rem 0;
+    background: #fff;
+}
 .edit-rail-inner {
     display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem;
 }
-.block.editing .block-controls {
+.block.text-editing .block-controls {
     position: static; display: flex; flex-wrap: wrap; gap: 0.4rem;
 }
-.block.editing .block-controls button {
+.block.text-editing .block-controls button {
     width: 44px; height: 44px; font-size: 1.15rem;
 }
 .edit-done {
@@ -276,7 +282,7 @@ a { color: #0066cc; }
 
 .block.rail-side .edit-rail {
     position: absolute; top: -1px; bottom: -1px; left: calc(100% + 8px);
-    width: 72px; margin: 0;
+    width: 72px; margin: 0; padding: 0; background: none;
 }
 /* Sticky inside a rail as tall as the block, so on a long paragraph the
    buttons ride along as you scroll it. `top` (below the toolbar) is set
@@ -952,3 +958,22 @@ a { color: #0066cc; }
     color: #9a8340; cursor: pointer;
 }
 .preview-chip button:hover { background: #f2e6c2; color: #5c4a10; }
+
+/* Unsaved text a previous visit left behind (localStorage), offered back
+   above the post. Amber like other "needs a decision" chrome. */
+.draft-offer {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+    margin: 0 -0.5rem 1rem; padding: 0.6rem 0.75rem;
+    border: 2px dashed #b7791f; border-radius: 6px;
+    background: #fffaf0; color: #7a5212; font-size: 0.9rem;
+}
+.draft-offer textarea {
+    flex: 1 0 100%; min-height: 6rem; box-sizing: border-box;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem;
+}
+.draft-offer-buttons { display: flex; gap: 0.5rem; margin-left: auto; }
+.draft-offer button {
+    min-height: 44px; padding: 0 1rem;
+    border: 1px solid #e4cfa0; border-radius: 6px;
+    background: #fff; color: #7a5212; font: inherit; font-weight: 700; cursor: pointer;
+}
