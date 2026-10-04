@@ -1178,8 +1178,7 @@ single-operator app with no per-user account table.
   valid session automatically (an autouse fixture keyed on the literal name
   `client`) — auth-specific tests use a differently-named local client so
   they aren't touched by it. Runs `EDITOR_AUTH_DB` against a throwaway tmp
-  file so the suite never seeds the real gitignored auth database. All 542
-  tests pass with this in place.
+  file so the suite never seeds the real gitignored auth database.
 - **Deployed and live since 2026-09-24** (`blog-editor.service` restarted
   after commit 7bd4313 merged `editor-magic-link-auth` to main). **Deploy
   order still matters for any future auth-affecting change**: sync the SMTP
@@ -1190,8 +1189,7 @@ single-operator app with no per-user account table.
   #    login@edit.cloudy.nyc if it doesn't exist yet, then
   make sync-blog-editor   # writes personal-site/.editor-smtp.env, chmod 600
 
-  # 2. Back in personal-site, on main (after reviewing + merging the branch):
-  git checkout main && git merge editor-magic-link-auth
+  # 2. Back in personal-site, on main:
   make editor-restart      # sudo systemctl restart blog-editor.service
   make editor-logs         # confirm clean startup, then request a link
   ```

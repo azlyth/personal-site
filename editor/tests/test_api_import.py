@@ -90,7 +90,8 @@ def test_import_title_without_slug_characters_is_400():
 
 
 def test_created_post_passes_the_draft_gate():
-    send("# Import Fixture Gate\n\nBody.\n")
+    res = send("# Import Fixture Gate\n\nBody.\n")
+    assert res.status_code == 201, res.text
     result = subprocess.run(
         ["python3", str(config.REPO / "scripts" / "check-drafts.py"),
          str(config.REPO / "content"), "/nonexistent"],

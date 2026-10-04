@@ -16,6 +16,9 @@ so the job here is to make every heading and every paragraph its own block:
 - Leading whitespace is dropped: four spaces of indent is a code block in
   CommonMark, and Platen has no code blocks.
 - A `# ` heading later in the body becomes `## `: one h1 per page.
+- A line that is only `#` characters (`#`, `##`, a stripped `# `, ...) carries
+  no text and is dropped rather than demoted -- demoting it would still leave
+  an empty heading in the body.
 """
 from __future__ import annotations
 
@@ -23,6 +26,7 @@ import re
 
 _H1 = re.compile(r"^#[ \t]+(.+)$")
 _BODY_H1 = re.compile(r"^#(?=[ \t])")
+_BLANK_HEADING = re.compile(r"^#+$")
 
 
 class EmptyImport(ValueError):
@@ -42,6 +46,7 @@ def convert(text: str, name: str) -> tuple[str, str]:
     if not title:
         title = re.sub(r"\.md$", "", name.strip())
 
+    lines = [line for line in lines if not _BLANK_HEADING.match(line)]
     if not lines:
         raise EmptyImport("The document has nothing to post after its title.")
 

@@ -82,6 +82,12 @@ def test_hash_without_space_is_not_a_heading():
     assert body == "#hashtag stays text.\n"
 
 
+def test_blank_heading_line_is_dropped_not_demoted():
+    _, body = convert("# T\n\n#\n\nText.\n", "doc")
+    assert body == "Text.\n"
+    assert kinds(body) == ["paragraph"]
+
+
 def test_title_only_is_rejected():
     with pytest.raises(EmptyImport):
         convert("# Only a title\n\n\n", "doc")
