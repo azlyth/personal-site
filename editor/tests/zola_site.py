@@ -12,8 +12,9 @@ import os
 import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 import pytest
 
@@ -22,12 +23,13 @@ BASE_URL = "https://cloudy.nyc"
 ZOLA_IMAGE = "personal-site-zola"
 
 
-def build_copy(prepare: Callable[[Path], None] | None = None) -> dict[str, str]:
-    """Copy the site, let `prepare(root)` edit the copy, build it.
-
-    Returns {output path relative to the build: text} for every .html and
-    .xml file Zola wrote.
-    """
+@contextmanager
+def built_copy(
+    prepare: Callable[[Path], None] | None = None,
+    zola_args: tuple[str, ...] = (),
+) -> Iterator[Path]:
+    """Copy the site, let `prepare(root)` edit the copy, build it into
+    `root/out`, and yield `root` while the temp dir still exists."""
     if shutil.which("docker") is None:
         pytest.skip("docker is needed to run Zola")
 
@@ -49,13 +51,22 @@ def build_copy(prepare: Callable[[Path], None] | None = None) -> dict[str, str]:
                 "--entrypoint", "zola",
                 ZOLA_IMAGE,
                 "build", "--base-url", BASE_URL,
-                "--output-dir", "/project/out", "--force",
+                "--output-dir", "/project/out", "--force", *zola_args,
             ],
             capture_output=True, text=True,
         )
         if result.returncode != 0:
             pytest.fail(f"zola build failed:\n{result.stdout}\n{result.stderr}")
+        yield root
 
+
+def build_copy(prepare: Callable[[Path], None] | None = None) -> dict[str, str]:
+    """Copy the site, let `prepare(root)` edit the copy, build it.
+
+    Returns {output path relative to the build: text} for every .html and
+    .xml file Zola wrote.
+    """
+    with built_copy(prepare) as root:
         out = root / "out"
         return {
             str(path.relative_to(out)): path.read_text()

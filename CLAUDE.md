@@ -468,6 +468,13 @@ is visible without opening the block that holds it.
   sees no draft flag at all. `frontmatter.set_meta` now lifts the tables out,
   adds the new top-level key and puts them back; `set_extra`/`clear_extra`
   own the nested half, and clearing removes the table when it empties.
+- **Drafts have two locks** (added 2026-10-04). Zola omits `draft = true`
+  pages from `zola build`, and `scripts/check-drafts.py` — run by
+  `build-site.sh` after the build, before the rsync — refuses to promote a
+  build in which a draft's page exists or its title is a feed item. It also
+  fails on a `draft` key nested in `[extra]` (the trap above, which Zola
+  publishes) and on unparseable frontmatter. `editor/tests/test_drafts.py`
+  pins it with real builds, including one forced with `--drafts`.
 - `editor/tests/test_preview_tags.py` builds the real templates with Zola
   against a **copy** of the site (fixtures replacing `content/blog`), because
   `build-site.sh` and the editor's Publish both render the working tree — a

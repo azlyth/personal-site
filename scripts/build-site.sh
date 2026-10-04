@@ -98,6 +98,13 @@ if [ ! -s "$TMP_ABS/index.html" ]; then
   exit 1
 fi
 
+# Refuse to promote a build that contains a draft. Zola already omits them;
+# this is the second lock (see the script's docstring for what it catches).
+if ! python3 "$REPO/scripts/check-drafts.py" "$REPO/content" "$TMP_ABS"; then
+  rm -rf "$TMP_ABS"
+  exit 1
+fi
+
 # Promote: sync the new build's contents into the stable public/ dir.
 mkdir -p "$REPO/public"
 rsync -a --delete "$TMP_ABS/" "$REPO/public/"
