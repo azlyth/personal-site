@@ -84,3 +84,15 @@ def import_token() -> str:
         os.environ.get("EDITOR_IMPORT_TOKEN")
         or _read_env_file(".editor-import.env").get("EDITOR_IMPORT_TOKEN", "")
     ).strip()
+
+
+def claude_bin() -> str:
+    """The claude CLI the proofreader runs. Absolute by default: the systemd
+    unit's PATH has no ~/.local/bin, which is how recipes' prod parser broke
+    on 2026-09-13. Read live so tests can override it."""
+    return os.environ.get("EDITOR_CLAUDE_BIN", "/home/peter/.local/bin/claude")
+
+
+def proofread_model() -> str:
+    """Optional --model for the proofreader; empty means the CLI default."""
+    return os.environ.get("EDITOR_PROOFREAD_MODEL", "").strip()
