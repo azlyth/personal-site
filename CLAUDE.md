@@ -1334,6 +1334,10 @@ edits), Discard (back to the last published version), and "↗ View live".
   published, because Zola publishes it. An untracked file is unlinked; one
   in the index is `git rm -f`ed, staging the removal for the next Publish.
   The post's `editor/.history/<slug>/` goes with it. Not undoable.
+  **The working tree alone isn't trusted**: ticking "draft" on a live post
+  only edits the file, so delete also refuses if HEAD holds a non-draft
+  version of the post -- at its path, at the index's rename source, or at
+  any alias's filename (`_published_in_head`).
 - **Links: the filename is the primary URL, Zola `aliases` are the others**
   (added 2026-10-04). Tapping `/blog/<slug>/` in the meta row opens a Links
   panel: the primary, each other link with **Make primary** / **Remove**,
@@ -1344,7 +1348,9 @@ edits), Discard (back to the last published version), and "↗ View live".
   draft's aliases are not built, and `check-drafts.py` fails a build where
   one was. `tests/test_post_links_build.py` pins both with real builds.
   - **Make primary keeps the old URL.** It is one operation: `git add` +
-    `git mv` to the new filename, old slug into `aliases`, new slug out.
+    `git mv` to the new filename, THEN the aliases written at the new name
+    (old slug in, new slug out) -- so a failure can't leave a self-alias.
+    Any failure restores the file and its exact index entry.
     `POST .../rename` is the same thing for a slug that isn't a link yet --
     the old "rename breaks your links" warning is gone, there is no way to
     rename without leaving a redirect.
