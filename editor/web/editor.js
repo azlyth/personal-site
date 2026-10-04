@@ -801,6 +801,7 @@ function canMergeWithNext(index) {
 // from the small icon buttons in blockControls() since this acts on a pair
 // of blocks, not just the one it's attached to.
 function mergeControl(index) {
+  const source = state.blocks[index].source;
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'merge-control';
@@ -817,8 +818,9 @@ function mergeControl(index) {
     // on the page can still have unsaved text open -- and mousedown above
     // suppressed the blur that would have saved it. Flush before merging,
     // same as every blockControls() action.
-    if (!(await flushPendingEdit())) return;
-    mergeBlock(index);
+    const at = await flushThenFind(index, source);
+    if (at < 0) return;
+    mergeBlock(at);
   });
   return btn;
 }
@@ -1101,8 +1103,9 @@ function blockControls(block) {
   add.title = 'Insert a paragraph';
   add.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!(await flushPendingEdit())) return;
-    askWhereToInsert(block.index, 'New paragraph.', 'a paragraph');
+    const at = await flushThenFind(block.index, block.source);
+    if (at < 0) return;
+    askWhereToInsert(at, 'New paragraph.', 'a paragraph');
   });
 
   const del = document.createElement('button');
@@ -1111,15 +1114,26 @@ function blockControls(block) {
   del.addEventListener('click', async (e) => {
     e.stopPropagation();
     if (!confirm('Delete this block?')) return;
-    // Deleting the open block closes it first (saved, so Undo has it);
-    // deleting another one tells the open editor where its block went.
-    if (openEditor && openEditor.index === block.index) {
+    // Deleting the open block closes it first (saved, so Undo has it).
+    // Deleting another one saves the open one, then finds this block again
+    // -- that save can split, merge or remove the open block, shifting
+    // every index after it.
+    if (openEditor && openEditor.el.contains(del)) {
+      const count = state.blocks.length;
       if (!(await closeEditor())) return;
-    } else {
-      if (!(await flushPendingEdit())) return;
-      expectShift(block.index, -1);
+      // Its own save may have split, merged or removed it: then "this
+      // block" is no longer one thing to delete.
+      if (state.blocks.length !== count) {
+        renderBlocks();
+        setStatus('the post changed under that tap — nothing deleted, try again');
+        return;
+      }
+      removeBlock(block.index);
+      return;
     }
-    removeBlock(block.index);
+    const at = await flushThenFind(block.index, block.source);
+    if (at < 0) return;
+    removeBlock(at);
   });
 
   const photo = document.createElement('button');
@@ -1127,8 +1141,9 @@ function blockControls(block) {
   photo.title = 'Add photos here';
   photo.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!(await flushPendingEdit())) return;
-    pickImages(block.index);
+    const at = await flushThenFind(block.index, block.source);
+    if (at < 0) return;
+    pickImages(at);
   });
 
   // Shows/hides this block's layout controls. Only on the things that HAVE
@@ -1144,9 +1159,10 @@ function blockControls(block) {
     if (state.wrapOpen.has(block.index)) layout.classList.add('active');
     layout.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!(await flushPendingEdit())) return;
-      if (state.wrapOpen.has(block.index)) state.wrapOpen.delete(block.index);
-      else state.wrapOpen.add(block.index);
+      const at = await flushThenFind(block.index, block.source);
+      if (at < 0) return;
+      if (state.wrapOpen.has(at)) state.wrapOpen.delete(at);
+      else state.wrapOpen.add(at);
       renderBlocks();
     });
   }
@@ -1156,8 +1172,9 @@ function blockControls(block) {
   spacer.title = 'Insert a spacer — blank space between sections';
   spacer.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!(await flushPendingEdit())) return;
-    askWhereToInsert(block.index, SPACER_SOURCE, 'a spacer');
+    const at = await flushThenFind(block.index, block.source);
+    if (at < 0) return;
+    askWhereToInsert(at, SPACER_SOURCE, 'a spacer');
   });
 
   // Only where a float is still wrapping -- elsewhere it would insert a
@@ -1169,8 +1186,9 @@ function blockControls(block) {
     stop.title = 'Stop the text wrapping here — start a new full-width section';
     stop.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!(await flushPendingEdit())) return;
-      askWhereToInsert(block.index, CLEAR_SOURCE, 'the stop');
+      const at = await flushThenFind(block.index, block.source);
+      if (at < 0) return;
+      askWhereToInsert(at, CLEAR_SOURCE, 'the stop');
     });
   }
 
@@ -1179,8 +1197,9 @@ function blockControls(block) {
   move.title = 'Move this block';
   move.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!(await flushPendingEdit())) return;
-    enterMoveMode(block.index);
+    const at = await flushThenFind(block.index, block.source);
+    if (at < 0) return;
+    enterMoveMode(at);
   });
 
   bar.append(...[add, photo, spacer, layout, stop, move, del].filter(Boolean));
@@ -1332,7 +1351,6 @@ function pickImages(index) {
     form.append('alts', JSON.stringify(alts));
     form.append('index', index);
     form.append('hash', state.hash);
-    expectShift(index, 1);
 
     setStatus(`uploading ${input.files.length} photo(s)…`);
     let res;
@@ -1345,7 +1363,7 @@ function pickImages(index) {
       setStatus(`upload failed — network error: ${err.message}`);
       return;
     }
-    await applyWrite(res);
+    await applyWrite(res, { at: index, delta: 1 });
   });
 
   input.click();
@@ -1374,17 +1392,19 @@ function insertChoice(block) {
   // `insert_block` inserts BEFORE the index it's given, and accepts the
   // block count itself as "append" -- so "below the last block" needs no
   // special case.
-  [['↑ Above', index], ['↓ Below', index + 1]].forEach(([text, at]) => {
+  [['↑ Above', 0], ['↓ Below', 1]].forEach(([text, offset]) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = text;
     btn.addEventListener('mousedown', (e) => e.preventDefault());
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!(await flushPendingEdit())) return;
+      // Typing since the menu opened is saved first, which can move this
+      // block; find it again rather than insert at a stale index.
+      const found = await flushThenFind(index, block.source);
+      if (found < 0) return;
       state.pendingInsert = null;
-      expectShift(at, 1);
-      insertBlock(at, source);
+      insertBlock(found + offset, source);
     });
     wrap.appendChild(btn);
   });
@@ -1417,7 +1437,7 @@ async function insertBlock(index, source = 'New paragraph.') {
     setStatus(`save failed — network error: ${err.message}`);
     return;
   }
-  await applyWrite(res);
+  await applyWrite(res, { at: index, delta: 1 });
 }
 
 async function removeBlock(index) {
@@ -1433,13 +1453,16 @@ async function removeBlock(index) {
     setStatus(`save failed — network error: ${err.message}`);
     return;
   }
-  await applyWrite(res);
+  await applyWrite(res, { at: index, delta: -1 });
 }
 
-async function applyWrite(res) {
-  // A write that doesn't land doesn't move anything, so the open editor's
-  // expectation of where its block will be is void.
-  if (!res.ok && openEditor) openEditor.expect = null;
+// `change` says how this write moves the open text block, so the rebuild
+// can find it: {at, delta} for an insert/delete at `at`, {own: ...} for the
+// editor's own save. It rides on the write and is only read once the write
+// landed -- a failed write (network error, 409) leaves nothing behind for a
+// later, unrelated render to misread. Whatever it says is still verified
+// against the block's text before the editor re-attaches (restoreOpenText).
+async function applyWrite(res, change = null) {
   if (res.status === 409) {
     setStatus('changed on disk — reload');
     return false;
@@ -1453,8 +1476,18 @@ async function applyWrite(res) {
   }
   const data = await res.json();
   state.hash = data.hash;
+  const before = state.blocks.length;
   state.blocks = data.blocks;
   setCanUndo(data.can_undo);
+  const ed = openEditor;
+  if (ed && ed.kind === 'text') {
+    if (!change) ed.expect = null;
+    else if (change.own) ed.expect = { ...change.own, count: before };
+    else {
+      const moves = change.delta > 0 ? change.at <= ed.index : change.at < ed.index;
+      ed.expect = { index: ed.index + (moves ? change.delta : 0) };
+    }
+  }
   // Undo and Discard can change the frontmatter too (a title, a link), so
   // the meta row and Links panel re-render from the payload as well.
   if (data.meta) {
@@ -1604,13 +1637,29 @@ function isTextEditable(block) {
     && !(block.kind === 'pair' && block.text !== undefined);
 }
 
-// The open text block will move by `delta` if the list changes at `at`
-// (an insert at or above it, a delete above it).
-function expectShift(at, delta) {
+// Save whatever is open, then find again the block a control was built
+// for: that save can split, merge or remove the open block, which shifts
+// every index after it. Returns the block's index now, or -1 -- after
+// re-rendering and saying so -- when it can't be verified, so a tap never
+// acts on a block other than the one it was aimed at.
+async function flushThenFind(index, source) {
+  const count = state.blocks.length;
   const ed = openEditor;
-  if (!ed || ed.kind !== 'text') return;
-  const moves = delta > 0 ? at <= ed.index : at < ed.index;
-  ed.expect = { index: ed.index + (moves ? delta : 0) };
+  const from = ed ? ed.index : -1;
+  const wasOpen = ed && ed.kind === 'text' && ed.index === index;
+  if (!(await flushPendingEdit())) return -1;
+  // The open block itself: its own save just changed its text, so it is
+  // verified by the editor having re-attached to it.
+  if (wasOpen && state.blocks.length === count && openEditor
+      && openEditor.kind === 'text' && openEditor.index === index) {
+    return index;
+  }
+  const at = index > from ? index + state.blocks.length - count : index;
+  const block = state.blocks[at];
+  if (block && block.source === source) return at;
+  renderBlocks();
+  setStatus('the post changed under that tap — nothing done, try again');
+  return -1;
 }
 
 // --- unsaved text survives a reload ------------------------------------
@@ -1676,7 +1725,7 @@ function offerDrafts() {
     const target = findDraftBlock(draft);
     const msg = document.createElement('span');
     msg.textContent = target
-      ? `Unsaved text from ${when} in block ${draft.index + 1}.`
+      ? `Unsaved text from ${when}, for block ${draft.index + 1}.`
       : `Unsaved text from ${when}. Its block has changed since, so copy what you need:`;
     box.appendChild(msg);
     if (!target) {
@@ -1690,7 +1739,7 @@ function offerDrafts() {
     if (target) {
       const restore = document.createElement('button');
       restore.type = 'button';
-      restore.textContent = 'Restore';
+      restore.textContent = `Restore into block ${draft.index + 1}`;
       restore.addEventListener('click', async () => {
         if (!(await closeEditor())) return;
         const block = findDraftBlock(draft);
@@ -1724,8 +1773,9 @@ function offerDrafts() {
 function findDraftBlock(draft) {
   const same = (b) => b && b.source.trimEnd() === draft.original.trimEnd()
     && (draft.kind === 'pair' ? b.kind === 'pair' && b.text !== undefined : isTextEditable(b));
-  if (same(state.blocks[draft.index])) return state.blocks[draft.index];
-  return state.blocks.find(same) || null;
+  // Only where it was typed. Another block with the same text (a second
+  // "New paragraph.") is not this one; then the text is shown to copy.
+  return same(state.blocks[draft.index]) ? state.blocks[draft.index] : null;
 }
 
 // An open text block stays open until its Done button (or opening another
@@ -1761,9 +1811,8 @@ function startEditing(el, content, block, resume = null) {
       const source = textarea.value;
       ed.savingSource = source;
       // The PUT targets this index, so that is where the block is after
-      // it -- even if the save split it in two (a blank line typed in).
-      ed.expect = { index: ed.index, own: true, count: state.blocks.length, source };
-      return saveBlock(ed.index, source, options);
+      // it -- if it is still there (see restoreOpenText).
+      return saveBlock(ed.index, source, options, { own: { index: ed.index, own: true, source } });
     },
   };
   openEditor = ed;
@@ -1892,44 +1941,62 @@ function captureOpenText() {
   };
 }
 
+// Never re-attach to a block that hasn't been verified as this one. When it
+// can't be, the editor closes and its localStorage draft (if the typing
+// isn't on the server) stays, to be offered back by the Restore strip.
+// Losing the open editor is fine; writing over the wrong block is not.
 function restoreOpenText(resume) {
+  const trim = (v) => (v === null || v === undefined ? null : v.trimEnd());
   let block = null;
   let value = resume.value;
+  let saved = null; // text the server now holds for this editor, if known
   const expect = resume.expect;
+  resume.expect = null;
   if (state.blocks === resume.blocks) {
     // Nothing was written: the list is the one it was opened on.
-    block = state.blocks[resume.index];
-  } else if (expect) {
-    // Whoever changed the list said where this block went.
-    block = state.blocks[expect.index];
-    if (expect.own && block) {
-      resume.expect = null;
-      const split = state.blocks.length - expect.count;
-      if (split > 0) {
-        // The save split it ("# Heading" + a paragraph). The rest is now
-        // blocks of its own below, so this editor keeps the first piece --
-        // plus anything typed after the save started, which no block has.
-        const extra = value.startsWith(expect.source) ? value.slice(expect.source.length) : null;
-        value = extra === null ? value : block.source + extra;
+    const b = state.blocks[resume.index];
+    if (b && b.source === resume.original) block = b;
+  } else if (expect && expect.own) {
+    // Its own save landed. The PUT went to expect.index, but a save can
+    // also remove the block (saved empty) or merge it into a neighbour
+    // ("- x" typed after a list): then nothing at that index is this block.
+    const b = state.blocks[expect.index];
+    const sent = trim(expect.source);
+    saved = expect.source;
+    if (b && state.blocks.length === expect.count && trim(b.source) === sent) {
+      block = b;
+    } else if (b && state.blocks.length > expect.count && sent.startsWith(trim(b.source))
+               && trim(b.source) !== '') {
+      // Split ("# Heading" + a paragraph): the rest is blocks of its own
+      // below, so keep editing the first piece -- plus anything typed after
+      // the save started, which no block has yet. Typing anywhere else in
+      // it can't be placed, so that closes (draft kept).
+      if (value.startsWith(expect.source)) {
+        block = b;
+        value = b.source + value.slice(expect.source.length);
       }
-    } else {
-      resume.expect = null;
     }
+  } else if (expect) {
+    // An insert or delete elsewhere said where it went; check the text.
+    const b = state.blocks[expect.index];
+    if (b && [resume.original, resume.savingSource, resume.value]
+      .some((t) => t !== null && trim(t) === trim(b.source))) block = b;
   } else {
-    // A write that didn't say (merge, Undo, pair...): the block that still
-    // holds this text, within one place. Undo putting an older version
-    // back closes it -- the text was flushed before Undo ran.
-    const texts = [resume.original, resume.savingSource, resume.value]
-      .filter((v) => v !== null).map((v) => v.trimEnd());
-    block = [resume.index, resume.index + 1, resume.index - 1]
-      .map((i) => state.blocks[i])
-      .find((b) => b && texts.includes(b.source.trimEnd())) || null;
+    // A write that didn't say (merge, Undo, pair...): only the same index,
+    // and only if it still holds this text. Undo putting older text back
+    // closes it -- the text was flushed before Undo ran.
+    const b = state.blocks[resume.index];
+    if (b && [resume.original, resume.savingSource, resume.value]
+      .some((t) => t !== null && trim(t) === trim(b.source))) block = b;
   }
   if (!isTextEditable(block)) {
-    // Closed under it. Every path that gets here flushed first, so the
-    // text is saved -- but if it somehow isn't, the draft stays and is
-    // offered back on the next load.
-    if (resume.value.trimEnd() === resume.original.trimEnd()) forgetDraft(resume.draftKey);
+    // Closed under it. Keep the draft unless what was typed is known to be
+    // on the server.
+    const onServer = trim(resume.value) === trim(resume.original)
+      || (saved !== null && resume.value === saved);
+    if (onServer) forgetDraft(resume.draftKey);
+    if (!onServer) setStatus('closed the editor — your text is kept, see the note above the post');
+    if (!onServer) offerDrafts();
     return;
   }
   const el = els.blocks.querySelector(`.block[data-index="${block.index}"]`);
@@ -1939,7 +2006,7 @@ function restoreOpenText(resume) {
   if (openEditor && openEditor.draftKey !== resume.draftKey) forgetDraft(resume.draftKey);
 }
 
-async function saveBlock(index, source, { keepalive = false } = {}) {
+async function saveBlock(index, source, { keepalive = false } = {}, change = null) {
   setStatus('saving…');
   let res;
   try {
@@ -1954,7 +2021,7 @@ async function saveBlock(index, source, { keepalive = false } = {}) {
     setStatus(`save failed — network error: ${err.message}`);
     return false;
   }
-  return await applyWrite(res);
+  return await applyWrite(res, change);
 }
 
 // Thumbnail editor for an `image`/`img_row` block. All markup generation

@@ -69,10 +69,13 @@ BODY = (
     "A short opening paragraph.\n\n"
     f"{LONG.strip()}\n\n"
     "A closing paragraph that follows the long one.\n\n"
-    f"{PAIR}\n"
+    f"{PAIR}\n\n"
+    "- one\n- two\n\n"
+    "After the list.\n\n"
+    "Final words.\n"
 )
 # Block indices in BODY.
-FIRST, LONG_IDX, CLOSING, PAIR_IDX = 0, 1, 2, 3
+FIRST, LONG_IDX, CLOSING, PAIR_IDX, LIST_IDX, AFTER_LIST, FINAL = 0, 1, 2, 3, 4, 5, 6
 
 VIEWPORTS = [(1024, 1366), (1366, 1024), (820, 1180)]
 
@@ -516,9 +519,106 @@ def run_review_cases(cdp, base, w, h, check):
             cdp("Emulation.setDeviceMetricsOverride", width=w, height=h,
                 deviceScaleFactor=1, mobile=True)
 
+    # --- Re-review: never re-attach to (or restore onto) an unverified block.
+    SET_TEXT = ("(text) => { const t = document.querySelector('.block.editing textarea');"
+                " t.value = text; t.dispatchEvent(new Event('input')); }")
+
+    def set_text(text):
+        cdp.js(f"({SET_TEXT})({json.dumps(text)})")
+
+    def done_if_open():
+        if cdp.rect(".block.editing .edit-done"):
+            cdp.tap_el(".block.editing .edit-done", 1.0)
+
+    def case_8():
+        # NEW-1: a paragraph saved empty is removed; the editor must not
+        # reopen on the block that moved into its index.
+        load(cdp, base)
+        cdp.tap_el(block_sel(FIRST), 0.6)
+        set_text("")
+        cdp.tap_el(PLUS, 1.0)
+        done_if_open()
+        text = POST.read_text()
+        check("re-review 1: clearing a paragraph leaves the next block untouched",
+              text.count("This paragraph is one long") == 6
+              and "A short opening" not in text, text[:400])
+
+    def case_9():
+        # NEW-1: "- x" after a list merges into it; the next block survives.
+        load(cdp, base)
+        cdp.tap_el(block_sel(AFTER_LIST), 0.6)
+        set_text("- x")
+        cdp.tap_el(PLUS, 1.0)
+        done_if_open()
+        text = POST.read_text()
+        check("re-review 1: a save that merges into a list overwrites nothing",
+              "Final words." in text and "- x" in text and "- two" in text, text[-300:])
+
+    def case_10():
+        # NEW-2: a network error during Insert Above, then Undo.
+        load(cdp, base)
+        open_long(cdp)
+        cdp.js(CARET_END)
+        cdp("Input.insertText", text=" Undo me.")
+        cdp.tap_el(PLUS, 1.0)  # saves
+        cdp("Network.emulateNetworkConditions", offline=True, latency=0,
+            downloadThroughput=-1, uploadThroughput=-1)
+        try:
+            cdp.tap_el(".insert-choice button", 1.0)  # Above, fails
+        finally:
+            cdp("Network.emulateNetworkConditions", offline=False, latency=0,
+                downloadThroughput=-1, uploadThroughput=-1)
+        cdp.js("document.getElementById('undo').click()")
+        time.sleep(1.2)
+        s = state(cdp)
+        done_if_open()
+        text = POST.read_text()
+        check("re-review 2: after a failed insert, Undo doesn't move the editor",
+              s["editing"] in (None, LONG_IDX)
+              and "A closing paragraph that follows the long one." in text
+              and text.count("This paragraph is one long") == 6, {"state": s, "text": text[:200]})
+
+    def case_11():
+        # NEW-3: a draft whose block changed is never restored onto another
+        # block with the same text.
+        POST.write_text(BODY + "\nNew paragraph.\n")
+        cdp("Page.navigate", url=f"{base}/edit/{SLUG}")
+        time.sleep(1.5)
+        cdp.js("localStorage.setItem('editor-draft:%s:2:x:old', JSON.stringify({kind: 'text',"
+               " index: 2, original: 'New paragraph.', text: 'Draft for a gone block.', at: Date.now()}))"
+               % SLUG)
+        cdp("Page.reload")
+        time.sleep(2.0)
+        copy_box = cdp.rect(".draft-offer textarea")
+        restore = cdp.js("[...document.querySelectorAll('.draft-offer button')]"
+                         ".some((b) => b.textContent.startsWith('Restore'))")
+        cdp.tap_el(".draft-offer button", 1.0)  # whatever comes first
+        done_if_open()
+        text = POST.read_text()
+        check("re-review 3: a draft for a changed block is shown to copy, not restored",
+              copy_box and not restore and "Draft for a gone block." not in text
+              and text.endswith("New paragraph.\n"), text[-200:])
+
+    def case_12():
+        # NEW-4: Delete on another block while the open one's save splits.
+        load(cdp, base)
+        cdp.tap_el(block_sel(FIRST), 0.6)
+        set_text("# Head\nBody text.")
+        cdp.js("window.confirm = () => true;"
+               f"document.querySelector('{block_sel(CLOSING)} .block-controls "
+               "button[title=\"Delete this block\"]').click()")
+        time.sleep(1.5)
+        done_if_open()
+        text = POST.read_text()
+        check("re-review 4: Delete during a split removes the block it was aimed at",
+              "A closing paragraph" not in text and text.count("This paragraph is one long") == 6
+              and "# Head" in text and "Body text." in text and PAIR in text, text[:300])
+
+
     # Each case reports a FAIL rather than crashing the run when the code
     # under test doesn't even get far enough to measure.
-    for case in [case_1, case_2, case_3, case_4, case_5, case_6, case_7]:
+    for case in [case_1, case_2, case_3, case_4, case_5, case_6, case_7,
+                 case_8, case_9, case_10, case_11, case_12]:
         try:
             case()
         except Exception as exc:  # noqa: BLE001

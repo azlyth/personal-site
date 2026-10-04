@@ -1648,6 +1648,18 @@ edits), Discard (back to the last published version), and "↗ View live".
       Restore/Discard, or shows the text to copy when its block changed.
     - Row-mode rail is `position: sticky; bottom: 0`, so Done stays on
       screen under a field taller than the window.
+    - *Re-review: never re-attach, or restore a draft, onto a block that
+      isn't verified as the same one.* A save can REMOVE its block (saved
+      empty) or MERGE it into a neighbour ("- x" after a list); trusting
+      the index then reopened the editor, dirty, on the next block, and the
+      next flush overwrote it. Re-attach now checks the text (and, for a
+      split, that the sent text starts with the first piece and the count
+      grew); on failure the editor closes and its localStorage draft stays
+      for the Restore strip. The expected shift rides on the write
+      (`applyWrite(res, change)`), so a write that fails leaves nothing
+      stale; a draft restores only at its own index, else it is shown to
+      copy; controls find their block again after the flush
+      (`flushThenFind`) and do nothing, with a status line, if they can't.
   `scripts/verify-edit-tap.py` drives all of this in headless Chromium at
   1024x1366, 1366x1024 and 820x1180, review cases included (system
   `python3`, ~5 min; not in
