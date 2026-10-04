@@ -114,7 +114,10 @@ def test_empty_date_returns_400_not_500(temp_post):
     assert temp_post.read_text() == POST
 
 
-def test_rename_moves_the_file_and_keeps_the_old_link(temp_post):
+def test_rename_moves_the_file_and_drops_the_old_link_for_an_unpublished_draft(temp_post):
+    # `temp_post` is a draft that's staged but never committed -- HEAD holds
+    # no published version of it, so nobody can be holding a link to its old
+    # slug, and the rename leaves no alias behind.
     data = client.get(f"/api/posts/{SLUG}").json()
     out = client.post(
         f"/api/posts/{SLUG}/rename",
@@ -122,7 +125,7 @@ def test_rename_moves_the_file_and_keeps_the_old_link(temp_post):
     ).json()
 
     assert out["slug"] == "renamed-post"
-    assert out["meta"]["aliases"] == [SLUG]
+    assert out["meta"].get("aliases") in (None, [])
     assert (config.BLOG_DIR / "renamed-post.md").exists()
     assert not temp_post.exists()
 

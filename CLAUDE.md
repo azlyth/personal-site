@@ -1353,7 +1353,14 @@ edits), Discard (back to the last published version), and "↗ View live".
     Any failure restores the file and its exact index entry.
     `POST .../rename` is the same thing for a slug that isn't a link yet --
     the old "rename breaks your links" warning is gone, there is no way to
-    rename without leaving a redirect.
+    rename without leaving a redirect -- **unless `_published_in_head` says
+    the post was never published** (added 2026-10-04): then nobody can hold
+    a link to the old slug, so `rename` drops it instead of leaving a
+    dead-end alias. `make_link_primary` (promoting an existing alias) is
+    unaffected and always keeps the old slug. The UI exposes this as an
+    **Edit** button on the primary row in the Links panel -- `/blog/
+    [input] /` with Save/Cancel, Enter/Escape -- that posts to the same
+    rename route Make primary already uses.
   - **A slug is unique across every post's filename AND aliases** (409
     naming the owner). New post and Platen import skip slugs an alias holds.
   - **Undo history does not follow a rename**; it is dropped for both the

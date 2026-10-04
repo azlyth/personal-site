@@ -16,6 +16,9 @@ const state = {
   // Whether the Links panel (the post's primary URL and its redirects) is
   // open. Survives re-renders so adding a link doesn't snap it shut.
   linksOpen: false,
+  // Whether the primary row in the Links panel is showing its editor
+  // (an input + Save/Cancel) instead of the plain "primary" badge.
+  editingPrimary: false,
 };
 
 const els = {
@@ -290,8 +293,8 @@ function renderLinks(aliases) {
   heading.append(note);
   els.links.append(heading);
 
-  els.links.append(linkRow(state.slug, true));
-  for (const alias of aliases) els.links.append(linkRow(alias, false));
+  els.links.append(state.editingPrimary ? primaryEditRow(aliases) : primaryRow(aliases));
+  for (const alias of aliases) els.links.append(linkRow(alias));
 
   const add = document.createElement('form');
   add.className = 'link-add';
@@ -319,25 +322,107 @@ function renderLinks(aliases) {
     linkWrite(`/api/posts/${state.slug}/links`, 'POST', { slug: input.value }, 'adding link');
   });
   els.links.append(add);
+
+  if (state.editingPrimary) {
+    const input = els.links.querySelector('.link-row-edit input[type="text"]');
+    input?.focus();
+    input?.select();
+  }
 }
 
-function linkRow(slug, primary) {
+// The primary row as plain display: its URL, the "primary" badge, and an
+// Edit button that swaps this same row for primaryEditRow()'s input.
+function primaryRow(aliases) {
+  const row = document.createElement('div');
+  row.className = 'link-row is-primary';
+
+  const path = document.createElement('span');
+  path.className = 'link-path';
+  path.textContent = `/blog/${state.slug}/`;
+
+  const badge = document.createElement('span');
+  badge.className = 'link-badge';
+  badge.textContent = 'primary';
+
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'link-action';
+  edit.textContent = 'Edit';
+  edit.title = "Change this post's primary URL";
+  edit.addEventListener('click', () => {
+    state.editingPrimary = true;
+    renderLinks(aliases);
+  });
+
+  row.append(path, badge, edit);
+  return row;
+}
+
+// The primary row swapped for an editor: /blog/ [input] /, Save, Cancel.
+// Save posts the same rename route Make primary already uses under the
+// hood; Cancel (or Escape) drops back to primaryRow() untouched.
+function primaryEditRow(aliases) {
+  const row = document.createElement('form');
+  row.className = 'link-row is-primary link-row-edit';
+
+  const prefix = document.createElement('span');
+  prefix.className = 'link-prefix';
+  prefix.textContent = '/blog/';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = state.slug;
+  input.autocapitalize = 'none';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('aria-label', 'Edit primary link slug');
+
+  const suffix = document.createElement('span');
+  suffix.className = 'link-prefix';
+  suffix.textContent = '/';
+
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'link-action';
+  save.textContent = 'Save';
+
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'link-action';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => {
+    state.editingPrimary = false;
+    renderLinks(aliases);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      state.editingPrimary = false;
+      renderLinks(aliases);
+    }
+  });
+
+  row.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!input.value.trim()) return;
+    state.editingPrimary = false;
+    linkWrite(`/api/posts/${state.slug}/rename`, 'POST', { new_slug: input.value }, 'editing primary link');
+  });
+
+  row.append(prefix, input, suffix, save, cancel);
+  return row;
+}
+
+// A non-primary link row: its URL plus Make primary / Remove.
+function linkRow(slug) {
   const row = document.createElement('div');
   row.className = 'link-row';
-  row.classList.toggle('is-primary', primary);
 
   const path = document.createElement('span');
   path.className = 'link-path';
   path.textContent = `/blog/${slug}/`;
   row.append(path);
-
-  if (primary) {
-    const badge = document.createElement('span');
-    badge.className = 'link-badge';
-    badge.textContent = 'primary';
-    row.append(badge);
-    return row;
-  }
 
   const makePrimary = document.createElement('button');
   makePrimary.type = 'button';

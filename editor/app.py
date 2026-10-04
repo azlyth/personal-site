@@ -1438,12 +1438,13 @@ def _undo_move(path, target, raw, moved, relative, new_relative, saved_index) ->
         )
 
 
-def _make_primary(slug: str, new_slug: str):
+def _make_primary(slug: str, new_slug: str, *, keep_old_alias: bool = True):
     """Rename the post to `new_slug`, keeping its old URL as a redirect.
 
     One operation, three changes: the file moves (`git mv`, so its history
     follows and the rename is staged for the next Publish), the old slug
-    joins `aliases`, and the new slug leaves them.
+    joins `aliases` (unless `keep_old_alias` is False -- nobody can hold a
+    link to a slug that was never published), and the new slug leaves them.
 
     Undo history does NOT follow. A snapshot is the whole file, and every
     snapshot taken before the swap lacks the old slug in its aliases --
@@ -1460,7 +1461,8 @@ def _make_primary(slug: str, new_slug: str):
         e for e in _alias_entries(read_meta(frontmatter))
         if _alias_slug(e) not in (new_slug, slug)
     ]
-    entries.append(_alias_path(slug))
+    if keep_old_alias:
+        entries.append(_alias_path(slug))
 
     # Move first, write second: the frontmatter only ever changes at the
     # NEW name, so a failure or a kill part-way can't leave the old file
@@ -1550,15 +1552,19 @@ class Rename(BaseModel):
 
 @app.post("/api/posts/{slug}/rename")
 def rename_post(slug: str, rename: Rename):
-    """Give the post a new primary slug. The old one ALWAYS stays as a
-    redirect -- this is Make primary for a slug that isn't a link yet."""
-    _, raw, _, _ = _read_post(slug)
+    """Edit the post's primary slug. If the post has been published --
+    `_published_in_head` holds a non-draft version of it -- the old slug
+    stays as a redirect, exactly like Make primary. If it never has, nobody
+    can be holding a link to the old slug, so it is dropped rather than left
+    as a dead-end alias."""
+    path, raw, frontmatter, _ = _read_post(slug)
     _require_fresh(raw, rename.hash)
     new_slug = _sanitize_slug(rename.new_slug)
     if new_slug == slug:
         raise HTTPException(status_code=400, detail="that's already this post's slug")
     _claim(new_slug, slug)
-    return _make_primary(slug, new_slug)
+    keep_old_alias = _published_in_head(path, read_meta(frontmatter))
+    return _make_primary(slug, new_slug, keep_old_alias=keep_old_alias)
 
 
 # --- Delete draft -------------------------------------------------------------

@@ -265,15 +265,38 @@ def test_rename_refuses_another_posts_alias(site):
     data = load("first")
     res = client.post("/api/posts/first/rename", json={"new_slug": "claimed", "hash": data["hash"]})
     assert res.status_code == 409
+    assert (site / "content" / "blog" / "first.md").exists()
+    assert not (site / "content" / "blog" / "claimed.md").exists()
 
 
 def test_rename_to_its_own_alias_is_make_primary(site):
-    write(site, "first", post("P", aliases=["/blog/second/"]))
+    write(site, "first", post("P", aliases=["/blog/second/"]), commit=True)
     data = load("first")
     out = client.post("/api/posts/first/rename",
                       json={"new_slug": "second", "hash": data["hash"]}).json()
     assert out["slug"] == "second"
     assert out["meta"]["aliases"] == ["first"]
+
+
+def test_rename_of_an_unpublished_draft_drops_the_old_alias(site):
+    # Nobody can be holding a link to a slug that was never published, so
+    # editing a draft's primary leaves no dead-end redirect behind.
+    write(site, "first", post("P", draft=True), commit=True)
+    data = load("first")
+    res = client.post("/api/posts/first/rename", json={"new_slug": "second", "hash": data["hash"]})
+    assert res.status_code == 200
+    out = res.json()
+    assert out["slug"] == "second"
+    assert out["meta"].get("aliases") in (None, [])
+    assert aliases_on_disk(site / "content" / "blog" / "second.md") is None
+    assert not (site / "content" / "blog" / "first.md").exists()
+
+
+def test_rename_refuses_a_stale_hash(site):
+    write(site, "first", post("P"), commit=True)
+    res = client.post("/api/posts/first/rename", json={"new_slug": "second", "hash": "stale"})
+    assert res.status_code == 409
+    assert (site / "content" / "blog" / "first.md").exists()
 
 
 def test_rename_of_never_committed_post_works(site):
