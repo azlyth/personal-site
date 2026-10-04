@@ -73,3 +73,14 @@ def load_smtp_env() -> dict:
     run, dev before the sync has run -- means "log the link instead of
     sending it" (see editor/auth/mailer.py)."""
     return _read_env_file(".editor-smtp.env")
+
+
+def import_token() -> str:
+    """The shared secret Platen sends as X-Import-Token (see app.py's
+    import_post). Read live, not at import, so tests can monkeypatch it.
+    The env var wins over the gitignored .editor-import.env. Empty means
+    the import route is switched off."""
+    return (
+        os.environ.get("EDITOR_IMPORT_TOKEN")
+        or _read_env_file(".editor-import.env").get("EDITOR_IMPORT_TOKEN", "")
+    ).strip()

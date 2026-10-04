@@ -1180,11 +1180,11 @@ single-operator app with no per-user account table.
   they aren't touched by it. Runs `EDITOR_AUTH_DB` against a throwaway tmp
   file so the suite never seeds the real gitignored auth database. All 542
   tests pass with this in place.
-- **NOT deployed as of 2026-09-24.** The branch is `editor-magic-link-auth`
-  in this checkout; `blog-editor.service` and its systemd unit are
-  untouched. **Deploy order matters**: sync the SMTP creds BEFORE
-  restarting the service, or the first deploy locks Peter out with no way
-  to receive a login link.
+- **Deployed and live since 2026-09-24** (`blog-editor.service` restarted
+  after commit 7bd4313 merged `editor-magic-link-auth` to main). **Deploy
+  order still matters for any future auth-affecting change**: sync the SMTP
+  creds BEFORE restarting the service, or a deploy that changes how links
+  are sent locks Peter out with no way to receive a login link.
   ```
   # 1. In personal-cloud-infra: provision the SES identity for
   #    login@edit.cloudy.nyc if it doesn't exist yet, then
@@ -1199,6 +1199,13 @@ single-operator app with no per-user account table.
   `mailer.send_login_link` logs the link to the unit's journal instead of
   sending, so `make editor-logs` shows it. Just don't leave it that way for
   real use.
+- **One route skips the session: `POST /api/import`** (added 2026-10-04),
+  Platen's send-to-blog. It authenticates with `X-Import-Token` against
+  `EDITOR_IMPORT_TOKEN` in the gitignored `.editor-import.env` (0600), and
+  answers 404 when that's unset. It always creates a new `draft = true` post
+  via `_create_draft`, the same helper New post uses; the text→blocks rules
+  are in `editor/importer.py`. `TOKEN_AUTH_EXACT` in `auth/middleware.py`
+  lists it and `test_auth.py` pins the list.
 
 ### How the editor edits (the rules that keep it from eating posts)
 

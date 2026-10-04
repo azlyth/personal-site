@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -11,16 +12,16 @@ import tempfile
 from pathlib import Path
 
 import boto3
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from PIL import UnidentifiedImageError
 
 import tomlkit
 
-from editor import config, history, pairs, videos
+from editor import config, history, importer, pairs, videos
 from editor.auth.middleware import AuthMiddleware
 from editor.auth.routes import router as auth_router
 from editor.blocks import (
@@ -179,9 +180,11 @@ class NewPost(BaseModel):
     title: str
 
 
-@app.post("/api/posts")
-def create_post(new: NewPost):
-    slug = re.sub(r"[^a-z0-9]+", "-", new.title.lower()).strip("-")
+def _create_draft(title: str, body: str) -> str:
+    """Write a new draft post and return its slug. Shared by New post and
+    Platen's import so the slug, collision and frontmatter rules can't
+    drift apart."""
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     if not slug:
         raise HTTPException(status_code=400, detail="title has no usable characters")
 
@@ -197,17 +200,49 @@ def create_post(new: NewPost):
     # produce invalid TOML that read_meta can't parse back. Same class of
     # bug as the alt-text escaping elsewhere in this project.
     doc = tomlkit.document()
-    doc["title"] = new.title
+    doc["title"] = title
     doc["date"] = datetime.date.today()
     doc["draft"] = True
     frontmatter = tomlkit.dumps(doc)
 
     # Blank-line-before-body style, matching every current post (see
     # test_frontmatter.py) and join_post's separator handling.
-    body = "\nStart writing.\n"
+    _atomic_write_text(config.BLOG_DIR / f"{candidate}.md", join_post(frontmatter, "\n" + body))
+    return candidate
 
-    _atomic_write_text(config.BLOG_DIR / f"{candidate}.md", join_post(frontmatter, body))
-    return get_post(candidate)
+
+@app.post("/api/posts")
+def create_post(new: NewPost):
+    return get_post(_create_draft(new.title, "Start writing.\n"))
+
+
+class ImportDoc(BaseModel):
+    text: str = Field(max_length=1_000_000)
+    name: str = Field(default="", max_length=500)
+
+
+@app.post("/api/import", status_code=201)
+def import_post(doc: ImportDoc, x_import_token: str | None = Header(default=None)):
+    """Platen's "Send to blog": a new draft from a Platen doc, every time.
+
+    Authenticated by X-Import-Token, not the session cookie (see
+    auth/middleware.py's TOKEN_AUTH_EXACT). With no token configured the
+    route doesn't exist as far as a caller can tell. Always a draft, so the
+    draft gate keeps it off cloudy.nyc until it's un-drafted here.
+    """
+    expected = config.import_token()
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if not x_import_token or not hmac.compare_digest(
+        x_import_token.encode(), expected.encode()
+    ):
+        raise HTTPException(status_code=401, detail="bad import token")
+    try:
+        title, body = importer.convert(doc.text, doc.name)
+    except importer.EmptyImport as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    slug = _create_draft(title, body)
+    return {"slug": slug, "edit_url": f"{config.BASE_URL}/edit/{slug}"}
 
 
 def _post_path(slug: str):

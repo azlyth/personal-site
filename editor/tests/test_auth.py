@@ -18,7 +18,12 @@ from editor import config
 from editor.app import app
 from editor.auth import security, service, store
 from editor.auth.deps import SESSION_COOKIE
-from editor.auth.middleware import PUBLIC_EXACT, PUBLIC_PREFIXES, is_public
+from editor.auth.middleware import (
+    PUBLIC_EXACT,
+    PUBLIC_PREFIXES,
+    TOKEN_AUTH_EXACT,
+    is_public,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -210,7 +215,7 @@ def test_every_route_requires_auth_unless_explicitly_public():
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        if is_public(route.path):
+        if is_public(route.path) or route.path in TOKEN_AUTH_EXACT:
             continue
         url = _dummy_path(route.path)
         for method in route.methods - {"HEAD", "OPTIONS"}:
@@ -231,6 +236,17 @@ def test_public_allowlist_is_short_and_explicit():
         "/", "/auth/request", "/auth/verify", "/favicon.svg", "/favicon.ico",
     })
     assert PUBLIC_PREFIXES == ("/static/", "/edit/")
+    # Routes that skip the session check because they authenticate with a
+    # shared secret instead. Each is a deliberate decision; see app.py.
+    assert TOKEN_AUTH_EXACT == frozenset({"/api/import"})
+
+
+def test_token_auth_routes_refuse_an_anonymous_caller(monkeypatch):
+    from editor import config
+    monkeypatch.setattr(config, "import_token", lambda: "configured")
+    anon = _fresh()
+    for path in TOKEN_AUTH_EXACT:
+        assert anon.post(path, json={"text": "# A\n\nB", "name": "x"}).status_code == 401
 
 
 def test_static_assets_stay_reachable_signed_out():

@@ -57,6 +57,7 @@ node_modules
 # this) and the sqlite file holding login tokens/sessions. Neither may ever
 # be committed.
 /.editor-smtp.env
+/.editor-import.env
 /.editor-auth.db
 
 # Zola build output from `zola check` -- 25MB of HTML and multi-MB PNGs.
