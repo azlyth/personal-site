@@ -228,3 +228,27 @@ def test_commit_stages_literal_asterisk_filename(repo: Path):
     status = _git(repo, "status", "--porcelain")
     assert "unrelated.txt" in status
     assert "star2.md" in status  # still untracked, not swept into the commit
+
+
+def test_commit_stages_a_staged_deletion(repo: Path):
+    # Deleting a draft `git rm`s it, so the path is gone from disk AND the
+    # index -- `git add` of it would fail "pathspec did not match".
+    _git(repo, "rm", "-q", "content/a.md")
+    sha = commit_paths(repo, ["content/a.md"], "delete a")
+    assert sha
+    assert _git(repo, "ls-tree", "-r", "--name-only", "HEAD").split() == []
+
+
+def test_commit_stages_a_staged_rename(repo: Path):
+    # `git mv` (Make primary / rename): status reports both paths, and the
+    # old one is in neither the working tree nor the index any more.
+    _git(repo, "mv", "content/a.md", "content/b.md")
+    sha = commit_paths(repo, ["content/b.md", "content/a.md"], "rename a")
+    assert sha
+    assert _git(repo, "ls-tree", "-r", "--name-only", "HEAD").split() == ["content/b.md"]
+
+
+def test_commit_stages_an_unstaged_deletion(repo: Path):
+    (repo / "content" / "a.md").unlink()
+    assert commit_paths(repo, ["content/a.md"], "delete a")
+    assert _git(repo, "ls-tree", "-r", "--name-only", "HEAD").split() == []

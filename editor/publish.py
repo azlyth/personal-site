@@ -35,13 +35,38 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def _removed_from_index(repo: Path) -> set[str]:
+    """Paths in HEAD that are gone from both the index and the working tree."""
+    try:
+        in_head = _git(repo, "ls-tree", "-r", "-z", "--name-only", "HEAD")
+    except subprocess.CalledProcessError:
+        return set()  # no commits yet, so nothing can have been removed
+    indexed = set(_git(repo, "ls-files", "-z").split("\0"))
+    return {
+        p for p in in_head.split("\0")
+        if p and p not in indexed and not (repo / p).exists()
+    }
+
+
 def commit_paths(repo: Path, paths: list[str], message: str) -> str | None:
     """Stage exactly `paths` and commit. Returns the sha, or None if no change."""
     if not paths:
         return None
 
+    # A path HEAD holds that's in neither the working tree nor the index is
+    # a removal that's ALREADY staged -- `git rm` (Delete draft) or the old
+    # side of a `git mv` (rename / Make primary). There's nothing left to
+    # add for it, and `git add` of a path matching nothing fails the whole
+    # command ("pathspec did not match"), which used to make every rename
+    # unpublishable. Anything else still goes to `git add`, so a path that
+    # never existed keeps failing loudly. Both listings are -z and compared
+    # literally, so a filename with glob characters can't match another.
+    staged_removals = _removed_from_index(repo)
+    to_add = [p for p in paths if p not in staged_removals]
+
     # `git add --` with explicit paths: never -A, never .
-    _git(repo, "add", "--", *paths)
+    if to_add:
+        _git(repo, "add", "--", *to_add)
 
     staged = _git(repo, "diff", "--cached", "--name-only")
     if not staged:
