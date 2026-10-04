@@ -1327,6 +1327,38 @@ edits), Discard (back to the last published version), and "↗ View live".
     `rename_post` stages exactly like that -- and `git checkout HEAD --` on
     one of those fails, surfacing as a 500 instead of the clear "never been
     committed" refusal. A brand-new draft is refused rather than deleted.
+- **Delete draft** (added 2026-10-04) is a red button at the end of the meta
+  row, shown only on drafts, behind `window.confirm`. `DELETE
+  /api/posts/{slug}` (hash-checked, 409 when stale) refuses anything without
+  a top-level `draft = true` (400) -- a flag misplaced in `[extra]` counts as
+  published, because Zola publishes it. An untracked file is unlinked; one
+  in the index is `git rm -f`ed, staging the removal for the next Publish.
+  The post's `editor/.history/<slug>/` goes with it. Not undoable.
+- **Links: the filename is the primary URL, Zola `aliases` are the others**
+  (added 2026-10-04). Tapping `/blog/<slug>/` in the meta row opens a Links
+  panel: the primary, each other link with **Make primary** / **Remove**,
+  and an **Add** field. Others live in top-level frontmatter as
+  `aliases = ["/blog/<old>/"]` (always that canonical shape on disk; the API
+  and `meta.aliases` speak bare slugs). Zola 0.20 builds each to
+  `blog/<old>/index.html`, a meta-refresh + canonical to the primary; a
+  draft's aliases are not built, and `check-drafts.py` fails a build where
+  one was. `tests/test_post_links_build.py` pins both with real builds.
+  - **Make primary keeps the old URL.** It is one operation: `git add` +
+    `git mv` to the new filename, old slug into `aliases`, new slug out.
+    `POST .../rename` is the same thing for a slug that isn't a link yet --
+    the old "rename breaks your links" warning is gone, there is no way to
+    rename without leaving a redirect.
+  - **A slug is unique across every post's filename AND aliases** (409
+    naming the owner). New post and Platen import skip slugs an alias holds.
+  - **Undo history does not follow a rename**; it is dropped for both the
+    old and new name. Snapshots are whole files, and one taken before the
+    swap would, restored at the new name, 404 the old URL and alias the post
+    to itself. Add/Remove snapshot first, like the meta route, so they undo.
+  - **`publish.commit_paths` skips paths that are already staged removals**
+    (in HEAD, gone from index and disk). `git add` of such a path fails the
+    whole command, and `_dirty_paths` reports the old side of every `git mv`
+    -- so before this, **every rename was unpublishable** ("pathspec did not
+    match"). A path that never existed still fails loudly.
 - **Text wrapping is a float and nothing more: the row picks a side.** A
   photo or clip sitting next to prose is a third class on the row
   (`<div class="video-row size-medium beside-right">`) plus `float: right`.
