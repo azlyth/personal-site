@@ -11,12 +11,14 @@ body {
 
 .bar {
     position: sticky; top: 0; z-index: 10;
-    display: flex; gap: 0.75rem; align-items: center;
+    /* Wraps on a portrait tablet (820px): one line of buttons ran ~180px
+       past the window there, so the browser zoomed the whole page out. */
+    display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;
     padding: 0.75rem 1rem;
     background: #f8f9fa; border-bottom: 1px solid #e9ecef;
 }
 
-.bar select { flex: 1; padding: 0.5rem; font-size: 1rem; }
+.bar select { flex: 1 1 12rem; min-width: 0; padding: 0.5rem; font-size: 1rem; }
 /* When a long status line (an error's detail) needs the room, the buttons
    keep their one-line labels instead of wrapping into two-line blocks. */
 .bar button { white-space: nowrap; flex-shrink: 0; }
@@ -241,6 +243,61 @@ a { color: #0066cc; }
     margin: 0;
 }
 .block.editing { border-color: #0066cc; background: #fff; cursor: default; }
+
+/* An open text block's controls, its Done button and any menu they open
+   live in one rail (see startEditing). Always shown -- the tablet has no
+   hover -- and every button a 44px target. By default it is a row under the
+   field; `.rail-side`, set when the window has room beside a full-width
+   block, makes it a column to the right of the block instead, so the text
+   keeps the whole column. */
+/* Sized to its text by startEditing, so a drag handle would only fight it. */
+.block textarea.block-source { resize: none; overflow: hidden; }
+.edit-rail { margin-top: 0.5rem; }
+.edit-rail-inner {
+    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem;
+}
+.block.editing .block-controls {
+    position: static; display: flex; flex-wrap: wrap; gap: 0.4rem;
+}
+.block.editing .block-controls button {
+    width: 44px; height: 44px; font-size: 1.15rem;
+}
+.edit-done {
+    order: 1; margin-left: auto;
+    min-width: 44px; height: 44px; padding: 0 1.1rem;
+    border: 1px solid #0066cc; border-radius: 6px;
+    background: #0066cc; color: #fff;
+    font: inherit; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer;
+}
+/* The insert menu takes its own line under the buttons that opened it. */
+.edit-rail-inner .insert-choice { order: 2; flex: 1 0 100%; margin: 0; }
+.edit-rail-inner .insert-choice button { min-height: 44px; }
+
+.block.rail-side .edit-rail {
+    position: absolute; top: -1px; bottom: -1px; left: calc(100% + 8px);
+    width: 72px; margin: 0;
+}
+/* Sticky inside a rail as tall as the block, so on a long paragraph the
+   buttons ride along as you scroll it. `top` (below the toolbar) is set
+   from the toolbar's measured height. */
+.block.rail-side .edit-rail-inner {
+    position: sticky;
+    flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+}
+.block.rail-side .edit-done { order: 0; margin: 0 0 0.25rem; padding: 0; }
+.block.rail-side .block-controls { flex-direction: column; flex-wrap: nowrap; }
+.block.rail-side .block-controls button { width: 100%; }
+.block.rail-side .insert-choice {
+    flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+    gap: 0.3rem; padding: 0.3rem;
+    font-size: 0.65rem; text-align: center;
+    text-transform: none; letter-spacing: normal;
+}
+.block.rail-side .insert-choice button {
+    flex: 0 0 auto; min-height: 44px; padding: 0 0.15rem; font-size: 0.75rem;
+    white-space: nowrap;
+}
 
 .block textarea {
     width: 100%; box-sizing: border-box;

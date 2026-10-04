@@ -1591,9 +1591,37 @@ edits), Discard (back to the last published version), and "↗ View live".
   the controls with it. Cancel restores by calling `renderBlocks()`, not by
   patching HTML — the old patch raced the block's own click listener and
   silently reopened the editor. Control actions call `flushPendingEdit()` first:
-  the `mousedown preventDefault()` that keeps the toolbar clickable also
-  suppresses the blur that would have saved an open textarea, so without the
-  flush a tap would discard typing with no warning.
+  nothing saves on blur, so without the flush an action's own `renderBlocks()`
+  would discard typing with no warning.
+- **Text editors close on Done, never on blur** (2026-10-04). Peter's tablet
+  kept dropping him out of editing. Root cause, reproduced over CDP: the
+  textarea's `rows` came from the SOURCE line count, so a one-line paragraph
+  wrapping to 15 lines opened as a 50px box scrolling 346px of text; the
+  block collapsed, the next blocks slid up under his finger, and the next tap
+  "on the text" missed the field, blurred it, and the blur handler closed the
+  editor. The insert menu's Cancel (any `renderBlocks()`) tore it down too.
+  Now:
+  - the textarea is sized to `scrollHeight` (on open, input, resize);
+  - an open block closes only on its **Done** button, or by tapping another
+    block (which saves this one first, then opens that one); blur does
+    nothing, and a tap on the block's padding keeps focus;
+  - `renderBlocks()` puts an open text editor back with its unsaved text and
+    caret (`captureOpenText`/`restoreOpenText`, matching the block by
+    source within one index, so an insert above it follows it down; Undo,
+    move mode and Delete close it);
+  - Publish, the post picker, + New, Sign out and the tab hiding
+    (`visibilitychange`/`pagehide`, `keepalive` fetch) flush first;
+  - while open, the block's controls, Done and the insert menu sit in a rail:
+    a 72px column right of the block when the window has the room and the
+    block spans the column (not when a float narrows it), else a row under
+    the field. Never on top of the text.
+  - `flushPendingEdit` reads the open editor from `openText`, NOT "a
+    textarea inside `.block.editing`": that selector also matched a pair's
+    prose field and saved the prose over the whole pair, deleting its
+    picture, on any control tap with the pair editor open.
+  `scripts/verify-edit-tap.py` drives all of this in headless Chromium at
+  1024x1366, 1366x1024 and 820x1180 (system `python3`, ~3 min; not in
+  pytest, since the venv has no websocket-client).
 
 
 ## Git Workflow

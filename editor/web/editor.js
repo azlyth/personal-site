@@ -559,6 +559,9 @@ function refreshPreviewPicks() {
 }
 
 function renderBlocks() {
+  // An open text editor survives a rebuild (a menu opening or cancelling,
+  // its own save landing) -- see captureOpenText().
+  const resume = captureOpenText();
   // The overlay's observer points at nodes that are about to be thrown away.
   stopWatchingLayout();
   els.blocks.innerHTML = '';
@@ -617,7 +620,22 @@ function renderBlocks() {
     }
     el.appendChild(content);
 
-    el.addEventListener('click', () => {
+    el.addEventListener('click', async () => {
+      if (el.classList.contains('editing')) return;
+      // One editor at a time: tapping another block saves the open text
+      // block first, then opens this one. A save that fails leaves the
+      // open one as it is, text and all.
+      if (openText && openText.el !== el) {
+        const from = openText.index;
+        const count = state.blocks.length;
+        if (!(await closeTextEditor())) return;
+        // A blank line typed into the saved block splits it into several,
+        // which shifts every block after it.
+        const target = block.index > from ? block.index + state.blocks.length - count : block.index;
+        const fresh = els.blocks.querySelector(`.block[data-index="${target}"]`);
+        if (fresh) fresh.click();
+        return;
+      }
       // A photo block (a standalone image or an .img-row) gets a thumbnail
       // strip -- add/remove/reorder/alt-text -- instead of raw markup in a
       // textarea. Gate on `images` actually being present, not just
@@ -664,6 +682,8 @@ function renderBlocks() {
       els.blocks.appendChild(mergeControl(block.index));
     }
   });
+
+  if (resume) restoreOpenText(resume);
 
   // Overlaid last, once every block is laid out: the zones are placed
   // from the blocks' measured positions.
@@ -989,27 +1009,33 @@ async function mergeBlock(index) {
   await applyWrite(res);
 }
 
-// If a plain-paragraph block's textarea is open with unsaved changes, save
-// it the way blurring it normally would -- and report whether that actually
-// landed. Every control-bar action below calls this first: those buttons'
-// mousedown now has preventDefault() on it (see the comment on `bar`
-// below), which stops the browser's default blur, which is what used to
-// trigger startEditing()'s save-on-blur. Without an explicit flush here,
-// tapping a control -- even one that only inserts/moves/deletes some *other*
-// block -- would silently sail past unsaved text and then wipe it out from
-// under the user the moment the action's own renderBlocks() call rebuilds
-// the page from `state`, which never saw the edit. Only a plain textarea
-// needs this: the photo/video thumbnail editors have no field that
-// autosaves-on-blur (their local `images`/`clips` working copy only ever
-// gets written on an explicit Done), so there's nothing to flush there.
-async function flushPendingEdit() {
-  const textarea = document.querySelector('.block.editing textarea');
-  if (!textarea) return true;
-  const el = textarea.closest('.block');
-  const index = Number(el.dataset.index);
-  const block = state.blocks[index];
-  if (!block || textarea.value === block.source) return true;
-  return await saveBlock(index, textarea.value);
+// If the text editor is open with unsaved changes, save it -- and report
+// whether that actually landed. It stays open: a save re-renders the list,
+// and renderBlocks() puts the editor back around the saved text.
+//
+// Every control-bar action below calls this first, as do Publish, switching
+// posts and the tab going away. Blur no longer saves (it no longer does
+// anything -- an open block closes on its Done), so without an explicit
+// flush an action's own renderBlocks() would rebuild the page from `state`,
+// which never saw the edit.
+//
+// It looks only at `openText`, never at "a textarea inside .block.editing":
+// a paired section's editor has one too, holding just its prose, and the
+// old selector saved that prose over the WHOLE pair block -- deleting its
+// picture -- whenever a control was tapped with the pair editor open.
+async function flushPendingEdit(options = {}) {
+  const ed = openText;
+  if (!ed || !ed.textarea.isConnected) return true;
+  if (ed.saving) return await ed.saving;
+  const value = ed.textarea.value;
+  if (value === ed.original) return true;
+  ed.savingSource = value;
+  ed.saving = saveBlock(ed.index, value, options);
+  try {
+    return await ed.saving;
+  } finally {
+    ed.saving = null;
+  }
 }
 
 // The stop-wrap marker's exact source -- must match blocks.py's _CLEAR_RE,
@@ -1042,22 +1068,15 @@ function blockControls(block) {
   const bar = document.createElement('div');
   bar.className = 'block-controls';
 
-  // These controls are now reachable while a *different* block's textarea
-  // still has focus (that's the whole point of keeping them alive during
-  // editing -- see renderBlocks()). A real tap's mousedown blurs whatever
-  // textarea is focused before its own click fires; startEditing()'s blur
-  // handler reacts to that by calling renderBlocks() synchronously, which
-  // replaces this exact button out from under the in-flight click. The
-  // browser then has no element to fire 'click' on, so the tap silently
-  // does nothing -- reproduced live via CDP (mousePressed/mouseReleased),
-  // not just theorized. preventDefault() on mousedown is the standard fix
-  // (how toolbar buttons coexist with a focused text field): it suppresses
-  // the browser's default "blur the focused element" behavior without
-  // suppressing the click that follows.
+  // preventDefault() on mousedown keeps the open textarea focused (and the
+  // tablet's keyboard up) through a tap on a control. It began as the fix
+  // for a blur handler that re-rendered synchronously and replaced the
+  // button mid-click; blur no longer does anything, but losing focus on
+  // every control tap would still drop the keyboard.
   //
-  // That trade requires flushPendingEdit() below: suppressing the blur
-  // also suppresses the save startEditing()'s blur handler used to trigger,
-  // so every handler here does that save itself, explicitly, before acting.
+  // Nothing saves on blur, so every handler here calls flushPendingEdit()
+  // itself before acting -- otherwise the action's own renderBlocks()
+  // would rebuild the page from `state`, which never saw the typing.
   bar.addEventListener('mousedown', (e) => e.preventDefault());
 
   const add = document.createElement('button');
@@ -1076,6 +1095,9 @@ function blockControls(block) {
     e.stopPropagation();
     if (!confirm('Delete this block?')) return;
     if (!(await flushPendingEdit())) return;
+    // Don't let the editor reattach to a neighbour that happens to hold the
+    // same text (two "New paragraph." blocks).
+    if (openText && openText.index === block.index) openText.closing = true;
     removeBlock(block.index);
   });
 
@@ -1508,6 +1530,7 @@ els.discard.addEventListener('mousedown', (e) => e.preventDefault());
 els.discard.addEventListener('click', discardEdits);
 
 els.publish.addEventListener('click', async () => {
+  if (!(await flushPendingEdit())) return;
   const message = prompt('Commit message:', `Update ${state.slug}`);
   if (message === null) return;
 
@@ -1535,37 +1558,174 @@ els.publish.addEventListener('click', async () => {
   await refreshStatus();
 });
 
-function startEditing(el, content, block) {
+// The one open text editor (startEditing), or null:
+// {index, original, textarea, el, closing, saving, savingSource}.
+// `original` is the block's source as the server has it, so "unsaved" is
+// `textarea.value !== original`. Only the plain-text editor lives here --
+// the photo, clip and pair editors keep a local working copy and write it
+// on their own Done, so there is nothing of theirs to flush.
+let openText = null;
+
+// Room the side rail needs: its 72px column (editor.css) plus the 8px gap
+// to the block.
+const RAIL_ROOM = 80;
+
+// An open text block stays open until its Done button (or opening another
+// block, which saves it first). Blur used to close it, and on a tablet
+// almost any tap blurs: the block's own padding, a menu's Cancel, the line
+// under a short field. See "Text editors close on Done" in CLAUDE.md.
+//
+// `resume` is set when renderBlocks() is rebuilding the page under an open
+// editor (a menu opened or cancelled, a save landed): it carries the
+// in-progress text, caret and focus so the rebuild is invisible.
+function startEditing(el, content, block, resume = null) {
   if (el.classList.contains('editing')) return;
   el.classList.add('editing');
   content.innerHTML = '';
 
   const textarea = document.createElement('textarea');
-  textarea.value = block.source;
-  textarea.rows = Math.max(2, block.source.split('\n').length + 1);
+  textarea.className = 'block-source';
+  textarea.value = resume ? resume.value : block.source;
+  textarea.rows = 2;
   content.appendChild(textarea);
-  textarea.focus();
 
-  textarea.addEventListener('blur', async () => {
-    if (textarea.value === block.source) {
-      // Nothing changed, so there's nothing to save -- restore this block
-      // (controls included) the same robust way every other exit path
-      // does: a full renderBlocks() from current state, which can't drift
-      // from what renderBlocks() actually builds.
-      renderBlocks();
+  openText = {
+    index: block.index, original: block.source, textarea, el,
+    closing: false, saving: null, savingSource: null,
+  };
+
+  // The block's controls, a Done button and any menu those controls open
+  // move into one rail: a column beside the block when the window has room
+  // for one, a row under the field when it doesn't. Either way nothing sits
+  // on top of the text being edited.
+  const rail = document.createElement('div');
+  rail.className = 'edit-rail';
+  const inner = document.createElement('div');
+  inner.className = 'edit-rail-inner';
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'edit-done';
+  done.textContent = 'Done';
+  done.title = 'Save and stop editing';
+  done.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTextEditor();
+  });
+  inner.appendChild(done);
+  const bar = el.querySelector(':scope > .block-controls');
+  if (bar) inner.appendChild(bar);
+  const menu = el.querySelector(':scope > .insert-choice');
+  if (menu) inner.appendChild(menu);
+  rail.appendChild(inner);
+  el.appendChild(rail);
+
+  // Beside the block only when the window has the room AND the block spans
+  // the whole column: a block narrowed by a floated picture would put the
+  // rail on top of the picture.
+  const placeRail = () => {
+    const r = el.getBoundingClientRect();
+    const column = els.blocks.getBoundingClientRect();
+    const full = r.right >= column.right;
+    const room = document.documentElement.clientWidth - r.right;
+    el.classList.toggle('rail-side', full && room >= RAIL_ROOM);
+    // Stick below the toolbar, whose height depends on its own contents.
+    const toolbar = document.querySelector('.bar');
+    inner.style.top = `${(toolbar ? toolbar.offsetHeight : 0) + 8}px`;
+  };
+
+  // Sized to its content, not to its count of source lines. A paragraph is
+  // usually ONE source line that wraps to a dozen on screen, so `rows` from
+  // the line count gave a two-row box that scrolled: the block collapsed,
+  // the next blocks slid up into the space the text had filled, and the
+  // next tap "on the text" landed outside the field (reproduced over CDP:
+  // scripts/verify-edit-tap.py). Re-fit on input and on resize: a narrower
+  // window (rotation, the keyboard on browsers that resize the layout)
+  // rewraps the text.
+  const fit = () => {
+    if (!textarea.isConnected) {
+      window.removeEventListener('resize', fit);
       return;
     }
-    // Don't clear `editing` here -- saveBlock()/applyWrite() renders fresh
-    // from the server on success (which drops the class along with
-    // everything else), and on a 409/failed save leaves the DOM untouched
-    // on purpose so the textarea and its edits survive. Clearing the class
-    // up front used to desync the `.editing` style from that: a failed
-    // save left the textarea open but visually "not editing".
-    await saveBlock(block.index, textarea.value);
+    placeRail();
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+  fit();
+  textarea.addEventListener('input', fit);
+  window.addEventListener('resize', fit);
+
+  if (!resume || resume.focused) {
+    textarea.focus({ preventScroll: Boolean(resume) });
+    if (resume) textarea.setSelectionRange(resume.start, resume.end);
+  }
+
+  // A tap on the open block that misses the field -- its padding, the rail
+  // around the buttons -- keeps the focus, and so the keyboard, where it
+  // is. Same mousedown-preventDefault trick the control bar uses (which
+  // handles its own, so it's left alone).
+  el.addEventListener('mousedown', (e) => {
+    if (!el.classList.contains('editing') || !textarea.isConnected) return;
+    if (e.target === textarea || e.target.closest('.block-controls')) return;
+    e.preventDefault();
+    textarea.focus({ preventScroll: true });
   });
 }
 
-async function saveBlock(index, source) {
+// Save the open text block if it changed, then close it. Resolves false,
+// leaving the editor open with its text, when the save didn't land (a 409,
+// a network error) -- the caller must not go on as if it had.
+async function closeTextEditor() {
+  const ed = openText;
+  if (!ed) return true;
+  ed.closing = true;
+  if (!(await flushPendingEdit())) {
+    ed.closing = false;
+    return false;
+  }
+  // A save already re-rendered without it; an unchanged one still needs
+  // the block put back.
+  if (openText === ed) {
+    openText = null;
+    renderBlocks();
+  }
+  return true;
+}
+
+// What renderBlocks() needs to put the open text editor back after it
+// rebuilds the list, or null when there's nothing to put back.
+function captureOpenText() {
+  const ed = openText;
+  openText = null;
+  if (!ed || ed.closing || !ed.textarea.isConnected || state.moveIndex !== null) return null;
+  const ta = ed.textarea;
+  return {
+    index: ed.index,
+    // Its block is whichever block now holds the text as the server had it,
+    // as it is being saved, or as typed (a save that just landed).
+    sources: [ed.original, ed.savingSource, ta.value].filter((v) => v !== null),
+    value: ta.value,
+    start: ta.selectionStart,
+    end: ta.selectionEnd,
+    focused: document.activeElement === ta,
+  };
+}
+
+function restoreOpenText(resume) {
+  // The nearest match within one place: an insert or delete just above it
+  // shifts its index by one. Anything further, or a block whose text no
+  // longer matches (Undo put an older version back), closes it -- the text
+  // was flushed before any of those actions ran.
+  const block = [resume.index, resume.index - 1, resume.index + 1]
+    .map((i) => state.blocks[i])
+    .find((b) => b && resume.sources.includes(b.source) && !b.images && !b.videos
+      && !(b.kind === 'pair' && b.text !== undefined));
+  if (!block) return;
+  const el = els.blocks.querySelector(`.block[data-index="${block.index}"]`);
+  if (!el) return;
+  startEditing(el, el.querySelector(':scope > .block-content'), block, resume);
+}
+
+async function saveBlock(index, source, { keepalive = false } = {}) {
   setStatus('saving…');
   let res;
   try {
@@ -1573,6 +1733,8 @@ async function saveBlock(index, source) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, hash: state.hash }),
+      // So a save started as the tab goes away still reaches the server.
+      keepalive,
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);
@@ -2175,6 +2337,7 @@ async function splitBlockVideo(index, clips, size, side, split) {
 async function newPost() {
   const title = prompt('Title for the new post:');
   if (!title) return;
+  if (!(await closeTextEditor())) return;
 
   setStatus('creating…');
   let res;
@@ -2201,7 +2364,14 @@ async function newPost() {
   setStatus('created (draft)');
 }
 
-els.picker.addEventListener('change', () => loadPost(els.picker.value));
+els.picker.addEventListener('change', async () => {
+  const next = els.picker.value;
+  if (!(await closeTextEditor())) {
+    els.picker.value = state.slug;
+    return;
+  }
+  loadPost(next);
+});
 els.newPost.addEventListener('click', newPost);
 els.title.addEventListener('click', startEditingTitle);
 
@@ -2209,6 +2379,7 @@ els.title.addEventListener('click', startEditingTitle);
 // it just asks the server to drop the session and reloads. A signed-out
 // reload lands back on the sign-in card via editor_page's own check.
 els.signOut.addEventListener('click', async () => {
+  if (!(await flushPendingEdit())) return;
   try {
     await fetch('/auth/logout', { method: 'POST' });
   } catch {
@@ -2217,6 +2388,14 @@ els.signOut.addEventListener('click', async () => {
   }
   location.reload();
 });
+
+// Typing that hasn't been saved yet goes out as the tab is hidden or closed
+// (switching apps on the tablet, a reload). keepalive lets the request
+// outlive the page.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushPendingEdit({ keepalive: true });
+});
+window.addEventListener('pagehide', () => flushPendingEdit({ keepalive: true }));
 
 (async function main() {
   try {
