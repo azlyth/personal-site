@@ -118,3 +118,32 @@ def test_build_site_runs_the_checker_before_promoting():
     script = (REPO / "scripts" / "build-site.sh").read_text()
     check = script.index("check-drafts.py")
     assert check < script.index('rsync -a --delete "$TMP_ABS/"')
+
+
+# A draft that already has another link: Zola builds no redirect for it
+# either, and the checker catches one if a build leaks it.
+ALIASED_DRAFT = """+++
+title = "Draft fixture aliased"
+date = 2026-10-01
+draft = true
+aliases = ["/blog/draft-fixture-old-link/"]
++++
+Not for publishing.
+"""
+
+
+def test_a_drafts_aliases_are_not_built():
+    with built_copy(add_drafts(("draft-fixture-aliased.md", ALIASED_DRAFT))) as root:
+        assert not (root / "out" / "blog" / "draft-fixture-aliased").exists()
+        assert not (root / "out" / "blog" / "draft-fixture-old-link").exists()
+        result = run_checker(root)
+        assert result.returncode == 0, result.stderr
+
+
+def test_the_checker_catches_a_leaked_draft_alias():
+    prepare = add_drafts(("draft-fixture-aliased.md", ALIASED_DRAFT))
+    with built_copy(prepare, zola_args=("--drafts",)) as root:
+        assert (root / "out" / "blog" / "draft-fixture-old-link" / "index.html").exists()
+        result = run_checker(root)
+        assert result.returncode == 1
+        assert "its alias /blog/draft-fixture-old-link/ was built" in result.stderr

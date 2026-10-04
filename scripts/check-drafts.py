@@ -11,6 +11,8 @@ listing pages some other way.
 
 Fails (exit 1) when:
   - a draft's page exists in the build output,
+  - a redirect page for one of a draft's `aliases` (its other links, which
+    the editor manages) exists in the build output,
   - a draft's title is an <item> in rss.xml,
   - a `draft` key sits inside [extra] (or any table) instead of at the top
     level. Zola reads only the top-level key, so that post is published
@@ -96,6 +98,11 @@ def check(content: Path, out: Path) -> list[str]:
         page = out / url_path(md, content, meta)
         if page.exists():
             problems.append(f"{rel}: is a draft but was built to {page.relative_to(out)}/")
+        aliases = meta.get("aliases", [])
+        for alias in aliases if isinstance(aliases, list) else []:
+            built = out / str(alias).strip("/")
+            if str(alias).strip("/") and built.exists():
+                problems.append(f"{rel}: is a draft but its alias {alias} was built")
         title = str(meta.get("title", "")).strip()
         if title and title in titles:
             problems.append(f"{rel}: is a draft but {title!r} is in rss.xml")
