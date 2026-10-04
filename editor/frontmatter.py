@@ -78,6 +78,14 @@ def set_meta(frontmatter_toml: str, key: str, value) -> str:
     return tomlkit.dumps(doc)
 
 
+def delete_meta(frontmatter_toml: str, key: str) -> str:
+    """Remove a TOP-LEVEL frontmatter key. A no-op when it's absent."""
+    doc = tomlkit.parse(frontmatter_toml)
+    if key in doc and not _is_table(doc[key]):
+        del doc[key]
+    return tomlkit.dumps(doc)
+
+
 def set_extra(frontmatter_toml: str, key: str, value) -> str:
     """Set a key inside the `[extra]` table, creating the table if needed.
 

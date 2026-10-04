@@ -97,3 +97,14 @@ def undo(path: Path) -> bool:
     shutil.copyfile(newest, path)
     newest.unlink()
     return True
+
+
+def forget(path: Path) -> None:
+    """Drop every snapshot for `path`.
+
+    Called when the post stops existing under that name -- deleted, or
+    renamed (see app.py's `_make_primary` for why history doesn't follow a
+    rename). Left behind, the directory would hand its snapshots to the
+    next post that happens to take the name.
+    """
+    shutil.rmtree(_dir_for(path), ignore_errors=True)

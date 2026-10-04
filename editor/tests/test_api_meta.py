@@ -114,7 +114,7 @@ def test_empty_date_returns_400_not_500(temp_post):
     assert temp_post.read_text() == POST
 
 
-def test_rename_moves_the_file_and_warns(temp_post):
+def test_rename_moves_the_file_and_keeps_the_old_link(temp_post):
     data = client.get(f"/api/posts/{SLUG}").json()
     out = client.post(
         f"/api/posts/{SLUG}/rename",
@@ -122,7 +122,7 @@ def test_rename_moves_the_file_and_warns(temp_post):
     ).json()
 
     assert out["slug"] == "renamed-post"
-    assert "link" in out["warning"].lower()
+    assert out["meta"]["aliases"] == [SLUG]
     assert (config.BLOG_DIR / "renamed-post.md").exists()
     assert not temp_post.exists()
 

@@ -34,6 +34,7 @@ from editor.blocks import (
 )
 from editor.frontmatter import (
     clear_extra,
+    delete_meta,
     join_post,
     read_meta,
     set_extra,
@@ -189,9 +190,12 @@ def _create_draft(title: str, body: str) -> str:
         raise HTTPException(status_code=400, detail="title has no usable characters")
 
     # De-duplicate rather than overwrite: losing an existing post to a title
-    # collision would be silent data loss.
+    # collision would be silent data loss. A slug another post keeps as a
+    # redirect is taken too -- its page and that alias would both claim
+    # /blog/<slug>/.
+    taken = _taken_slugs()
     candidate, n = slug, 2
-    while (config.BLOG_DIR / f"{candidate}.md").exists():
+    while candidate in taken or (config.BLOG_DIR / f"{candidate}.md").exists():
         candidate = f"{slug}-{n}"
         n += 1
 
@@ -323,6 +327,9 @@ def get_post(slug: str):
             # photo in the post). Empty string rather than null so the
             # client can compare it to an image URL without a null guard.
             "preview_image": meta.get("extra", {}).get("preview_image", ""),
+            # The post's other links, as bare slugs: each is a Zola alias
+            # that redirects to `url`. See the Links section below.
+            "aliases": _alias_slugs(meta),
         },
         "hash": hashlib.sha256(raw_bytes).hexdigest(),
         # Drives the Undo button's enabled state. Included in EVERY post
@@ -1270,11 +1277,6 @@ class MetaEdit(BaseModel):
     preview_image: str | None = None
 
 
-class Rename(BaseModel):
-    new_slug: str
-    hash: str
-
-
 @app.put("/api/posts/{slug}/meta")
 def edit_meta(slug: str, edit: MetaEdit):
     path, raw, frontmatter, body = _read_post(slug)
@@ -1323,44 +1325,250 @@ def edit_meta(slug: str, edit: MetaEdit):
     return get_post(slug)
 
 
-@app.post("/api/posts/{slug}/rename")
-def rename_post(slug: str, rename: Rename):
-    path, raw, _, _ = _read_post(slug)
+# --- Links ------------------------------------------------------------------
+#
+# A post has ONE primary URL, its filename (content/blog/<slug>.md ->
+# /blog/<slug>/), and any number of other links kept in the frontmatter as
+# Zola's own top-level `aliases`. Zola writes a meta-refresh redirect page at
+# each alias pointing at the primary, so an old link keeps working after a
+# rename. On disk an alias is always the canonical `/blog/<slug>/`; the API
+# speaks bare slugs. An alias outside /blog/ (only a hand edit can make one)
+# isn't shown or touched -- every write keeps it verbatim.
 
-    if hashlib.sha256(raw).hexdigest() != rename.hash:
-        raise HTTPException(status_code=409, detail="post changed on disk; reload")
+_BLOG_ALIAS = re.compile(r"^/?blog/(?P<slug>[^/]+)/?(?:index\.html)?$")
 
-    new_slug = re.sub(r"[^a-z0-9-]+", "-", rename.new_slug.lower()).strip("-")
-    if not new_slug:
+
+def _sanitize_slug(raw: str) -> str:
+    slug = re.sub(r"[^a-z0-9-]+", "-", raw.lower()).strip("-")
+    if not slug:
         raise HTTPException(status_code=400, detail="slug is empty after sanitising")
+    return slug
 
+
+def _alias_path(slug: str) -> str:
+    return f"/blog/{slug}/"
+
+
+def _alias_slug(entry) -> str | None:
+    match = _BLOG_ALIAS.match(str(entry))
+    return match.group("slug") if match else None
+
+
+def _alias_entries(meta: dict) -> list:
+    entries = meta.get("aliases", [])
+    return list(entries) if isinstance(entries, list) else []
+
+
+def _alias_slugs(meta: dict) -> list[str]:
+    return [s for s in map(_alias_slug, _alias_entries(meta)) if s]
+
+
+def _taken_slugs() -> dict[str, str]:
+    """Every /blog/<slug>/ some post claims, mapped to the post claiming it:
+    each post's filename, and each of its aliases."""
+    taken: dict[str, str] = {}
+    for md in sorted(config.BLOG_DIR.glob("*.md")):
+        if md.name == "_index.md":
+            continue
+        taken.setdefault(md.stem, md.stem)
+        try:
+            meta = read_meta(split_post(md.read_text(encoding="utf-8"))[0])
+        except Exception:
+            # An unreadable post still owns its filename; its aliases are
+            # unknowable, and that's the draft gate's problem to report.
+            continue
+        for alias in _alias_slugs(meta):
+            taken.setdefault(alias, md.stem)
+    return taken
+
+
+def _claim(new_slug: str, slug: str) -> None:
+    """409 unless /blog/<new_slug>/ is free (or already this post's alias)."""
+    owner = _taken_slugs().get(new_slug)
+    if owner is None:
+        return
+    if owner != slug:
+        raise HTTPException(
+            status_code=409,
+            detail=f"/blog/{new_slug}/ is already used by the post {owner!r}",
+        )
+    if new_slug == slug:
+        raise HTTPException(status_code=409, detail=f"/blog/{new_slug}/ is this post's own link")
+
+
+def _require_fresh(raw: bytes, expected_hash: str) -> None:
+    if hashlib.sha256(raw).hexdigest() != expected_hash:
+        raise HTTPException(
+            status_code=409,
+            detail="post changed on disk since it was loaded; reload before saving",
+        )
+
+
+def _write_aliases(path: Path, frontmatter: str, body: str, entries: list) -> None:
+    frontmatter = (
+        set_meta(frontmatter, "aliases", entries) if entries
+        else delete_meta(frontmatter, "aliases")
+    )
+    _atomic_write_text(path, join_post(frontmatter, body))
+
+
+def _make_primary(slug: str, new_slug: str):
+    """Rename the post to `new_slug`, keeping its old URL as a redirect.
+
+    One operation, three changes: the file moves (`git mv`, so its history
+    follows and the rename is staged for the next Publish), the old slug
+    joins `aliases`, and the new slug leaves them.
+
+    Undo history does NOT follow. A snapshot is the whole file, and every
+    snapshot taken before the swap lacks the old slug in its aliases --
+    restoring one at the new filename would 404 the old URL and alias the
+    post to itself. So the post starts a fresh history under its new name,
+    and any stale history a past post left under that name goes too.
+    """
+    path, raw, frontmatter, body = _read_post(slug)
     target = config.BLOG_DIR / f"{new_slug}.md"
     if target.exists():
         raise HTTPException(status_code=409, detail=f"{new_slug} already exists")
 
-    # git mv keeps the file's history attached to the new name, and stages
-    # the rename -- _dirty_paths already knows how to parse that (an "R  "
-    # porcelain entry) when the post is next published. But git mv refuses
-    # (exit 128, "not under version control") a path that isn't tracked
-    # yet, and a post from "+ New" is exactly that: create_post only
-    # _atomic_write_texts the file, it never `git add`s it. `git add`
-    # first so the path is always known to git by the time `git mv` runs --
-    # a no-op for an already-tracked post, and it composes with git mv's
-    # index rename instead of duplicating that logic with a plain
-    # Path.rename fallback.
-    subprocess.run(
-        ["git", "add", "--", str(path.relative_to(config.REPO))],
-        cwd=config.REPO, check=True, capture_output=True, text=True,
-    )
-    subprocess.run(
-        ["git", "mv", str(path.relative_to(config.REPO)), str(target.relative_to(config.REPO))],
-        cwd=config.REPO, check=True, capture_output=True, text=True,
-    )
+    entries = [
+        e for e in _alias_entries(read_meta(frontmatter))
+        if _alias_slug(e) not in (new_slug, slug)
+    ]
+    entries.append(_alias_path(slug))
+    _write_aliases(path, frontmatter, body, entries)
 
-    return {
-        "slug": new_slug,
-        "warning": f"/blog/{slug}/ will 404 — any existing links to it will break.",
-    }
+    # git mv refuses (exit 128, "not under version control") a path that
+    # isn't tracked yet, and a post from "+ New" is exactly that. `git add`
+    # first so it always is -- a no-op for a tracked post.
+    relative = path.relative_to(config.REPO)
+    try:
+        for cmd in (
+            ["git", "--literal-pathspecs", "add", "--", str(relative)],
+            ["git", "--literal-pathspecs", "mv", "--", str(relative),
+             str(target.relative_to(config.REPO))],
+        ):
+            subprocess.run(cmd, cwd=config.REPO, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        _atomic_write_text(path, raw.decode("utf-8"))
+        raise HTTPException(
+            status_code=500, detail=f"could not rename in git: {exc.stderr.strip()}"
+        )
+
+    history.forget(path)
+    history.forget(target)
+    return get_post(new_slug)
+
+
+class LinkAdd(BaseModel):
+    slug: str
+    hash: str
+
+
+@app.post("/api/posts/{slug}/links")
+def add_link(slug: str, link: LinkAdd):
+    """Add another URL for this post: a redirect to its primary."""
+    path, raw, frontmatter, body = _read_post(slug)
+    _require_fresh(raw, link.hash)
+    new_slug = _sanitize_slug(link.slug)
+    _claim(new_slug, slug)
+    entries = _alias_entries(read_meta(frontmatter))
+    if new_slug in _alias_slugs(read_meta(frontmatter)):
+        raise HTTPException(status_code=409, detail=f"/blog/{new_slug}/ already links here")
+
+    # Frontmatter writes skip _write_body, so they carry their own snapshot
+    # (same as the meta route) -- Undo walks back through link edits too.
+    history.snapshot(path)
+    _write_aliases(path, frontmatter, body, entries + [_alias_path(new_slug)])
+    return get_post(slug)
+
+
+@app.delete("/api/posts/{slug}/links/{link}")
+def remove_link(slug: str, link: str, edit: PostRestore):
+    """Drop one redirect. The primary can't go -- a post needs a URL."""
+    path, raw, frontmatter, body = _read_post(slug)
+    _require_fresh(raw, edit.hash)
+    if link == slug:
+        raise HTTPException(
+            status_code=400,
+            detail="that's the post's primary link; make another link primary first",
+        )
+    entries = _alias_entries(read_meta(frontmatter))
+    kept = [e for e in entries if _alias_slug(e) != link]
+    if len(kept) == len(entries):
+        raise HTTPException(status_code=404, detail=f"/blog/{link}/ isn't one of this post's links")
+
+    history.snapshot(path)
+    _write_aliases(path, frontmatter, body, kept)
+    return get_post(slug)
+
+
+@app.post("/api/posts/{slug}/links/{link}/primary")
+def make_link_primary(slug: str, link: str, edit: PostRestore):
+    _, raw, frontmatter, _ = _read_post(slug)
+    _require_fresh(raw, edit.hash)
+    if link not in _alias_slugs(read_meta(frontmatter)):
+        raise HTTPException(status_code=404, detail=f"/blog/{link}/ isn't one of this post's links")
+    return _make_primary(slug, link)
+
+
+class Rename(BaseModel):
+    new_slug: str
+    hash: str
+
+
+@app.post("/api/posts/{slug}/rename")
+def rename_post(slug: str, rename: Rename):
+    """Give the post a new primary slug. The old one ALWAYS stays as a
+    redirect -- this is Make primary for a slug that isn't a link yet."""
+    _, raw, _, _ = _read_post(slug)
+    _require_fresh(raw, rename.hash)
+    new_slug = _sanitize_slug(rename.new_slug)
+    if new_slug == slug:
+        raise HTTPException(status_code=400, detail="that's already this post's slug")
+    _claim(new_slug, slug)
+    return _make_primary(slug, new_slug)
+
+
+# --- Delete draft -------------------------------------------------------------
+
+@app.delete("/api/posts/{slug}")
+def delete_post(slug: str, edit: PostRestore):
+    """Throw away a draft.
+
+    Drafts only: a published post has a live URL and readers. "Draft" means
+    what Zola means -- a top-level `draft = true` -- so a flag misplaced in
+    [extra] (which Zola publishes) is refused too. A file git has never seen
+    is just removed; one in the index is `git rm`ed, which stages the
+    removal so the next Publish commits it (publish.commit_paths knows a
+    staged removal needs no `git add`). Not undoable: the post's own undo
+    history goes with it, or the next post to take the name would inherit
+    it. A committed draft is still in git history.
+    """
+    path, raw, frontmatter, _ = _read_post(slug)
+    _require_fresh(raw, edit.hash)
+    if read_meta(frontmatter).get("draft") is not True:
+        raise HTTPException(
+            status_code=400,
+            detail="only drafts can be deleted -- this post is published",
+        )
+
+    relative = path.relative_to(config.REPO).as_posix()
+    indexed = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=config.REPO, check=True,
+        capture_output=True, text=True,
+    ).stdout.split("\0")
+    if relative in indexed:
+        # -f: a staged-but-uncommitted post (a renamed "+ New") differs
+        # from HEAD, and plain `git rm` refuses that.
+        subprocess.run(
+            ["git", "--literal-pathspecs", "rm", "-f", "-q", "--", relative],
+            cwd=config.REPO, check=True, capture_output=True, text=True,
+        )
+    else:
+        path.unlink()
+
+    history.forget(path)
+    return {"deleted": slug}
 
 
 # Rewrites /static/<stem>.<ext> in the page to /static/<stem>-<content hash>.<ext>,
