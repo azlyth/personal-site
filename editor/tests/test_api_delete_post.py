@@ -132,3 +132,54 @@ def test_delete_drops_the_undo_history(site):
     assert (history.HISTORY_DIR / "draft").is_dir()
     delete("draft", edited["hash"])
     assert not (history.HISTORY_DIR / "draft").exists()
+
+
+# --- a post published in HEAD is never a draft to delete --------------------
+
+def test_delete_refuses_a_published_post_re_ticked_as_draft(site):
+    # Ticking "draft" on a live post only changes the working tree; HEAD --
+    # what Publish last shipped -- still has it live. Deleting it would
+    # stage a removal that the next Publish turns into a dead URL.
+    path = write(site, "live", PUBLISHED, commit=True)
+    data = client.get("/api/posts/live").json()
+    drafted = client.put("/api/posts/live/meta", json={"draft": True, "hash": data["hash"]}).json()
+    assert drafted["meta"]["draft"] is True
+
+    res = delete("live", drafted["hash"])
+    assert res.status_code == 400
+    assert "published" in res.json()["detail"].lower()
+    assert path.exists()
+    assert _git(site, "status", "--porcelain") == " M content/blog/live.md\n"
+
+
+def test_delete_refuses_a_renamed_published_post_re_ticked_as_draft(site):
+    write(site, "live", PUBLISHED, commit=True)
+    data = client.get("/api/posts/live").json()
+    renamed = client.post("/api/posts/live/rename",
+                          json={"new_slug": "moved", "hash": data["hash"]}).json()
+    drafted = client.put("/api/posts/moved/meta",
+                         json={"draft": True, "hash": renamed["hash"]}).json()
+
+    res = delete("moved", drafted["hash"])
+    assert res.status_code == 400
+    assert (site / "content" / "blog" / "moved.md").exists()
+
+
+def test_delete_refuses_a_hand_moved_published_post(site):
+    # Renamed by hand with no alias trail: the index's rename source is the
+    # only link back to the published version.
+    write(site, "live", PUBLISHED, commit=True)
+    _git(site, "mv", "content/blog/live.md", "content/blog/moved.md")
+    path = site / "content" / "blog" / "moved.md"
+    path.write_text(DRAFT.replace('title = "D"', 'title = "P"'))
+    _git(site, "add", "--", str(path))
+    data = client.get("/api/posts/moved").json()
+    assert delete("moved", data["hash"]).status_code == 400
+    assert path.exists()
+
+
+def test_delete_allows_a_committed_draft(site):
+    path = write(site, "draft", DRAFT, commit=True)
+    data = client.get("/api/posts/draft").json()
+    assert delete("draft", data["hash"]).status_code == 200
+    assert not path.exists()

@@ -1366,11 +1366,11 @@ def _alias_slugs(meta: dict) -> list[str]:
 def _taken_slugs() -> dict[str, str]:
     """Every /blog/<slug>/ some post claims, mapped to the post claiming it:
     each post's filename, and each of its aliases."""
-    taken: dict[str, str] = {}
-    for md in sorted(config.BLOG_DIR.glob("*.md")):
-        if md.name == "_index.md":
-            continue
-        taken.setdefault(md.stem, md.stem)
+    posts = [md for md in sorted(config.BLOG_DIR.glob("*.md")) if md.name != "_index.md"]
+    # Filenames first: a post's own file outranks an alias some other post
+    # (by a hand edit) claims for the same slug.
+    taken: dict[str, str] = {md.stem: md.stem for md in posts}
+    for md in posts:
         try:
             meta = read_meta(split_post(md.read_text(encoding="utf-8"))[0])
         except Exception:
@@ -1412,6 +1412,32 @@ def _write_aliases(path: Path, frontmatter: str, body: str, entries: list) -> No
     _atomic_write_text(path, join_post(frontmatter, body))
 
 
+def _git_out(*args: str) -> str:
+    """Run git in the repo with literal pathspecs; raises CalledProcessError."""
+    return subprocess.run(
+        ["git", "--literal-pathspecs", *args],
+        cwd=config.REPO, check=True, capture_output=True, text=True,
+    ).stdout
+
+
+def _undo_move(path, target, raw, moved, relative, new_relative, saved_index) -> None:
+    """Put a failed _make_primary back: the file at its old name with its
+    old bytes, and the index entry for it exactly as it was (or absent)."""
+    if moved or target.exists():
+        os.replace(target, path)
+    path.write_bytes(raw)
+    for name in (relative, new_relative):
+        subprocess.run(
+            ["git", "--literal-pathspecs", "rm", "--cached", "-q", "--ignore-unmatch", "--", name],
+            cwd=config.REPO, capture_output=True, text=True,
+        )
+    if saved_index:
+        subprocess.run(
+            ["git", "update-index", "-z", "--index-info"], input=saved_index,
+            cwd=config.REPO, check=True, capture_output=True, text=True,
+        )
+
+
 def _make_primary(slug: str, new_slug: str):
     """Rename the post to `new_slug`, keeping its old URL as a redirect.
 
@@ -1435,24 +1461,27 @@ def _make_primary(slug: str, new_slug: str):
         if _alias_slug(e) not in (new_slug, slug)
     ]
     entries.append(_alias_path(slug))
-    _write_aliases(path, frontmatter, body, entries)
 
-    # git mv refuses (exit 128, "not under version control") a path that
-    # isn't tracked yet, and a post from "+ New" is exactly that. `git add`
-    # first so it always is -- a no-op for a tracked post.
-    relative = path.relative_to(config.REPO)
+    # Move first, write second: the frontmatter only ever changes at the
+    # NEW name, so a failure or a kill part-way can't leave the old file
+    # aliasing itself or a half-renamed copy staged. Everything before the
+    # write is put back exactly -- index entry included -- if any step fails.
+    relative = str(path.relative_to(config.REPO))
+    new_relative = str(target.relative_to(config.REPO))
+    saved_index = _git_out("ls-files", "-s", "-z", "--", relative)
+    moved = False
     try:
-        for cmd in (
-            ["git", "--literal-pathspecs", "add", "--", str(relative)],
-            ["git", "--literal-pathspecs", "mv", "--", str(relative),
-             str(target.relative_to(config.REPO))],
-        ):
-            subprocess.run(cmd, cwd=config.REPO, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as exc:
-        _atomic_write_text(path, raw.decode("utf-8"))
-        raise HTTPException(
-            status_code=500, detail=f"could not rename in git: {exc.stderr.strip()}"
-        )
+        # git mv refuses (exit 128, "not under version control") a path that
+        # isn't tracked yet, and a post from "+ New" is exactly that. `git
+        # add` first so it always is -- a no-op for a tracked post.
+        _git_out("add", "--", relative)
+        _git_out("mv", "--", relative, new_relative)
+        moved = True
+        _write_aliases(target, frontmatter, body, entries)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        _undo_move(path, target, raw, moved, relative, new_relative, saved_index)
+        detail = getattr(exc, "stderr", None) or str(exc)
+        raise HTTPException(status_code=500, detail=f"could not rename: {detail.strip()}")
 
     history.forget(path)
     history.forget(target)
@@ -1508,6 +1537,9 @@ def make_link_primary(slug: str, link: str, edit: PostRestore):
     _require_fresh(raw, edit.hash)
     if link not in _alias_slugs(read_meta(frontmatter)):
         raise HTTPException(status_code=404, detail=f"/blog/{link}/ isn't one of this post's links")
+    # Same claim as Add: a hand-edited alias can name a slug another post's
+    # file or alias already holds.
+    _claim(link, slug)
     return _make_primary(slug, link)
 
 
@@ -1531,6 +1563,54 @@ def rename_post(slug: str, rename: Rename):
 
 # --- Delete draft -------------------------------------------------------------
 
+def _published_in_head(path: Path, meta: dict) -> bool:
+    """True if HEAD -- what Publish last shipped -- holds a version of this
+    post that isn't a draft.
+
+    The working tree alone can't answer this: ticking "draft" on a live post
+    only edits the file, and deleting it then would stage a removal the next
+    Publish turns into a dead URL. "This post" in HEAD is any of: its current
+    path, the path the index says it was renamed from, and the file each of
+    its aliases names (Make primary turns the old filename into an alias, so
+    that trail survives even where git's rename detection wouldn't).
+    """
+    relative = path.relative_to(config.REPO).as_posix()
+    candidates = {relative}
+    candidates.update(
+        f"{BLOG_PREFIX}{alias}.md" for alias in _alias_slugs(meta)
+    )
+    renames = subprocess.run(
+        ["git", "diff", "--cached", "-M", "--name-status", "-z", "HEAD"],
+        cwd=config.REPO, capture_output=True, text=True,
+    )
+    if renames.returncode == 0:
+        fields = renames.stdout.split("\0")
+        i = 0
+        while i < len(fields) - 1:
+            status = fields[i]
+            if status.startswith(("R", "C")):
+                if fields[i + 2] == relative:
+                    candidates.add(fields[i + 1])
+                i += 3
+            else:
+                i += 2
+
+    for candidate in candidates:
+        shown = subprocess.run(
+            ["git", "show", f"HEAD:{candidate}"],
+            cwd=config.REPO, capture_output=True, text=True,
+        )
+        if shown.returncode != 0:
+            continue  # not in HEAD (or no HEAD at all)
+        try:
+            head_meta = read_meta(split_post(shown.stdout)[0])
+        except Exception:
+            return True  # unreadable: can't prove it was a draft, so refuse
+        if head_meta.get("draft") is not True:
+            return True
+    return False
+
+
 @app.delete("/api/posts/{slug}")
 def delete_post(slug: str, edit: PostRestore):
     """Throw away a draft.
@@ -1546,10 +1626,11 @@ def delete_post(slug: str, edit: PostRestore):
     """
     path, raw, frontmatter, _ = _read_post(slug)
     _require_fresh(raw, edit.hash)
-    if read_meta(frontmatter).get("draft") is not True:
+    meta = read_meta(frontmatter)
+    if meta.get("draft") is not True or _published_in_head(path, meta):
         raise HTTPException(
             status_code=400,
-            detail="only drafts can be deleted -- this post is published",
+            detail="This post is published. Only unpublished drafts can be deleted.",
         )
 
     relative = path.relative_to(config.REPO).as_posix()

@@ -307,3 +307,77 @@ def test_new_post_skips_a_slug_taken_by_an_alias(site):
     write(site, "other", post("O", aliases=["/blog/hello/"]))
     created = client.post("/api/posts", json={"title": "Hello"}).json()
     assert created["slug"] == "hello-2"
+
+
+# --- review fixes ----------------------------------------------------------
+
+def test_make_primary_refuses_another_posts_filename(site):
+    # A hand-written alias that collides with a real post must not rename
+    # this post on top of it.
+    write(site, "first", post("P", aliases=["/blog/other/"]))
+    write(site, "other", post("O"))
+    data = load("first")
+    res = client.post("/api/posts/first/links/other/primary", json={"hash": data["hash"]})
+    assert res.status_code == 409
+    assert "other" in res.json()["detail"]
+    assert (site / "content" / "blog" / "first.md").exists()
+    assert (site / "content" / "blog" / "other.md").read_text() == post("O")
+
+
+def test_make_primary_refuses_an_alias_another_post_also_holds(site):
+    write(site, "first", post("P", aliases=["/blog/shared/"]))
+    write(site, "zeta", post("Z", aliases=["/blog/shared/"]))
+    data = load("zeta")
+    res = client.post("/api/posts/zeta/links/shared/primary", json={"hash": data["hash"]})
+    assert res.status_code == 409
+
+
+def _index_state(repo):
+    return _git(repo, "ls-files", "-s"), _git(repo, "status", "--porcelain")
+
+
+def test_make_primary_rolls_back_when_git_mv_fails(site, monkeypatch):
+    path = write(site, "first", post("P", aliases=["/blog/second/"]), commit=True)
+    path.write_text(post("P edited", aliases=["/blog/second/"]))  # unstaged edit
+    before_bytes, before_index = path.read_bytes(), _index_state(site)
+    data = load("first")
+
+    real_run = subprocess.run
+
+    def failing_mv(cmd, *args, **kwargs):
+        if cmd[:1] == ["git"] and "mv" in cmd:
+            raise subprocess.CalledProcessError(128, cmd, stderr="boom")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(app_module.subprocess, "run", failing_mv)
+    res = client.post("/api/posts/first/links/second/primary", json={"hash": data["hash"]})
+    monkeypatch.setattr(app_module.subprocess, "run", real_run)
+
+    assert res.status_code == 500
+    assert path.read_bytes() == before_bytes
+    assert not (site / "content" / "blog" / "second.md").exists()
+    assert _index_state(site) == before_index
+
+
+def test_make_primary_rolls_back_when_the_write_fails(site, monkeypatch):
+    path = write(site, "first", post("P", aliases=["/blog/second/"]))  # untracked
+    before_bytes, before_index = path.read_bytes(), _index_state(site)
+    data = load("first")
+
+    def failing_write(target, text):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(app_module, "_atomic_write_text", failing_write)
+    res = client.post("/api/posts/first/links/second/primary", json={"hash": data["hash"]})
+
+    assert res.status_code == 500
+    assert path.read_bytes() == before_bytes
+    assert not (site / "content" / "blog" / "second.md").exists()
+    assert _index_state(site) == before_index
+
+
+def test_make_primary_never_leaves_a_self_alias_on_disk(site):
+    write(site, "first", post("P", aliases=["/blog/second/"]))
+    data = load("first")
+    client.post("/api/posts/first/links/second/primary", json={"hash": data["hash"]})
+    assert aliases_on_disk(site / "content" / "blog" / "second.md") == ["/blog/first/"]
