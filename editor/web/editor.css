@@ -17,6 +17,9 @@ body {
 }
 
 .bar select { flex: 1; padding: 0.5rem; font-size: 1rem; }
+/* When a long status line (an error's detail) needs the room, the buttons
+   keep their one-line labels instead of wrapping into two-line blocks. */
+.bar button { white-space: nowrap; flex-shrink: 0; }
 .status { font-size: 0.85rem; color: #666; min-width: 6rem; text-align: right; }
 
 .publish {
@@ -41,7 +44,7 @@ body {
 
 .title { font-size: 1.6rem; font-weight: 600; cursor: text; }
 .title-input { font: inherit; font-weight: inherit; width: 100%; border: none; outline: none; }
-.post-meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; display: flex; gap: 1rem; align-items: center; }
+.post-meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
 .post-meta input[type="date"] { font: inherit; font-size: 0.9rem; }
 /* Sits with the slug, since both are about where the post lives rather than
    what it says. Muted for a draft, which has no live page yet. */
@@ -52,12 +55,80 @@ body {
 .live-link:hover { text-decoration: underline; }
 .live-link.unpublished { color: #a0a6b0; }
 
-.rename-slug {
-    font: inherit; font-size: 0.85rem; color: #888;
+/* The post's URL. Tapping it opens the Links panel below; 44px tall because
+   it is a tablet's tap target, not a label. */
+.links-toggle {
+    font: inherit; font-size: 0.85rem; color: #666;
+    min-height: 44px; padding: 0 0.75rem;
+    display: inline-flex; align-items: center; gap: 0.4rem;
     border: 1px solid #ddd; border-radius: 6px; background: #fff;
-    padding: 0.2rem 0.5rem; cursor: pointer;
+    cursor: pointer;
 }
-.rename-slug:hover { border-color: #0066cc; color: #0066cc; }
+.links-toggle.is-open { border-color: #0066cc; color: #0066cc; background: #f3f8fd; }
+.links-count {
+    font-size: 0.75rem; font-weight: 700;
+    padding: 0.05rem 0.4rem; border-radius: 999px;
+    background: #e9ecef; color: #556;
+}
+
+/* Pushed to the end of the meta row: destructive, so away from the things
+   you tap while writing. Shown only on drafts. */
+.post-meta .delete-draft { margin-left: auto; min-height: 44px; }
+
+/* The Links panel: one row per URL, the primary first. Every control is a
+   44px button -- nothing here appears on hover, there is none on a tablet. */
+.post-links {
+    margin: -0.75rem 0 1.5rem;
+    border: 1px solid #e3e8ee; border-radius: 8px;
+    background: #fafbfc; padding: 0.5rem 0.75rem 0.75rem;
+}
+.post-links[hidden] { display: none; }
+.links-heading {
+    display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
+    font-size: 0.8rem; font-weight: 700; color: #556;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.25rem 0 0.5rem;
+}
+.links-note {
+    font-weight: 400; text-transform: none; letter-spacing: 0; color: #889;
+}
+.link-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    min-height: 44px; padding: 0.25rem 0;
+    border-top: 1px solid #edf0f3;
+}
+.link-path {
+    flex: 1; min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem;
+    color: #445; overflow-wrap: anywhere;
+}
+.link-row.is-primary .link-path { color: #0066cc; font-weight: 600; }
+.link-badge {
+    font-size: 0.75rem; font-weight: 700; color: #0066cc;
+    padding: 0.15rem 0.55rem; border-radius: 999px; background: #e6f0fa;
+}
+.link-action {
+    font: inherit; font-size: 0.85rem;
+    min-height: 44px; padding: 0 0.85rem;
+    border: 1px solid #ccd4dc; border-radius: 6px;
+    background: #fff; color: #445; cursor: pointer; white-space: nowrap;
+}
+.link-action:active { background: #eef2f6; }
+.link-action.danger { color: #cc3333; border-color: #f0c9c9; }
+.link-add {
+    display: flex; align-items: center; gap: 0.25rem;
+    padding-top: 0.5rem; border-top: 1px solid #edf0f3;
+}
+.link-prefix {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem;
+    color: #889;
+}
+.link-add input {
+    flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem;
+    padding: 0 0.6rem; border: 1px solid #ccd4dc; border-radius: 6px; background: #fff;
+}
+.link-add .link-action { margin-left: 0.5rem; }
 
 a { color: #0066cc; }
 

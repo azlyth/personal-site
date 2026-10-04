@@ -1393,7 +1393,7 @@ def _claim(new_slug: str, slug: str) -> None:
             detail=f"/blog/{new_slug}/ is already used by the post {owner!r}",
         )
     if new_slug == slug:
-        raise HTTPException(status_code=409, detail=f"/blog/{new_slug}/ is this post's own link")
+        raise HTTPException(status_code=409, detail=f"/blog/{new_slug}/ is already this post's primary link")
 
 
 def _require_fresh(raw: bytes, expected_hash: str) -> None:

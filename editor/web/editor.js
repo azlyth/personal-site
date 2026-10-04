@@ -13,6 +13,9 @@
 const state = {
   slug: null, hash: null, url: null, blocks: [], moveIndex: null,
   wrapOpen: new Set(), pendingInsert: null, canUndo: false,
+  // Whether the Links panel (the post's primary URL and its redirects) is
+  // open. Survives re-renders so adding a link doesn't snap it shut.
+  linksOpen: false,
 };
 
 const els = {
@@ -20,6 +23,7 @@ const els = {
   newPost: document.getElementById('new-post'),
   title: document.getElementById('post-title'),
   meta: document.getElementById('post-meta'),
+  links: document.getElementById('post-links'),
   blocks: document.getElementById('blocks'),
   status: document.getElementById('status'),
   undo: document.getElementById('undo'),
@@ -80,16 +84,32 @@ async function loadPost(slug) {
     return;
   }
   const data = await res.json();
+  if (data.slug !== state.slug) state.linksOpen = false;
+  applyPost(data);
+  setStatus('');
+}
+
+// Render a whole post payload -- the initial load, and any write whose
+// response can change more than the blocks (links, Make primary, Undo).
+function applyPost(data) {
+  const renamed = state.slug !== null && data.slug !== state.slug;
   state.slug = data.slug;
   state.hash = data.hash;
   state.blocks = data.blocks;
   state.url = data.url;
   setCanUndo(data.can_undo);
 
-  els.title.textContent = data.meta.title;
+  if (!els.title.dataset.editing) els.title.textContent = data.meta.title;
   renderMeta(data.meta);
   renderBlocks();
-  setStatus('');
+  if (renamed) rememberSlugInUrl(data.slug);
+}
+
+// A tab opened at /edit/<slug> reloads to that slug, so once the post moves
+// (Make primary) or goes (Delete draft) the address bar has to follow.
+function rememberSlugInUrl(slug) {
+  if (!location.pathname.startsWith('/edit/')) return;
+  history.replaceState(null, '', slug ? `/edit/${slug}` : '/');
 }
 
 function startEditingTitle() {
@@ -167,18 +187,28 @@ function renderMeta(meta) {
   draft.addEventListener('change', () => saveMeta({ draft: draft.checked }));
   draftLabel.append(draft, document.createTextNode(' draft'));
 
-  // The slug isn't part of MetaEdit -- renaming a post's file is a separate
-  // route (POST .../rename) because it moves the file via `git mv` instead
-  // of just rewriting frontmatter, and it breaks the post's existing URL.
-  // Surface that as a deliberate, separate action rather than folding it
-  // into the date/draft row, and always show the warning it returns -- that
-  // warning is the whole point of the confirm step, not decoration.
-  const renameBtn = document.createElement('button');
-  renameBtn.type = 'button';
-  renameBtn.className = 'rename-slug';
-  renameBtn.textContent = `/blog/${state.slug}/`;
-  renameBtn.title = 'Change the URL slug';
-  renameBtn.addEventListener('click', renameSlug);
+  // Where the post lives. Tapping it opens the Links panel underneath:
+  // the primary URL plus any others that redirect to it. Behind a toggle
+  // for the same reason as the ◨ layout controls -- most posts have one
+  // link and nothing to do about it.
+  const aliases = meta.aliases || [];
+  const linksBtn = document.createElement('button');
+  linksBtn.type = 'button';
+  linksBtn.className = 'links-toggle';
+  linksBtn.classList.toggle('is-open', state.linksOpen);
+  linksBtn.setAttribute('aria-expanded', String(state.linksOpen));
+  linksBtn.textContent = `/blog/${state.slug}/`;
+  if (aliases.length) {
+    const more = document.createElement('span');
+    more.className = 'links-count';
+    more.textContent = `+${aliases.length}`;
+    linksBtn.append(more);
+  }
+  linksBtn.title = 'Links: change the URL, or add others that redirect here';
+  linksBtn.addEventListener('click', () => {
+    state.linksOpen = !state.linksOpen;
+    renderMeta(meta);
+  });
 
   // Straight to the published page. A draft isn't built at all, so the link
   // would 404 -- say so in the title rather than hiding it, since "where is
@@ -196,7 +226,7 @@ function renderMeta(meta) {
     live.title = 'Open the published post in a new tab';
   }
 
-  els.meta.append(date, draftLabel, renameBtn, live);
+  els.meta.append(date, draftLabel, linksBtn, live);
 
   // The override, where you can see it. A pinned photo is otherwise only
   // visible by opening the block that holds it, and the whole point of an
@@ -226,7 +256,182 @@ function renderMeta(meta) {
     els.meta.append(chip);
   }
 
+  // Only a draft can be thrown away; the server refuses anything else.
+  if (meta.draft) {
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'bar-action danger delete-draft';
+    del.textContent = 'Delete draft';
+    del.title = 'Delete this draft for good';
+    del.addEventListener('mousedown', (e) => e.preventDefault());
+    del.addEventListener('click', deleteDraft);
+    els.meta.append(del);
+  }
+
+  renderLinks(aliases);
   refreshPreviewPicks();
+}
+
+// The Links panel. The primary is the post's filename and can't be removed;
+// every other link is a Zola alias -- a redirect page pointing at the
+// primary. "Make primary" swaps one in, and the old primary becomes a
+// redirect in the same step, so no link ever stops working.
+function renderLinks(aliases) {
+  els.links.innerHTML = '';
+  els.links.hidden = !state.linksOpen;
+  if (!state.linksOpen) return;
+
+  const heading = document.createElement('div');
+  heading.className = 'links-heading';
+  heading.textContent = 'Links';
+  const note = document.createElement('span');
+  note.className = 'links-note';
+  note.textContent = 'Others redirect to the primary. Changes go live on Publish.';
+  heading.append(note);
+  els.links.append(heading);
+
+  els.links.append(linkRow(state.slug, true));
+  for (const alias of aliases) els.links.append(linkRow(alias, false));
+
+  const add = document.createElement('form');
+  add.className = 'link-add';
+  const prefix = document.createElement('span');
+  prefix.className = 'link-prefix';
+  prefix.textContent = '/blog/';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'another-link';
+  input.autocapitalize = 'none';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.setAttribute('aria-label', 'New link slug');
+  const suffix = document.createElement('span');
+  suffix.className = 'link-prefix';
+  suffix.textContent = '/';
+  const button = document.createElement('button');
+  button.type = 'submit';
+  button.className = 'link-action';
+  button.textContent = 'Add';
+  add.append(prefix, input, suffix, button);
+  add.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!input.value.trim()) return;
+    linkWrite(`/api/posts/${state.slug}/links`, 'POST', { slug: input.value }, 'adding link');
+  });
+  els.links.append(add);
+}
+
+function linkRow(slug, primary) {
+  const row = document.createElement('div');
+  row.className = 'link-row';
+  row.classList.toggle('is-primary', primary);
+
+  const path = document.createElement('span');
+  path.className = 'link-path';
+  path.textContent = `/blog/${slug}/`;
+  row.append(path);
+
+  if (primary) {
+    const badge = document.createElement('span');
+    badge.className = 'link-badge';
+    badge.textContent = 'primary';
+    row.append(badge);
+    return row;
+  }
+
+  const makePrimary = document.createElement('button');
+  makePrimary.type = 'button';
+  makePrimary.className = 'link-action';
+  makePrimary.textContent = 'Make primary';
+  makePrimary.title = `Move the post to /blog/${slug}/; /blog/${state.slug}/ will redirect to it`;
+  makePrimary.addEventListener('click', () => linkWrite(
+    `/api/posts/${state.slug}/links/${encodeURIComponent(slug)}/primary`, 'POST', {},
+    'making primary',
+  ));
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'link-action danger';
+  remove.textContent = 'Remove';
+  remove.title = `Stop redirecting /blog/${slug}/ — it will 404 once published`;
+  remove.addEventListener('click', () => linkWrite(
+    `/api/posts/${state.slug}/links/${encodeURIComponent(slug)}`, 'DELETE', {},
+    'removing link',
+  ));
+
+  row.append(makePrimary, remove);
+  return row;
+}
+
+async function linkWrite(url, method, fields, doing) {
+  if (!(await flushPendingEdit())) return;
+  setStatus(`${doing}…`);
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...fields, hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`${doing} failed — network error: ${err.message}`);
+    return;
+  }
+  if (!res.ok) {
+    // A 409 here is as likely to be "that link is taken" as a stale hash,
+    // and the detail says which -- so show it rather than a generic reload.
+    setStatus(`${doing} failed — ${await errorDetail(res)}`);
+    return;
+  }
+  const data = await res.json();
+  const renamed = data.slug !== state.slug;
+  applyPost(data);
+  if (renamed) {
+    await loadPostList();
+    els.picker.value = data.slug;
+  }
+  setStatus('saved');
+  await refreshStatus();
+}
+
+async function deleteDraft() {
+  const title = els.title.textContent.trim() || state.slug;
+  if (!confirm(`Delete the draft "${title}"?\n\nThis can't be undone.`)) return;
+  if (!(await flushPendingEdit())) return;
+
+  setStatus('deleting…');
+  let res;
+  try {
+    res = await fetch(`/api/posts/${state.slug}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: state.hash }),
+    });
+  } catch (err) {
+    setStatus(`delete failed — network error: ${err.message}`);
+    return;
+  }
+  if (!res.ok) {
+    setStatus(`delete failed — ${await errorDetail(res)}`);
+    return;
+  }
+
+  const posts = await loadPostList();
+  state.slug = null;
+  state.linksOpen = false;
+  rememberSlugInUrl(null);
+  if (posts.length) {
+    els.picker.value = posts[0].slug;
+    await loadPost(posts[0].slug);
+  } else {
+    els.title.textContent = '';
+    els.meta.innerHTML = '';
+    els.links.hidden = true;
+    state.blocks = [];
+    renderBlocks();
+  }
+  setStatus('draft deleted');
+  await refreshStatus();
 }
 
 // A star pinning one photo as the post's link preview -- the picture Reddit,
@@ -266,40 +471,6 @@ function paintPreviewPick(btn) {
 // away every un-saved alt-text edit and reorder sitting in its working copy.
 function refreshPreviewPicks() {
   document.querySelectorAll('.preview-pick').forEach(paintPreviewPick);
-}
-
-async function renameSlug() {
-  const current = state.slug;
-  const next = prompt('New URL slug:', current);
-  if (!next || next === current) return;
-
-  setStatus('renaming…');
-  let res;
-  try {
-    res = await fetch(`/api/posts/${current}/rename`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ new_slug: next, hash: state.hash }),
-    });
-  } catch (err) {
-    setStatus(`rename failed — network error: ${err.message}`);
-    return;
-  }
-
-  if (res.status === 409) {
-    setStatus('changed on disk — reload');
-    return;
-  }
-  if (!res.ok) {
-    setStatus(`rename failed — ${await errorDetail(res)}`);
-    return;
-  }
-
-  const data = await res.json();
-  alert(data.warning);
-  await loadPostList();
-  els.picker.value = data.slug;
-  await loadPost(data.slug);
 }
 
 function renderBlocks() {
@@ -1150,6 +1321,12 @@ async function applyWrite(res) {
   state.hash = data.hash;
   state.blocks = data.blocks;
   setCanUndo(data.can_undo);
+  // Undo and Discard can change the frontmatter too (a title, a link), so
+  // the meta row and Links panel re-render from the payload as well.
+  if (data.meta) {
+    if (!els.title.dataset.editing) els.title.textContent = data.meta.title;
+    renderMeta(data.meta);
+  }
   renderBlocks();
   setStatus('saved');
   await refreshStatus();
