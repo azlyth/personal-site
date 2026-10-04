@@ -32,7 +32,9 @@ Not goals: syncing edits back and forth, publishing from Platen, images.
 Input: the Platen doc's text and its name (the fallback title).
 Output: `(title, body_markdown)`.
 
-1. Normalize `\r\n` to `\n`, strip trailing whitespace on each line.
+1. Normalize `\r\n` to `\n`, strip leading and trailing whitespace on each
+   line. (Four spaces of indent is a code block in CommonMark; Platen has no
+   code blocks, so an indented line must still post as a paragraph.)
 2. **Title.** If the first non-blank line is `# <text>`, `<text>` is the
    title and that line is removed from the body. Otherwise the title is the
    doc name with a trailing `.md` removed.
@@ -86,7 +88,8 @@ Output: `(title, body_markdown)`.
   "Send to blog" button on its own row under Share / Fullscreen, rendered
   only when `can_send_to_blog`. On tap: flush autosave (as delete does),
   call the endpoint, then show "Draft created" plus an **Open in editor**
-  link in the existing `#share-status` line. Failures show there too.
+  link in its own `#blog-status` line (not `#share-status`, which clears
+  itself on a timer). Failures show there too.
 
 ## Secret handling
 
