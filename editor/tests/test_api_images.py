@@ -1,3 +1,4 @@
+import json
 import io
 
 import pytest
@@ -261,3 +262,45 @@ def test_fewer_alts_than_files_pads_with_empty_string(temp_post):
     text = temp_post.read_text()
     assert 'alt="only-one"' in text
     assert 'alt="">' in text
+
+
+# -- alt text can't break the block out (same rules as /images/place) -------
+
+def _post_blocks(path):
+    from editor.blocks import parse_blocks
+    from editor.frontmatter import split_post
+    return parse_blocks(split_post(path.read_text())[1])
+
+
+def _upload_at(files, alts):
+    data = client.get(f"/api/posts/{SLUG}").json()
+    return client.post(
+        f"/api/posts/{SLUG}/images",
+        files=[("files", (f"{i}.png", _png(), "image/png")) for i in range(files)],
+        data={"alts": json.dumps(alts), "index": "1", "hash": data["hash"]},
+    )
+
+
+def test_a_script_after_line_breaks_stays_inside_one_image(temp_post):
+    res = _upload_at(1, ["x\r\r<script>alert(1)</script>"])
+    assert res.status_code == 200
+    blocks = _post_blocks(temp_post)
+    assert [b.kind for b in blocks] == ["paragraph", "image", "paragraph"]
+    assert all("<script" not in b.html for b in blocks)
+
+
+def test_a_link_after_line_breaks_stays_inside_one_row(temp_post):
+    res = _upload_at(2, ["x\r\r[c](javascript:alert(1))", ""])
+    assert res.status_code == 200
+    blocks = _post_blocks(temp_post)
+    assert [b.kind for b in blocks] == ["paragraph", "img_row", "paragraph"]
+    assert all('href="javascript' not in b.html for b in blocks)
+    assert len(res.json()["blocks"][1]["images"]) == 2
+
+
+def test_a_trailing_backslash_still_parses_as_an_image(temp_post):
+    res = _upload_at(1, ["trailing\\"])
+    assert res.status_code == 200
+    block = res.json()["blocks"][1]
+    assert block["kind"] == "image"
+    assert block["images"][0]["alt"] == "trailing\\"

@@ -1271,10 +1271,17 @@ async def upload_images(
 
 
 
+class PlacedImage(BaseModel):
+    url: str
+    # Typed later in the photo editor; capped here because this route takes
+    # it straight from the client.
+    alt: str = Field(default="", max_length=500)
+
+
 class ImagesPlace(BaseModel):
     index: int = Field(ge=0)
     hash: str
-    images: list[ImageItem]
+    images: list[PlacedImage]
 
 
 @app.post("/api/posts/{slug}/images/place")

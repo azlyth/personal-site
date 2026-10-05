@@ -72,6 +72,19 @@ def is_uploaded_url(url: str, post_slug: str) -> bool:
     return bool(_UPLOADED_NAME_RE.match(url[len(prefix):]))
 
 
+# Every character Python (str.splitlines) or a markdown parser may treat as a
+# line break. Alt text is one line by definition; a break inside it -- a
+# blank line especially -- would end the image paragraph or the .img-row's
+# html block, and whatever followed would become markup of its own.
+_ALT_BREAK_RE = re.compile("[\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029]")
+# What the markdown branch of `markdown_for` escapes, undone by parse_images.
+_MD_ALT_UNESCAPE_RE = re.compile(r"\\([\\\[\]])")
+
+
+def _one_line(alt: str) -> str:
+    return _ALT_BREAK_RE.sub(" ", alt)
+
+
 _MD_IMAGE_RE = re.compile(r"^!\[(?P<alt>.*)\]\((?P<url>[^)]*)\)$", re.S)
 _IMG_TAG_RE = re.compile(r'<img\s+src="(?P<url>[^"]*)"\s+alt="(?P<alt>[^"]*)"\s*/?>')
 _IMG_ROW_OPEN_RE = re.compile(
@@ -120,7 +133,7 @@ def parse_images(kind: str, source: str) -> dict | None:
         match = _MD_IMAGE_RE.match(source.strip())
         if not match:
             return None
-        alt = match.group("alt").replace("\\]", "]").replace("\\[", "[")
+        alt = _MD_ALT_UNESCAPE_RE.sub(r"\1", match.group("alt"))
         images = [{"url": match.group("url"), "alt": alt}]
         size = DEFAULT_SIZE
         side = DEFAULT_SIDE
@@ -194,7 +207,11 @@ def markdown_for(
         )
 
     if len(urls) == 1 and size == DEFAULT_SIZE:
-        alt = alts[0].replace("\n", " ").replace("[", "\\[").replace("]", "\\]")
+        # The backslash first, or a trailing one would escape the closing
+        # `]` and the whole thing would stop being an image.
+        alt = (
+            _one_line(alts[0]).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+        )
         return f"![{alt}]({urls[0]})"
 
     class_attr = "img-row" if size == DEFAULT_SIZE else f"img-row size-{size}"
@@ -202,7 +219,7 @@ def markdown_for(
         class_attr += f" beside-{side}"
     lines = [f'<div class="{class_attr}">']
     for url, alt in zip(urls, alts):
-        safe_alt = html.escape(alt.replace("\n", " "), quote=True)
+        safe_alt = html.escape(_one_line(alt), quote=True)
         lines.append(f'<img src="{url}" alt="{safe_alt}">')
     lines.append("</div>")
     return "\n".join(lines)

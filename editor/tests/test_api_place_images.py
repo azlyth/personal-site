@@ -227,3 +227,60 @@ def test_every_key_image_key_can_make_validates(alt):
 
     key = image_key(SLUG, alt, b"some bytes")
     assert is_uploaded_url(f"https://img.cloudy.nyc/{key}", SLUG)
+
+
+# -- alt text can't break the block out ------------------------------------
+# Every kind of line break becomes a space (a blank line would end the image
+# paragraph or the .img-row's html block, and whatever followed would be
+# markup of its own), and a backslash is escaped before the brackets so a
+# trailing one can't escape the closing `]`.
+
+BREAKS = ["\r", "\n", "\v", "\f", "\x85", " ", " "]
+
+
+def _only_block(path, kind):
+    blocks = _blocks(path)
+    kinds = [b.kind for b in blocks]
+    assert kinds.count(kind) == 1 and "html" not in kinds, kinds
+    assert all("<script" not in b.html for b in blocks)
+    assert all('href="javascript' not in b.html for b in blocks)
+    return blocks
+
+
+def test_a_script_after_line_breaks_stays_inside_one_image(temp_post):
+    res = _place(1, [{"url": A, "alt": "x\r\r<script>alert(1)</script>"}])
+    assert res.status_code == 200
+    blocks = _only_block(temp_post, "image")
+    assert len(blocks) == 4
+    assert res.json()["blocks"][1]["images"][0]["url"] == A
+
+
+def test_a_link_after_line_breaks_stays_inside_one_row(temp_post):
+    res = _place(1, [{"url": A, "alt": "x\r\r[c](javascript:alert(1))"}, {"url": B, "alt": ""}])
+    assert res.status_code == 200
+    blocks = _only_block(temp_post, "img_row")
+    assert len(blocks) == 4
+    assert len(res.json()["blocks"][1]["images"]) == 2
+
+
+@pytest.mark.parametrize("brk", BREAKS)
+def test_every_line_break_becomes_a_space(temp_post, brk):
+    res = _place(1, [{"url": A, "alt": f"a{brk}{brk}b"}])
+    assert res.status_code == 200
+    assert _blocks(temp_post)[1].source == f"![a  b]({A})"
+    assert res.json()["blocks"][1]["images"] == [{"url": A, "alt": "a  b"}]
+
+
+@pytest.mark.parametrize("alt", ["trailing\\", "mid\\dle", "\\[x\\]", "a\\\\b"])
+def test_a_backslash_still_parses_as_an_image(temp_post, alt):
+    res = _place(1, [{"url": A, "alt": alt}])
+    assert res.status_code == 200
+    block = res.json()["blocks"][1]
+    assert block["kind"] == "image"
+    assert block["images"] == [{"url": A, "alt": alt}]
+
+
+def test_an_alt_over_500_characters_is_refused(temp_post):
+    assert _place(1, [{"url": A, "alt": "a" * 501}]).status_code in (400, 422)
+    assert temp_post.read_text() == POST
+    assert _place(1, [{"url": A, "alt": "a" * 500}]).status_code == 200
