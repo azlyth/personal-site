@@ -115,7 +115,11 @@ CAPTURE_PICKER = """(() => {
   window.__pickers = [];
   const orig = HTMLInputElement.prototype.click;
   HTMLInputElement.prototype.click = function () {
-    if (this.type === 'file') { window.__pickers.push(this); return; }
+    if (this.type === 'file') {
+      window.__pickers.push(this);
+      if (window.__log) window.__log.push('click');
+      return;
+    }
     return orig.call(this);
   };
 })()"""
@@ -163,7 +167,8 @@ def status(cdp) -> str:
 
 def button_shown(cdp) -> bool:
     return cdp.js("(() => { const b = document.getElementById('add-photo');"
-                  " return !b.hidden && getComputedStyle(b).display !== 'none'"
+                  " const cs = getComputedStyle(b);"
+                  " return !b.hidden && cs.display !== 'none' && cs.visibility !== 'hidden'"
                   " && b.getBoundingClientRect().width > 0; })()")
 
 
@@ -225,11 +230,19 @@ def run_viewport(cdp, base, w, h, results, shots, files, delay_file):
     r = cdp.rect("#add-photo")
     bar = cdp.rect(".bar")
     label = cdp.js("document.getElementById('add-photo').getAttribute('aria-label')")
-    check("1: button visible, 56px round, labelled 'Add photo', under the toolbar, at the right",
-          button_shown(cdp) and r and r["w"] >= 56 and r["h"] >= 56 and label == "Add photo"
-          and bar and r["y"] >= bar["y"] + bar["h"] and r["y"] < bar["y"] + bar["h"] + 40
-          and r["x"] + r["w"] > w - 40,
-          {"rect": r, "bar": bar, "label": label})
+    col = json.loads(cdp.js("JSON.stringify(document.querySelector('#blocks').getBoundingClientRect())"))
+    if w >= 960:
+        check("1: button visible, 56px, labelled 'Add photo', floating under the toolbar in the margin",
+              button_shown(cdp) and r and r["w"] >= 56 and r["h"] >= 56 and label == "Add photo"
+              and bar and r["y"] >= bar["y"] + bar["h"] and r["y"] < bar["y"] + bar["h"] + 40
+              and r["x"] + r["w"] > w - 40 and r["x"] >= col["right"],
+              {"rect": r, "bar": bar, "label": label, "column": col})
+    else:
+        check("1: button visible, 48px, labelled 'Add photo', at the right end of the toolbar",
+              button_shown(cdp) and r and r["w"] >= 48 and r["h"] >= 48 and label == "Add photo"
+              and bar and r["y"] >= bar["y"] and r["y"] + r["h"] <= bar["y"] + bar["h"]
+              and r["x"] + r["w"] > w - 40,
+              {"rect": r, "bar": bar, "label": label})
     cdp.js("scrollTo(0, 900)")
     time.sleep(0.3)
     scrolled = cdp.rect("#add-photo")
@@ -252,6 +265,57 @@ def run_viewport(cdp, base, w, h, results, shots, files, delay_file):
           and not cdp.js("!!document.querySelector('.block.editing')"),
           {"picked": picked, "status": status(cdp)})
     cdp.tap_el(".place-banner .move-cancel", 0.4)
+
+    # --- 2b. the picker opens inside the tap; the save comes after the pick --
+    load(cdp, base)
+    cdp.tap_el('.block[data-index="1"]', 0.6)
+    cdp.js("(() => { const t = document.querySelector('.block.editing textarea');"
+           " t.value = t.value + ' Saved after the pick.'; t.dispatchEvent(new Event('input')); })()")
+    cdp.js("""(() => {
+      window.__log = [];
+      const f = window.fetch;
+      window.fetch = (url, opts = {}) => {
+        window.__log.push(`${opts.method || 'GET'} ${url}`);
+        return f(url, opts);
+      };
+      new MutationObserver(() => {
+        if (document.querySelector('.place-banner') && !window.__log.includes('banner')) {
+          window.__log.push('banner');
+        }
+      }).observe(document.getElementById('blocks'), {childList: true, subtree: true});
+    })()""")
+    cdp.js("scrollTo(0, 0)")
+    time.sleep(0.2)
+    r = cdp.rect("#add-photo")
+    cdp.tap(r["x"] + r["w"] / 2, r["y"] + r["h"] / 2, 0.6)
+    log_at_tap = cdp.js("window.__log.slice()")
+    still_open = cdp.js("!!document.querySelector('.block.editing textarea')")
+    check("2b: the picker opens in the tap, before any save; the editor stays open meanwhile",
+          log_at_tap == ["click"] and still_open and "Saved after the pick." not in POST.read_text(),
+          {"log": log_at_tap, "open": still_open})
+    cdp.js("window.__log.push('files')")
+    obj = cdp("Runtime.evaluate", expression="window.__pickers[window.__pickers.length - 1]")
+    cdp("DOM.setFileInputFiles", files=[str(red)], objectId=obj["result"]["objectId"])
+    wait_for(cdp, "window.__log.includes('banner')", 8)
+    log = cdp.js("window.__log.slice()")
+    puts = [i for i, e in enumerate(log) if e.startswith("PUT ") and "/blocks/" in e]
+    order_ok = (puts and log.index("click") < log.index("files") < puts[0] < log.index("banner"))
+    check("2b: the dirty editor is saved after the files are set and before the banner",
+          order_ok and "Saved after the pick." in POST.read_text()
+          and not cdp.js("!!document.querySelector('.block.editing')"), log)
+    cdp.tap_el(".place-banner .move-cancel", 0.4)
+
+    load(cdp, base)
+    cdp.js("[...document.querySelectorAll('.block[data-index=\"2\"] .block-controls button')]"
+           ".find((b) => b.textContent === '+').click()")
+    time.sleep(0.3)
+    menu = cdp.js("!!document.querySelector('.insert-choice')")
+    pick(cdp, [red])
+    gone = not cdp.js("!!document.querySelector('.insert-choice')")
+    cdp.tap_el(".place-banner .move-cancel", 0.4)
+    check("2b: an open insert menu is gone once placing starts, and stays gone",
+          menu and gone and not cdp.js("!!document.querySelector('.insert-choice')"),
+          {"menu": menu, "gone": gone})
 
     # --- 3/4. placement mode, a tap that beats a slow upload ---------------
     load(cdp, base)
@@ -390,6 +454,53 @@ def run_viewport(cdp, base, w, h, results, shots, files, delay_file):
     check("8: a stale post gets the usual message, leaves placement, writes nothing",
           status(cdp) == "changed on disk — reload" and POST.read_text() == changed
           and not cdp.js("!!document.querySelector('.place-banner')"), status(cdp))
+
+    # --- 10. a bar action cancels a placement, and says so -----------------
+    load(cdp, base)
+    pick(cdp, [red])
+    wait_for(cdp, "document.querySelector('.place-banner').innerText.includes('Uploaded')", 10)
+    cdp.js("window.confirm = () => true")
+    cdp.js("document.getElementById('discard').click()")
+    time.sleep(0.8)
+    st = status(cdp)
+    check("10: Discard mid-placement leaves it, writes nothing, says 'Photo not added. Pick it again.'",
+          not cdp.js("!!document.querySelector('.place-banner')") and POST.read_text() == BODY
+          and "Photo not added. Pick it again." in st, st)
+
+    # --- 11. a bar action waits for a place already on the wire ------------
+    load(cdp, base)
+    pick(cdp, [red])
+    wait_for(cdp, "document.querySelector('.place-banner').innerText.includes('Uploaded')", 10)
+    cdp.js("""(() => {
+      const f = window.fetch;
+      window.fetch = (url, opts) => String(url).endsWith('/images/place')
+        ? new Promise((r) => setTimeout(r, 1200)).then(() => f(url, opts)) : f(url, opts);
+    })()""")
+    tap_gap(cdp, 1, 0.1)
+    cdp.js("window.confirm = () => true")
+    cdp.js("document.getElementById('discard').click()")
+    time.sleep(2.5)
+    st = status(cdp)
+    blocks = source_blocks()
+    check("11: Discard during an in-flight place waits for it: photo placed, no stale 409",
+          blocks[1].startswith("![](https://img.cloudy.nyc/") and "changed on disk" not in st
+          and "never been committed" in st, {"status": st, "blocks": blocks[:3]})
+
+    # --- 12. a title edit saved on blur doesn't 409 the place ---------------
+    load(cdp, base)
+    pick(cdp, [red])
+    wait_for(cdp, "document.querySelector('.place-banner').innerText.includes('Uploaded')", 10)
+    cdp.js("""(() => {
+      document.getElementById('post-title').click();
+      const i = document.querySelector('.title-input');
+      i.value = 'Renamed while placing';
+    })()""")
+    tap_gap(cdp, 1, 0.2)
+    wait_for(cdp, "!document.querySelector('.place-banner') && !!document.querySelector('.block.editing')", 8)
+    text_now = POST.read_text()
+    check("12: a title blur then a line tap: both saved, no 409",
+          'title = "Renamed while placing"' in text_now and "![](https://img.cloudy.nyc/" in text_now
+          and "changed on disk" not in status(cdp), {"status": status(cdp)})
 
     # --- 9. hidden during proofread and move mode --------------------------
     load(cdp, base)

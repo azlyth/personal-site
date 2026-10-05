@@ -44,10 +44,26 @@ const els = {
   proofCancel: document.getElementById('proof-cancel'),
   reviewBar: document.getElementById('review-bar'),
   addPhoto: document.getElementById('add-photo'),
+  addPhotoInput: document.getElementById('add-photo-input'),
 };
 
+// A note that has to survive the statuses that follow it for a moment --
+// "Photo not added" when another action cancels a placement, which that
+// action's own "saving…"/"saved" would otherwise overwrite at once.
+let statusNote = null;
+let statusText = '';
+
 function setStatus(text) {
-  els.status.textContent = text;
+  statusText = text;
+  const note = statusNote && Date.now() < statusNote.until ? statusNote.text : '';
+  els.status.textContent = [text, note].filter(Boolean).join(' ');
+}
+
+// Added after whatever the status says now, and kept after the statuses
+// that follow for `ms`.
+function noteStatus(text, ms = 8000) {
+  statusNote = { text, until: Date.now() + ms };
+  setStatus(statusText);
 }
 
 // Every write route can answer with a non-2xx that isn't the 409
@@ -113,7 +129,7 @@ function applyPost(data) {
   if (data.slug !== state.slug) closeReview();
   // Any other write lands a new block list, so the gaps a placement is
   // aiming at (and any line already tapped) no longer mean what they did.
-  cancelPlacing({ render: false });
+  cancelPlacing({ render: false, dropped: true });
   const renamed = state.slug !== null && data.slug !== state.slug;
   state.slug = data.slug;
   state.hash = data.hash;
@@ -152,7 +168,19 @@ function startEditingTitle() {
   });
 }
 
-async function saveMeta(fields) {
+// The meta write in flight, if any. A title edit saves on blur, which fires
+// just before a tap on a placement line -- placeAt waits for it, or the
+// place would go out on the hash the meta write is about to replace.
+let metaWrite = null;
+
+function saveMeta(fields) {
+  const write = saveMetaNow(fields);
+  metaWrite = write;
+  write.finally(() => { if (metaWrite === write) metaWrite = null; });
+  return write;
+}
+
+async function saveMetaNow(fields) {
   setStatus('saving…');
   let res;
   try {
@@ -471,6 +499,7 @@ async function linkWrite(url, method, fields, doing) {
   // Make primary renames the post, which a review can't follow. Every link
   // write leaves it, since which ones rename isn't known until they land.
   await leaveReview();
+  await leavePlacing();
   if (!(await flushPendingEdit())) return;
   setStatus(`${doing}…`);
   let res;
@@ -505,6 +534,7 @@ async function deleteDraft() {
   const title = els.title.textContent.trim() || state.slug;
   if (!confirm(`Delete the draft "${title}"?\n\nThis can't be undone.`)) return;
   await leaveReview();
+  await leavePlacing();
   if (!(await flushPendingEdit())) return;
 
   setStatus('deleting…');
@@ -536,6 +566,7 @@ async function deleteDraft() {
     els.meta.innerHTML = '';
     els.links.hidden = true;
     state.blocks = [];
+    cancelPlacing({ render: false });
     renderBlocks();
   }
   setStatus('draft deleted');
@@ -1532,7 +1563,7 @@ async function applyWrite(res, change = null) {
   state.hash = data.hash;
   // See applyPost: a new block list voids the placement's gaps. Its own
   // write clears state.placing before it gets here.
-  cancelPlacing({ render: false });
+  cancelPlacing({ render: false, dropped: true });
   const before = state.blocks.length;
   state.blocks = data.blocks;
   setCanUndo(data.can_undo);
@@ -1571,6 +1602,7 @@ function setCanUndo(canUndo) {
 async function undoEdit() {
   if (!state.canUndo) return;
   await leaveReview();
+  await leavePlacing();
   // Same reason every control-bar action flushes: the bar's mousedown
   // preventDefault suppresses the blur that would have saved an open
   // textarea, so without this an Undo would step back past text that was
@@ -1598,6 +1630,7 @@ async function discardEdits() {
     + 'You can still get it back with Undo.'
   )) return;
   await leaveReview();
+  await leavePlacing();
   if (!(await flushPendingEdit())) return;
 
   setStatus('discarding…');
@@ -1805,7 +1838,7 @@ function offerDrafts() {
           setStatus('Close proofreading to edit.');
           return;
         }
-        cancelPlacing();
+        await leavePlacing();
         if (!(await closeEditor())) return;
         const block = findDraftBlock(draft);
         const el = block && els.blocks.querySelector(`.block[data-index="${block.index}"]`);
@@ -2726,18 +2759,6 @@ async function splitBlockVideo(index, clips, size, side, split) {
   await applyWrite(res);
 }
 
-// --- Proofread ---------------------------------------------------------------
-// The server (editor/proofread.py) owns the prompt, the guardrails and the
-// red/green marks; this only batches, shows progress and steps through what
-// comes back. Nothing is written until Accept, and each Accept goes through
-// the apply route, which re-checks the fix against the block as it is now.
-//
-// No editor is open during a review, and none can be opened: starting one
-// closes (saving) whatever is open, and the block click handler, the block
-// controls and the draft Restore strip all refuse while reviewing(). That
-// keeps the editor's re-attach and draft logic out of it entirely -- every
-// write here lands with `openEditor` null. Undo, Discard, the post picker,
-// + New and Publish close the review before they act.
 // --- Add photo -----------------------------------------------------------
 // The round 📷 button: pick photos, then tap one of move mode's blue lines
 // to say where they go. The upload starts the moment the picker closes and
@@ -2766,21 +2787,36 @@ function positionAddPhoto() {
 }
 new ResizeObserver(positionAddPhoto).observe(document.querySelector('.bar'));
 
-async function startAddPhoto() {
-  if (!state.slug || reviewing() || state.placing || state.moveIndex !== null) return;
-  state.pendingInsert = null;
-  // Same rule as every bar action: save what's open first, and stop if that
-  // save didn't land.
-  if (!(await closeEditor())) return;
+function canAddPhoto() {
+  return Boolean(state.slug) && !reviewing() && !state.placing && state.moveIndex === null;
+}
 
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.multiple = true;
-  input.addEventListener('change', () => {
-    if (input.files.length) beginPlacing([...input.files]);
-  });
-  input.click();
+// The picker opens INSIDE the tap, synchronously: a browser only opens a
+// file picker during the tap's user activation, and Safari's and Chrome's
+// windows can run out across an awaited save or a confirm(). So nothing is
+// saved before it opens -- the open editor is closed (and saved) once files
+// have been chosen, and cancelling the picker leaves it exactly as it was.
+function openAddPhotoPicker() {
+  if (!canAddPhoto()) return;
+  els.addPhotoInput.value = ''; // so picking the same photo again still fires `change`
+  els.addPhotoInput.click();
+}
+
+async function addPhotoPicked() {
+  const files = [...els.addPhotoInput.files];
+  els.addPhotoInput.value = '';
+  if (!files.length || !canAddPhoto()) return;
+  // Same rule as every bar action: save what's open first, and stop if that
+  // save didn't land (its own status says why).
+  if (!(await closeEditor())) {
+    noteStatus('Photo not added. Pick it again.');
+    return;
+  }
+  if (!canAddPhoto()) return;
+  // An open "insert above or below?" menu is dropped; beginPlacing's
+  // render takes it off the screen.
+  state.pendingInsert = null;
+  beginPlacing(files);
 }
 
 function beginPlacing(files) {
@@ -2836,11 +2872,24 @@ function tapPlacement(gap) {
   placeAt(gap);
 }
 
-async function placeAt(gap) {
+// The place write in flight, if any. leavePlacing() waits for it, so a bar
+// action never acts on the hash it is about to replace.
+let placeWrite = null;
+
+function placeAt(gap) {
+  const write = placeAtNow(gap);
+  placeWrite = write;
+  write.finally(() => { if (placeWrite === write) placeWrite = null; });
+  return write;
+}
+
+async function placeAtNow(gap) {
   const placing = state.placing;
   placing.gap = gap;
   placing.busy = true;
   renderPlaceBanner();
+  // A title edit saved on blur, just before this tap, changes the hash.
+  if (metaWrite) await metaWrite;
   let res;
   try {
     res = await fetch(`/api/posts/${placing.slug}/images/place`, {
@@ -2849,11 +2898,19 @@ async function placeAt(gap) {
       body: JSON.stringify({ index: gap, hash: state.hash, images: placing.images }),
     });
   } catch (err) {
-    cancelPlacing();
+    if (state.placing === placing) cancelPlacing();
     setStatus(`save failed — network error: ${err.message}`);
+    noteStatus('Photo not added. Pick it again.');
     return;
   }
-  if (state.placing !== placing) return;
+  if (state.placing !== placing) {
+    // Something else ended the placement while this was out. A write that
+    // landed on this post still has to be applied (its hash is the post's
+    // now); one that didn't must not vanish without a word.
+    if (res.ok && placing.slug === state.slug) await applyWrite(res, { at: gap, delta: 1 });
+    else if (!res.ok) noteStatus('Photo not added. Pick it again.');
+    return;
+  }
   // Leave placement either way: a 409 means the gaps were stale, and
   // applyWrite says "changed on disk — reload" for it, as for any write.
   cancelPlacing({ render: !res.ok });
@@ -2868,11 +2925,23 @@ async function placeAt(gap) {
   }
 }
 
-function cancelPlacing({ render = true } = {}) {
+// For the bar actions that change the post (Undo, Discard, Links, Delete
+// draft, + New, switching posts, Restore): let a place already on the wire
+// land, then drop a placement that hasn't been placed -- its gaps are about
+// to stop meaning anything -- and say so.
+async function leavePlacing() {
+  if (placeWrite) await placeWrite;
+  cancelPlacing({ dropped: true });
+}
+
+// `dropped`: something other than the person's own Cancel ended it, so the
+// photos they picked were not added and the status has to say so.
+function cancelPlacing({ render = true, dropped = false } = {}) {
   const placing = state.placing;
   if (!placing) return;
   state.placing = null;
   placing.thumbs.forEach((url) => URL.revokeObjectURL(url));
+  if (dropped) noteStatus('Photo not added. Pick it again.');
   if (render) renderBlocks();
 }
 
@@ -2945,7 +3014,8 @@ function renderPlaceBanner() {
   });
 }
 
-els.addPhoto.addEventListener('click', startAddPhoto);
+els.addPhoto.addEventListener('click', openAddPhotoPicker);
+els.addPhotoInput.addEventListener('change', addPhotoPicked);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.placing && !state.placing.busy) {
     cancelPlacing();
@@ -2953,6 +3023,18 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// --- Proofread ---------------------------------------------------------------
+// The server (editor/proofread.py) owns the prompt, the guardrails and the
+// red/green marks; this only batches, shows progress and steps through what
+// comes back. Nothing is written until Accept, and each Accept goes through
+// the apply route, which re-checks the fix against the block as it is now.
+//
+// No editor is open during a review, and none can be opened: starting one
+// closes (saving) whatever is open, and the block click handler, the block
+// controls and the draft Restore strip all refuse while reviewing(). That
+// keeps the editor's re-attach and draft logic out of it entirely -- every
+// write here lands with `openEditor` null. Undo, Discard, the post picker,
+// + New and Publish close the review before they act.
 const PROSE_KINDS = new Set(['paragraph', 'heading', 'list', 'blockquote', 'pair']);
 const PROOF_BATCH = 5; // the route takes at most five indices
 // Null, or the batch loop in flight: {cancelled, abort: AbortController}.
@@ -3317,6 +3399,7 @@ async function newPost() {
   const title = prompt('Title for the new post:');
   if (!title) return;
   await leaveReview();
+  await leavePlacing();
   if (!(await closeEditor())) return;
 
   setStatus('creating…');
@@ -3347,6 +3430,7 @@ async function newPost() {
 els.picker.addEventListener('change', async () => {
   const next = els.picker.value;
   await leaveReview();
+  await leavePlacing();
   if (!(await closeEditor())) {
     els.picker.value = state.slug;
     return;

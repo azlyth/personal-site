@@ -1735,15 +1735,26 @@ punctuation fixes only, and shows them inline for Accept/Reject.
 
 ### Add photo (added 2026-10-04)
 
-A round 📷 button (56px, `#add-photo`, `aria-label="Add photo"`) is fixed at
-the top right, just under the toolbar (`top` measured from `.bar` by a
-ResizeObserver, since the bar wraps on a portrait tablet). It is hidden with
-no post, during a proofread run or review, while placing, and in move mode
-(`syncAddPhoto()`, called from `renderBlocks`).
+A round 📷 button (`#add-photo`, `aria-label="Add photo"`), one element in
+the toolbar's markup. From 960px up it floats at the top right, 56px, just
+under the toolbar (`top` measured from `.bar` by a ResizeObserver, plus
+`env(safe-area-inset-right)`); below that the side margin can't hold it --
+it covered the column at 820px -- so it sits at the right end of the bar,
+48px, with negative block margins so the sticky bar doesn't grow (12px more
+bar covered the post on a short window and broke verify-edit-tap's review 7).
+It is hidden with no post, during a proofread run or review, while placing,
+and in move mode (`syncAddPhoto()`, called from `renderBlocks`); hidden is
+`visibility: hidden`, so it keeps its room and placement doesn't reflow.
 
-- **Pick, then place.** Tapping it saves and closes any open editor through
-  `closeEditor()` (stops if that save didn't land), then opens a native
-  `<input type=file accept="image/*" multiple>`. On a pick the upload starts
+- **The picker opens inside the tap.** A browser opens a file picker only
+  during the tap's user activation, which an awaited save or a `confirm()`
+  can outlast. So the click handler clicks the persistent hidden
+  `#add-photo-input` (`accept="image/*" multiple`) synchronously, and the
+  open editor is closed and saved through `closeEditor()` only in the
+  `change` handler, once files are chosen (stopping, with "Photo not added.
+  Pick it again.", if that save doesn't land). Cancelling the picker leaves
+  the editor alone. An open insert menu is cleared as placing starts.
+- **Pick, then place.** On a pick the upload starts
   at once (`POST .../images/upload`, empty alts, no post write) while
   `state.placing` puts the post into a placement mode that **reuses move
   mode's overlay**: `renderDropOverlay()` (shared with `renderMoveOverlay`)
@@ -1768,27 +1779,42 @@ no post, during a proofread run or review, while placing, and in move mode
   8 hex. `markdown_for` writes URLs verbatim, so this is what stops the
   route writing arbitrary markup. A post renamed between upload and place
   therefore gets a 400 (the photos sit under the old slug's folder).
-  1-12 photos (`MAX_FILES`), `index >= 0`; an index past the end is a 409
-  like any stale block index.
+  1-12 photos (`MAX_FILES`), `index >= 0`, alt <= 500 chars; an index past
+  the end is a 409 like any stale block index.
+- **Alt text can't break out of the block** (`markdown_for`, so `/images`
+  and every row editor too): every line break -- `\r \n \v \f \x85`, U+2028,
+  U+2029 and the `\x1c-\x1e` separators `splitlines` honours -- becomes a
+  space, since a blank line would end the image paragraph or the row's html
+  block and what followed would be live markup; and in the markdown shape
+  `\` is escaped before `[`/`]`, or a trailing backslash escapes the closing
+  bracket and the photo stops being an image. `parse_images` undoes exactly
+  that escaping. A legacy alt holding a bare backslash now parses lossily
+  and falls back to raw editing, which is the safe direction.
 - **Leaving.** Cancel or Escape inserts nothing (uploaded objects stay in
   S3, as an abandoned photo-strip upload's do); Cancel is disabled once the
   place write is on the wire. A failed or partly failed upload leaves
   placement with `upload failed — <detail>`; a 409 leaves it with the usual
-  "changed on disk — reload". Any other write or post load
-  (`applyWrite`/`applyPost`) cancels placement, since its gaps no longer
-  mean what they did; draft Restore cancels it first; Proofread is disabled
-  while placing.
-- **Known:** the picker opens after `await closeEditor()`. With no editor
-  open (or a clean one) that is immediate; after a real save it relies on
-  the browser's user-activation window (iOS Safari's is short), so a slow
-  save could make the first tap not open the picker. At 820px the button
-  overlaps the right edge of the reading column.
+  "changed on disk — reload". Proofread is disabled while placing.
+- **Other actions wait for a place, then drop the placement, and say so.**
+  The place write is `placeWrite`; `leavePlacing()` awaits it and then
+  cancels a placement that hasn't placed. Undo, Discard, every Links write,
+  Delete draft, + New, the post picker and draft Restore call it (beside
+  `leaveReview()`), so none of them acts on the hash the place is about to
+  replace. A placement dropped by anything but its own Cancel shows "Photo
+  not added. Pick it again." -- a `noteStatus` that rides along with the
+  statuses that follow for 8 s, since the action's own "saved" would
+  otherwise overwrite it at once. `applyWrite`/`applyPost` still cancel as
+  a backstop; a place whose placement was ended under it applies a write
+  that landed and notes one that didn't. `placeAt` also awaits
+  `metaWrite`, so a title saved on blur by the very tap on a line can't
+  409 the place.
 - `scripts/verify-add-photo.py` checks it all in headless Chromium at
   1024x1366 and 820x1180 (system `python3`, ~2 min). S3 is faked the way
   the pytest suite does it -- a launcher in its temp dir sets
   `app.state.s3` to a fake whose `put_object` sleeps for a configurable
   delay, so the app carries no test hook -- and the picker is the real
-  input, filled with `DOM.setFileInputFiles`. Screenshots go to
+  input, filled with `DOM.setFileInputFiles`. It pins that the picker's
+  `click()` comes before any save and the save before the banner. Screenshots go to
   `~/.cache/add-photo-<width>[-button|-pending].png`. Route tests:
   `editor/tests/test_api_place_images.py`.
 
