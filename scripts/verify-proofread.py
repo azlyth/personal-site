@@ -73,9 +73,17 @@ FAKE_CLAUDE = r'''#!/usr/bin/env python3
 import json, os, re, sys, time
 prompt = sys.argv[sys.argv.index("-p") + 1]
 time.sleep(0.6)
-# Case 8: with the marker present, the batch holding block 5 fails.
-if os.path.exists(MARKER) and '<block index="5">' in prompt:
-    sys.exit(3)
+# The marker file steers the batch holding block 5 (the second one):
+# "fail" exits non-zero, "slow" answers late, "slow-empty" late and empty.
+mode = open(MARKER).read() if os.path.exists(MARKER) else ""
+if '<block index="5">' in prompt:
+    if mode == "fail":
+        sys.exit(3)
+    if mode.startswith("slow"):
+        time.sleep(2.5)
+    if mode == "slow-empty":
+        print("[]")
+        sys.exit(0)
 out = []
 for idx, body in re.findall(r'<block index="(\d+)">\n(.*?)\n</block>', prompt, re.S):
     for wrong, right in (("recieve", "receive"), ("teh", "the"), ("tomorow", "tomorrow")):
@@ -144,6 +152,12 @@ BAR_VISIBLE = "!document.getElementById('review-bar').hidden"
 RUN_DONE = "document.getElementById('proof-progress').hidden"
 NEXT = '.review-bar button[title="Next suggestion"]'
 PREV = '.review-bar button[title="Previous suggestion"]'
+
+
+def tap_proofread(cdp) -> bool:
+    cdp.js(WATCH_PROGRESS)
+    cdp.js("scrollTo(0, 0)")
+    return cdp.tap_el("#proofread", 0.2)
 
 
 def start_proofread(cdp) -> bool:
@@ -292,6 +306,70 @@ def run_viewport(cdp, base, w, h, results, shots):
     cdp.tap_el(".review-bar .review-close", 0.4)
     check("8: nothing was written", POST.read_text() == BODY)
 
+    # --- 10. rangeText lists separate runs ----------------------------------
+    ranges = cdp.js("[rangeText([2]), rangeText([0,1,2,3,4,10]), rangeText([0,3,4,8])]")
+    check("10: failures read as separate ranges",
+          ranges == ["paragraph 3", "paragraphs 1–5 and 11", "paragraphs 1, 4–5 and 9"], ranges)
+
+    # --- 11. every suggestion resolved while a batch is still out ------------
+    load(cdp, base)
+    MARKER.write_text("slow-empty")
+    try:
+        tap_proofread(cdp)
+        wait_for(cdp, BAR_VISIBLE, 5)
+        for _ in range(3):
+            cdp.js("document.querySelector('.review-bar .review-reject').click()")
+            time.sleep(0.15)
+        mid_run = not cdp.js(RUN_DONE)
+        wait_for(cdp, RUN_DONE, 10)
+    finally:
+        MARKER.unlink(missing_ok=True)
+    check("11: all resolved mid-run ends with 'All suggestions reviewed.'",
+          mid_run and status(cdp) == "All suggestions reviewed."
+          and cdp.js("document.getElementById('review-bar').hidden")
+          and POST.read_text() == BODY, {"mid_run": mid_run, "status": status(cdp)})
+
+    # --- 12. Accept all keeps taking batches that arrive while it runs -------
+    load(cdp, base)
+    MARKER.write_text("slow")
+    try:
+        tap_proofread(cdp)
+        wait_for(cdp, BAR_VISIBLE, 5)
+        mid_run = not cdp.js(RUN_DONE)
+        cdp.js("document.querySelector('.review-bar .review-all').click()")
+        wait_for(cdp, RUN_DONE + " && document.getElementById('review-bar').hidden", 15)
+    finally:
+        MARKER.unlink(missing_ok=True)
+    src = POST.read_text()
+    check("12: Accept all during a run also applies the later batch",
+          mid_run and "recieve" not in src and "tomorow" not in src and "teh" not in src
+          and status(cdp) == "All suggestions reviewed.",
+          {"mid_run": mid_run, "status": status(cdp), "src": src[-300:]})
+
+    # --- 13. Delete draft mid-run leaves the review --------------------------
+    load(cdp, base)
+    MARKER.write_text("slow")
+    try:
+        tap_proofread(cdp)
+        wait_for(cdp, BAR_VISIBLE, 5)
+        mid_run = not cdp.js(RUN_DONE)
+        cdp.js("window.confirm = () => true")
+        cdp.tap_el(".delete-draft", 0.5)
+        time.sleep(3.5)  # past the slow batch, which must not paint anything
+    finally:
+        MARKER.unlink(missing_ok=True)
+    after = json.loads(cdp.js(
+        "JSON.stringify({picker: document.getElementById('post-picker').value,"
+        " marks: document.querySelectorAll('del.pr-old, ins.pr-new').length,"
+        " bar: document.getElementById('review-bar').hidden,"
+        " progress: document.getElementById('proof-progress').hidden,"
+        " controls: document.querySelectorAll('.block-controls').length,"
+        " status: document.getElementById('status').textContent})"))
+    check("13: Delete draft mid-run: next post has no marks, bar and progress hidden",
+          mid_run and not POST.exists() and after["picker"] != SLUG and after["marks"] == 0
+          and after["bar"] and after["progress"] and after["controls"] > 0
+          and after["status"] == "draft deleted", {"mid_run": mid_run, **after})
+
 
 MARKER: Path  # set in main()
 
@@ -309,7 +387,7 @@ def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="proofread-", dir=cache))
     MARKER = tmp / "fail-batch"
     fake = tmp / "fake-claude"
-    fake.write_text(FAKE_CLAUDE.replace("MARKER", repr(str(MARKER)), 1))
+    fake.write_text(FAKE_CLAUDE.replace("MARKER", repr(str(MARKER))))
     fake.chmod(0o755)
     procs: list[subprocess.Popen] = []
     results: list = []

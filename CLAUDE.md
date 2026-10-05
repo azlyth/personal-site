@@ -1696,7 +1696,12 @@ punctuation fixes only, and shows them inline for Accept/Reject.
   wrap menus from `renderBlocks`, and blocks the draft Restore strip. So
   every Accept lands with no editor open and never touches the re-attach or
   draft logic; it goes through `applyWrite` like any other write. Undo,
-  Discard, the post picker, + New and Publish call `closeReview()` first.
+  Discard, the post picker, + New, Publish, Delete draft and every Links
+  write (Make primary renames the post) call `leaveReview()` first, which
+  closes the review and waits for an Accept already on the wire;
+  `applyPost` closes any review whose slug isn't the incoming post's, as a
+  backstop. Accept all keeps going until the run is finished and nothing
+  is left, so it also takes batches that arrive while it works.
   The client batches five blocks per request with a progress strip, so a
   long post shows results as they come in.
 - `scripts/verify-proofread.py` checks the whole flow in headless Chromium

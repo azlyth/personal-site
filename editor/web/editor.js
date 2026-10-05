@@ -103,6 +103,10 @@ async function loadPost(slug) {
 // Render a whole post payload -- the initial load, and any write whose
 // response can change more than the blocks (links, Make primary, Undo).
 function applyPost(data) {
+  // A review belongs to one post: its indices, hashes and marks mean
+  // nothing on another one (Delete draft, a rename, a stray load). The
+  // callers leave it first; this is the backstop.
+  if (data.slug !== state.slug) closeReview();
   const renamed = state.slug !== null && data.slug !== state.slug;
   state.slug = data.slug;
   state.hash = data.hash;
@@ -457,6 +461,9 @@ function linkRow(slug) {
 }
 
 async function linkWrite(url, method, fields, doing) {
+  // Make primary renames the post, which a review can't follow. Every link
+  // write leaves it, since which ones rename isn't known until they land.
+  await leaveReview();
   if (!(await flushPendingEdit())) return;
   setStatus(`${doing}…`);
   let res;
@@ -490,6 +497,7 @@ async function linkWrite(url, method, fields, doing) {
 async function deleteDraft() {
   const title = els.title.textContent.trim() || state.slug;
   if (!confirm(`Delete the draft "${title}"?\n\nThis can't be undone.`)) return;
+  await leaveReview();
   if (!(await flushPendingEdit())) return;
 
   setStatus('deleting…');
@@ -2726,10 +2734,21 @@ function hideProofProgress() {
   els.proofread.hidden = false;
 }
 
+// "paragraph 3", "paragraphs 1–5", "paragraphs 1–5 and 11",
+// "paragraphs 1, 4–5 and 9": runs of consecutive block numbers, 1-based.
 function rangeText(indices) {
-  const first = Math.min(...indices) + 1;
-  const last = Math.max(...indices) + 1;
-  return first === last ? `paragraph ${first}` : `paragraphs ${first}–${last}`;
+  const nums = [...new Set(indices)].sort((a, b) => a - b).map((i) => i + 1);
+  const runs = [];
+  for (const n of nums) {
+    const last = runs[runs.length - 1];
+    if (last && n === last[1] + 1) last[1] = n;
+    else runs.push([n, n]);
+  }
+  const parts = runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`));
+  const list = parts.length > 1
+    ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+    : parts[0];
+  return nums.length === 1 ? `paragraph ${list}` : `paragraphs ${list}`;
 }
 
 async function startProofread() {
@@ -2745,7 +2764,10 @@ async function startProofread() {
     return;
   }
   const run = { cancelled: false, abort: new AbortController() };
-  const review = { blocks: new Map(), items: [], current: 0 };
+  // `seen` counts every suggestion that ever arrived, so a run whose
+  // suggestions were all resolved before it finished says so, rather than
+  // "no issues found".
+  const review = { blocks: new Map(), items: [], current: 0, seen: 0 };
   const slug = state.slug;
   proofRun = run;
   state.review = review;
@@ -2777,6 +2799,7 @@ async function startProofread() {
         if (!b.suggestions.length) continue;
         review.blocks.set(b.index, { block_hash: b.block_hash, review_html: b.review_html });
         for (const s of b.suggestions) review.items.push({ ...s, index: b.index });
+        review.seen += b.suggestions.length;
       }
       for (const e of data.errors) failed.push(...e.indices);
     }
@@ -2796,7 +2819,11 @@ async function startProofread() {
   const couldnt = failed.length ? `Couldn't check ${rangeText(failed)}.` : '';
   if (!review.items.length) {
     closeReview();
-    setStatus(couldnt || (stopped ? 'Stopped. No issues found so far.' : 'No spelling or grammar issues found.'));
+    let done;
+    if (review.seen) done = 'All suggestions reviewed.';
+    else if (stopped) done = 'No issues found so far.';
+    else if (!couldnt) done = 'No spelling or grammar issues found.';
+    setStatus(`${stopped}${couldnt}${couldnt && done ? ' ' : ''}${done || ''}`.trim());
     return;
   }
   setStatus(`${stopped}${couldnt}`.trim());
@@ -2918,12 +2945,13 @@ async function acceptOne(item) {
   const review = state.review;
   const blk = review && review.blocks.get(item.index);
   if (!blk) return false;
+  const slug = state.slug;
   reviewBusy = true;
   renderReviewBar();
   try {
     let res;
     try {
-      res = await fetch(`/api/posts/${state.slug}/proofread/apply`, {
+      res = await fetch(`/api/posts/${slug}/proofread/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2958,6 +2986,9 @@ async function acceptOne(item) {
     // path every other write takes) consumes the body, so read a copy.
     // Landed on the server either way, so `state` must take it (its new
     // hash) even if the review was closed while it was out.
+    // ...unless `state` is another post by now (only the applyPost
+    // backstop can get here; leaveReview waits for this write).
+    if (state.slug !== slug) return false;
     const data = await res.clone().json();
     if (open) {
       blk.block_hash = data.block_hash;
@@ -2978,11 +3009,20 @@ function reject(item) {
   afterResolve();
 }
 
+// Keeps going until the run has finished and nothing is left: suggestions
+// from batches that arrive while it works are accepted too. Stops at the
+// first write that can't go on (see accept), or when the review closes.
 async function acceptAll() {
-  while (state.review && state.review.items.length) {
-    const before = state.review.items.length;
-    if (!(await accept(state.review.items[0]))) return;
-    if (state.review && state.review.items.length >= before) return; // no progress
+  const review = state.review;
+  while (state.review === review && (review.items.length || proofRun)) {
+    if (!review.items.length) {
+      // Caught up with the batches that are back; wait for the next one.
+      await new Promise((r) => setTimeout(r, 200));
+      continue;
+    }
+    const before = review.items.length;
+    if (!(await accept(review.items[0]))) return;
+    if (review.items.length >= before) return; // no progress
   }
 }
 
