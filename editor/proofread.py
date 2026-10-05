@@ -57,16 +57,37 @@ def run_claude(prompt: str, timeout_s: int = 120) -> str:
     return proc.stdout
 
 
+def _fenced_content(text: str) -> str | None:
+    m = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
+    return m.group(1).strip() if m else None
+
+
 def parse_response(raw: str) -> list:
-    fenced = re.search(r"```(?:json)?\s*(.*?)```", raw, re.S)
-    text = fenced.group(1) if fenced else raw
-    start, end = text.find("["), text.rfind("]")
-    if start == -1 or end < start:
-        raise ValueError("no JSON array in the response")
-    data = json.loads(text[start:end + 1])
-    if not isinstance(data, list):
-        raise ValueError("response is not a list")
-    return data
+    text = raw.strip()
+    # Try the whole response, then just the fenced block, before falling
+    # back to scanning -- a stray "[...]" in surrounding prose (e.g. a
+    # citation like "[1]") must not be mistaken for the real array.
+    for candidate in (text, _fenced_content(text)):
+        if candidate is None:
+            continue
+        try:
+            data = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(data, list):
+            return data
+    scan_text = _fenced_content(text) or text
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(scan_text):
+        if ch != "[":
+            continue
+        try:
+            data, _ = decoder.raw_decode(scan_text, i)
+        except ValueError:
+            continue
+        if isinstance(data, list) and all(isinstance(item, dict) for item in data):
+            return data
+    raise ValueError("no JSON array in the response")
 
 
 def _word_edits(a: str, b: str) -> int:
@@ -103,6 +124,9 @@ def _problem(source: str, before, after, kind="spelling") -> str | None:
 
 
 def validate(index: int, source: str, items: list) -> list[dict]:
+    # Caller must pass only this block's own suggestions -- `before` is
+    # matched against `source` alone, so an item meant for another block
+    # would be checked (and possibly accepted) against the wrong text.
     kept = []
     for item in items:
         if not isinstance(item, dict):
@@ -123,18 +147,32 @@ def validate(index: int, source: str, items: list) -> list[dict]:
 
 
 def review_html(source: str, suggestions: list[dict]) -> str:
-    marked = source
+    plain = _md.render(source)
     placed = sorted(suggestions, key=lambda s: source.index(s["before"]), reverse=True)
+    marked = source
+    tokens = []
     for n, s in enumerate(placed):
         at = marked.index(s["before"])
-        marked = marked[:at] + f"{n}" + marked[at + len(s["before"]):]
+        # Private-use-area delimiters, not plain digits: a bare "0"/"1"
+        # placeholder collides with any digit already in the source (e.g.
+        # "In 2020, ...") and gets rewritten by the later str.replace too.
+        token = "\ue000" + str(n) + "\ue001"
+        marked = marked[:at] + token + marked[at + len(s["before"]):]
+        tokens.append(token)
     out = _md.render(marked)
     for n, s in enumerate(placed):
+        token = tokens[n]
+        if out.count(token) != 1:
+            # The markdown render didn't preserve the token as a single,
+            # unique run (e.g. it landed across an escaped/altered span) --
+            # safer to show the block unmarked than to mark the wrong text.
+            return plain
         sid = html.escape(s["id"], quote=True)
         out = out.replace(
-            f"{n}",
+            token,
             f'<del class="pr-old" data-sid="{sid}">{html.escape(s["before"])}</del>'
             f'<ins class="pr-new" data-sid="{sid}">{html.escape(s["after"])}</ins>',
+            1,
         )
     return out
 

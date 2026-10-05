@@ -78,6 +78,12 @@ def test_parse_response_handles_fence_and_prose():
         proofread.parse_response("no json here")
 
 
+def test_parse_response_ignores_stray_brackets_in_prose():
+    raw = 'See [1] above:\n[{"block": 0, "before": "a", "after": "b", "kind": "spelling"}] Thanks [ok]'
+    data = proofread.parse_response(raw)
+    assert data == [{"block": 0, "before": "a", "after": "b", "kind": "spelling"}]
+
+
 def test_review_html_marks_in_place():
     source = "I will recieve *it* soon."
     sugg = proofread.validate(0, source, [ok("recieve", "receive")])
@@ -91,6 +97,55 @@ def test_review_html_escapes():
     source = "a & b recieve"
     sugg = proofread.validate(0, source, [ok("recieve", "receive")])
     assert "a &amp; b" in proofread.review_html(source, sugg)
+
+
+def test_review_html_does_not_mangle_digits():
+    source = "In 2020, I will recieve it."
+    sugg = proofread.validate(0, source, [ok("recieve", "receive")])
+    html = proofread.review_html(source, sugg)
+    assert "2020" in html
+    assert '<del class="pr-old" data-sid="0-0">recieve</del>' in html
+    assert '<ins class="pr-new" data-sid="0-0">receive</ins>' in html
+
+
+def test_review_html_two_suggestions_one_block():
+    source = "Thier house is is big."
+    sugg = proofread.validate(0, source, [
+        ok("house is", "house's", kind="grammar"),
+        ok("Thier", "Their"),
+    ])
+    html = proofread.review_html(source, sugg)
+    assert '<del class="pr-old" data-sid="0-0">Thier</del>' in html
+    assert '<ins class="pr-new" data-sid="0-0">Their</ins>' in html
+    assert '<del class="pr-old" data-sid="0-1">house is</del>' in html
+    assert '<ins class="pr-new" data-sid="0-1">house&#x27;s</ins>' in html
+
+
+def test_review_html_heading_block():
+    source = "## Teh heading"
+    sugg = proofread.validate(0, source, [ok("Teh", "The")])
+    html = proofread.review_html(source, sugg)
+    assert html.startswith("<h2>")
+    assert '<del class="pr-old" data-sid="0-0">Teh</del>' in html
+    assert '<ins class="pr-new" data-sid="0-0">The</ins>' in html
+
+
+def test_review_html_list_block():
+    source = "- recieve it\n- ok"
+    sugg = proofread.validate(0, source, [ok("recieve", "receive")])
+    html = proofread.review_html(source, sugg)
+    assert "<ul>" in html and "<li>" in html
+    assert '<del class="pr-old" data-sid="0-0">recieve</del>' in html
+    assert '<ins class="pr-new" data-sid="0-0">receive</ins>' in html
+
+
+def test_review_html_preserves_literal_zero():
+    source = "I owe you $0 and will recieve it."
+    sugg = proofread.validate(0, source, [ok("recieve", "receive")])
+    html = proofread.review_html(source, sugg)
+    assert "$0" in html
+    assert '<del class="pr-old" data-sid="0-0">recieve</del>' in html
+    assert '<ins class="pr-new" data-sid="0-0">receive</ins>' in html
 
 
 def test_apply_one_replaces_exactly_once_and_rechecks():
