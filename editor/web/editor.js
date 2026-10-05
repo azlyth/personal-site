@@ -1620,10 +1620,10 @@ els.discard.addEventListener('mousedown', (e) => e.preventDefault());
 els.discard.addEventListener('click', discardEdits);
 
 els.publish.addEventListener('click', async () => {
-  await leaveReview();
   if (!(await flushPendingEdit())) return;
   const message = prompt('Commit message:', `Update ${state.slug}`);
-  if (message === null) return;
+  if (message === null) return; // cancelled: the review stays up
+  await leaveReview();
 
   els.publish.disabled = true;
   setStatus('publishing…');
@@ -2861,16 +2861,26 @@ function renderReviewBar(scroll = false) {
   const kind = document.createElement('span');
   kind.className = 'review-kind';
   kind.textContent = item.kind;
+  // The change itself, as text, so a mark that's hard to spot (a comma, a
+  // space) is still readable before Accept.
+  const change = document.createElement('span');
+  change.className = 'review-change';
+  change.textContent = `${clip(item.before)} → ${clip(item.after)}`;
+  change.title = `${item.before} → ${item.after}`;
   bar.append(
     mk('↑', 'review-nav', () => step(-1), 'Previous suggestion'),
     mk('↓', 'review-nav', () => step(1), 'Next suggestion'),
-    count, kind,
+    count, kind, change,
     mk('Accept', 'review-accept', () => accept(item)),
     mk('Reject', 'review-reject', () => reject(item)),
     mk('Accept all', 'review-all', acceptAll),
     mk('Close', 'review-close', () => { closeReview(); setStatus(''); }),
   );
   focusCurrent(scroll);
+}
+
+function clip(text, max = 32) {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function focusCurrent(scroll) {
@@ -2956,7 +2966,7 @@ async function acceptOne(item) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           index: item.index, block_hash: blk.block_hash,
-          before: item.before, after: item.after, hash: state.hash,
+          before: item.before, after: item.after, kind: item.kind, hash: state.hash,
         }),
       });
     } catch (err) {
@@ -3020,9 +3030,12 @@ async function acceptAll() {
       await new Promise((r) => setTimeout(r, 200));
       continue;
     }
-    const before = review.items.length;
+    // Progress is suggestions resolved, not items left: a batch landing
+    // mid-accept can refill the list, which isn't a stall.
+    const resolved = () => review.seen - review.items.length;
+    const before = resolved();
     if (!(await accept(review.items[0]))) return;
-    if (review.items.length >= before) return; // no progress
+    if (resolved() <= before) return; // no progress
   }
 }
 

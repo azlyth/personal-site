@@ -71,7 +71,7 @@ N_SUGGESTIONS = 5
 
 FAKE_CLAUDE = r'''#!/usr/bin/env python3
 import json, os, re, sys, time
-prompt = sys.argv[sys.argv.index("-p") + 1]
+prompt = sys.stdin.read()  # the editor passes it on stdin, never argv
 time.sleep(0.6)
 # The marker file steers the batch holding block 5 (the second one):
 # "fail" exits non-zero, "slow" answers late, "slow-empty" late and empty.
@@ -206,6 +206,8 @@ def run_viewport(cdp, base, w, h, results, shots):
           marks == [N_SUGGESTIONS, N_SUGGESTIONS], marks)
     check("2: the bar says 1 of N", wait_for(cdp, BAR_VISIBLE, 2)
           and count_text(cdp) == f"1 of {N_SUGGESTIONS}", count_text(cdp))
+    change = text(cdp, ".review-bar .review-change")
+    check("2: the bar spells out the change", change == "recieve → receive", change)
     check("2: no block controls while reviewing",
           cdp.js("document.querySelectorAll('.block-controls').length") == 0)
     # 9. touch targets
@@ -345,6 +347,49 @@ def run_viewport(cdp, base, w, h, results, shots):
           mid_run and "recieve" not in src and "tomorow" not in src and "teh" not in src
           and status(cdp) == "All suggestions reviewed.",
           {"mid_run": mid_run, "status": status(cdp), "src": src[-300:]})
+
+    # --- 12b. a batch landing during an Accept isn't a stall -----------------
+    # The first apply is held until the slow batch is back, so the list
+    # refills while that Accept is out: its length doesn't drop, but one
+    # more suggestion is resolved, and Accept all must carry on.
+    load(cdp, base)
+    MARKER.write_text("slow")
+    try:
+        tap_proofread(cdp)
+        wait_for(cdp, BAR_VISIBLE, 5)
+        mid_run = not cdp.js(RUN_DONE)
+        cdp.js("""(() => { const orig = window.fetch; let gated = true;
+          window.fetch = async (url, opts) => {
+            if (gated && String(url).endsWith('/proofread/apply')) {
+              gated = false;
+              const n = state.review.items.length;
+              while (state.review && state.review.items.length <= n)
+                await new Promise((r) => setTimeout(r, 50));
+            }
+            return orig(url, opts);
+          }; })()""")
+        cdp.js("document.querySelector('.review-bar .review-all').click()")
+        wait_for(cdp, RUN_DONE + " && document.getElementById('review-bar').hidden", 15)
+    finally:
+        MARKER.unlink(missing_ok=True)
+    src = POST.read_text()
+    check("12b: Accept all carries on when a batch lands mid-Accept",
+          mid_run and "recieve" not in src and "tomorow" not in src and "teh" not in src
+          and status(cdp) == "All suggestions reviewed.",
+          {"mid_run": mid_run, "status": status(cdp), "src": src[-300:]})
+
+    # --- 14. cancelling Publish's commit prompt keeps the review --------------
+    load(cdp, base)
+    start_proofread(cdp)
+    wait_for(cdp, BAR_VISIBLE, 5)
+    cdp.js("window.prompt = () => { window.__prompted = true; return null; }")
+    cdp.js("document.getElementById('publish').click()")
+    time.sleep(0.5)
+    check("14: cancelled Publish leaves the review up",
+          cdp.js("window.__prompted === true") and cdp.js(BAR_VISIBLE) and count_text(cdp) == f"1 of {N_SUGGESTIONS}"
+          and cdp.js("document.querySelectorAll('del.pr-old').length") == N_SUGGESTIONS,
+          count_text(cdp))
+    cdp.tap_el(".review-bar .review-close", 0.4)
 
     # --- 13. Delete draft mid-run leaves the review --------------------------
     load(cdp, base)

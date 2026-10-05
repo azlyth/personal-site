@@ -1675,19 +1675,34 @@ punctuation fixes only, and shows them inline for Accept/Reject.
   live). The systemd unit's PATH has no `~/.local/bin`; that is exactly how
   recipes' prod parser broke on 2026-09-13. `EDITOR_PROOFREAD_MODEL` adds an
   optional `--model`.
+- **Claude runs boxed in** (`run_claude`, the same pattern as split's receipt
+  reader). Post text is untrusted input, so: cwd is a fresh empty
+  `tempfile.TemporaryDirectory` removed after the call (NOT the repo, whose
+  110 KB CLAUDE.md would load per batch and whose files would be readable);
+  `--tools ""` plus a `--disallowedTools` list by name; `--no-session-persistence`
+  so batches don't pile up saved sessions; the prompt on **stdin**, never argv;
+  and a four-variable env (`HOME`, `PATH`, `LANG`, `TERM`, plus
+  `CLAUDE_CONFIG_DIR` if set). Never `--bare` -- it skips the OAuth login. A
+  one-block real call takes about 5 s.
 - **Two routes.** `POST /api/posts/{slug}/proofread {indices: [<=5]}` runs one
   claude call for up to five prose blocks and returns, per block, its
   `block_hash`, the suggestions and a `review_html` with
   `<del class="pr-old" data-sid>`/`<ins class="pr-new" data-sid>` marks; a
   failed call comes back as `errors: [{indices, message}]` for that batch
-  only. `POST .../proofread/apply {index, block_hash, before, after, hash}`
+  only. `POST .../proofread/apply {index, block_hash, before, after, kind, hash}`
   writes one fix through `_write_body` (so Undo has it) and returns the post
   payload plus the block's new `block_hash`.
 - **The guardrails live in `editor/proofread.py`** (`validate`/`_problem`):
-  `before` must occur exactly once, be short, avoid markup/URLs/code, and be
-  a small word-level edit, so a rewording can't arrive dressed as a fix.
-  Apply re-checks the same rules AND the block hash, answering 409 when the
-  fix no longer fits; the client skips that one suggestion and carries on
+  `before` must occur exactly once, be short, sit on word boundaries ("form"
+  inside "formal" is dropped), avoid markup/URLs/code/inline-image alt
+  text/bare `www.` domains, and be at most two word edits. A `spelling` fix
+  must also look like the word it fixes (`difflib` ratio >= 0.6: teh->the
+  passes, good->great doesn't), and no fix may change the block's type
+  (`1 Apples` -> `1. Apples` would make a list). If the marks can't be placed
+  in `review_html` (a token landing inside a tag), it returns None and the
+  route drops that block's suggestions rather than offer a blind Accept.
+  Apply takes the suggestion's `kind` and re-checks the same rules AND the
+  block hash, answering 409 when the fix no longer fits; the client skips that one suggestion and carries on
   (a staleness 409 for the whole post stops Accept all instead).
 - **Review mode locks the blocks.** Starting closes (saving) any open
   editor through `closeEditor()`; while `state.review` or a batch run is
@@ -1700,8 +1715,16 @@ punctuation fixes only, and shows them inline for Accept/Reject.
   write (Make primary renames the post) call `leaveReview()` first, which
   closes the review and waits for an Accept already on the wire;
   `applyPost` closes any review whose slug isn't the incoming post's, as a
-  backstop. Accept all keeps going until the run is finished and nothing
-  is left, so it also takes batches that arrive while it works.
+  backstop. Publish leaves the review only after its commit-message prompt,
+  so cancelling the prompt keeps the review. Undo closes the review by
+  design (the suggestions were checked against text Undo may change). Accept
+  all keeps going until the run is finished and nothing is left, so it also
+  takes batches that arrive while it works; it measures progress as
+  suggestions resolved, not items left, since a batch can land mid-Accept.
+  Cancel and Close abort the client's fetch but don't kill a claude call
+  already running on the server; it finishes (or times out) within 120 s
+  and its answer is dropped. The bar shows the change as text
+  (`before → after`, clipped) next to its kind.
   The client batches five blocks per request with a progress strip, so a
   long post shows results as they come in.
 - `scripts/verify-proofread.py` checks the whole flow in headless Chromium
