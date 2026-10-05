@@ -1733,6 +1733,66 @@ punctuation fixes only, and shows them inline for Accept/Reject.
   it imports the CDP harness from `verify-edit-tap.py`.
 
 
+### Add photo (added 2026-10-04)
+
+A round 📷 button (56px, `#add-photo`, `aria-label="Add photo"`) is fixed at
+the top right, just under the toolbar (`top` measured from `.bar` by a
+ResizeObserver, since the bar wraps on a portrait tablet). It is hidden with
+no post, during a proofread run or review, while placing, and in move mode
+(`syncAddPhoto()`, called from `renderBlocks`).
+
+- **Pick, then place.** Tapping it saves and closes any open editor through
+  `closeEditor()` (stops if that save didn't land), then opens a native
+  `<input type=file accept="image/*" multiple>`. On a pick the upload starts
+  at once (`POST .../images/upload`, empty alts, no post write) while
+  `state.placing` puts the post into a placement mode that **reuses move
+  mode's overlay**: `renderDropOverlay()` (shared with `renderMoveOverlay`)
+  draws the fixed banner -- here the picked photos' thumbnails (object URLs,
+  revoked on leaving), "Tap where the photo goes" / "...the N photos go" and
+  Cancel -- and one blue line per gap, ResizeObserver and all, so nothing
+  reflows. `#blocks` gets `moving` (blocks inert) plus `placing`.
+- **A tap that beats the upload** marks its line "Placing when the upload
+  finishes" (a second tap moves it) and places as soon as the upload is
+  back.
+- **The insert is its own route**: `POST /api/posts/{slug}/images/place
+  {index, hash, images: [{url, alt}]}` builds the block with the same
+  `markdown_for` as `/images` (one photo -> `![](url)`, several -> one
+  `.img-row`) and inserts it with `insert_block` through `_write_body`
+  (409 when stale, Undo snapshot, atomic write), returning the post. The
+  client applies it with `applyWrite(res, {at: gap, delta: 1})` and opens
+  the new block's `startEditingImages` for alt text.
+- **URLs are checked, because they come back from the client**:
+  `images.is_uploaded_url(url, slug)` accepts only
+  `https://img.cloudy.nyc/<this slug>/<image_key name>.jpg` -- an optional
+  `_slugify` stem (lowercase, digits, dashes, <=40, may end in a dash) then
+  8 hex. `markdown_for` writes URLs verbatim, so this is what stops the
+  route writing arbitrary markup. A post renamed between upload and place
+  therefore gets a 400 (the photos sit under the old slug's folder).
+  1-12 photos (`MAX_FILES`), `index >= 0`; an index past the end is a 409
+  like any stale block index.
+- **Leaving.** Cancel or Escape inserts nothing (uploaded objects stay in
+  S3, as an abandoned photo-strip upload's do); Cancel is disabled once the
+  place write is on the wire. A failed or partly failed upload leaves
+  placement with `upload failed — <detail>`; a 409 leaves it with the usual
+  "changed on disk — reload". Any other write or post load
+  (`applyWrite`/`applyPost`) cancels placement, since its gaps no longer
+  mean what they did; draft Restore cancels it first; Proofread is disabled
+  while placing.
+- **Known:** the picker opens after `await closeEditor()`. With no editor
+  open (or a clean one) that is immediate; after a real save it relies on
+  the browser's user-activation window (iOS Safari's is short), so a slow
+  save could make the first tap not open the picker. At 820px the button
+  overlaps the right edge of the reading column.
+- `scripts/verify-add-photo.py` checks it all in headless Chromium at
+  1024x1366 and 820x1180 (system `python3`, ~2 min). S3 is faked the way
+  the pytest suite does it -- a launcher in its temp dir sets
+  `app.state.s3` to a fake whose `put_object` sleeps for a configurable
+  delay, so the app carries no test hook -- and the picker is the real
+  input, filled with `DOM.setFileInputFiles`. Screenshots go to
+  `~/.cache/add-photo-<width>[-button|-pending].png`. Route tests:
+  `editor/tests/test_api_place_images.py`.
+
+
 ## Git Workflow
 - Use simple present tense commit messages (e.g., "Add dark mode toggle")
 - Do not include Claude Code footer in commits
