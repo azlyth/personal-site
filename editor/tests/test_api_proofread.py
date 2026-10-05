@@ -77,11 +77,11 @@ def test_malformed_json_reports_error(monkeypatch):
     assert data["errors"] and data["blocks"] == []
 
 
-def apply(before, after, block_hash=None, index=0, post_hash=None):
+def apply(before, after, block_hash=None, index=0, post_hash=None, kind="spelling"):
     p = current()
     src = p["blocks"][index]["source"]
     return client.post(f"/api/posts/{SLUG}/proofread/apply", json={
-        "index": index, "before": before, "after": after,
+        "index": index, "before": before, "after": after, "kind": kind,
         "block_hash": block_hash or proofread.block_hash(src),
         "hash": post_hash or p["hash"],
     })
@@ -98,7 +98,7 @@ def test_apply_writes_one_fix_and_returns_new_block_hash():
 def test_two_accepts_in_one_block():
     first = apply("recieve", "receive").json()
     res = client.post(f"/api/posts/{SLUG}/proofread/apply", json={
-        "index": 0, "before": "tomorow", "after": "tomorrow",
+        "index": 0, "before": "tomorow", "after": "tomorrow", "kind": "spelling",
         "block_hash": first["block_hash"], "hash": first["hash"],
     })
     assert res.status_code == 200
@@ -115,7 +115,30 @@ def test_apply_refuses_stale_post_hash():
 
 
 def test_apply_rechecks_guardrails():
-    assert apply("I will recieve teh letter", "Letters come").status_code == 409
+    assert apply("I will recieve teh letter", "Letters come", kind="grammar").status_code == 409
+
+
+def test_apply_rechecks_with_the_suggestion_kind():
+    # A grammar fix isn't held to the spelling floor; a spelling one is.
+    assert apply("recieve teh", "receive the", kind="grammar").status_code == 200
+    assert apply("letter", "parcel", kind="spelling").status_code == 409
+
+
+def test_apply_requires_a_known_kind():
+    assert apply("recieve", "receive", kind="style").status_code == 422
+
+
+def test_apply_refuses_a_block_type_change():
+    assert apply("I will", "- I will", kind="grammar").status_code == 409
+
+
+def test_unmarkable_block_drops_its_suggestions(monkeypatch):
+    fake(monkeypatch, [{"block": 0, "before": "recieve", "after": "receive", "kind": "spelling"}])
+    monkeypatch.setattr(proofread, "review_html", lambda source, suggestions: None)
+    data = client.post(f"/api/posts/{SLUG}/proofread", json={"indices": [0]}).json()
+    b0 = next(b for b in data["blocks"] if b["index"] == 0)
+    assert b0["suggestions"] == []
+    assert 'class="pr-old"' not in b0["review_html"]
 
 
 def test_apply_is_undoable():
@@ -197,6 +220,7 @@ def test_apply_on_pair_changes_only_the_prose():
     before_source = p["blocks"][PAIR_INDEX]["source"]
     res = client.post(f"/api/posts/{PAIR_SLUG}/proofread/apply", json={
         "index": PAIR_INDEX, "before": "teh", "after": "the",
+        "kind": "spelling",
         "block_hash": proofread.block_hash(before_source),
         "hash": p["hash"],
     })

@@ -149,11 +149,11 @@ def test_review_html_preserves_literal_zero():
 
 
 def test_apply_one_replaces_exactly_once_and_rechecks():
-    assert proofread.apply_one("I recieve it.", "recieve", "receive") == "I receive it."
+    assert proofread.apply_one("I recieve it.", "recieve", "receive", "spelling") == "I receive it."
     with pytest.raises(ValueError):
-        proofread.apply_one("teh and teh", "teh", "the")
+        proofread.apply_one("teh and teh", "teh", "the", "spelling")
     with pytest.raises(ValueError):
-        proofread.apply_one("I receive it.", "recieve", "receive")
+        proofread.apply_one("I receive it.", "recieve", "receive", "spelling")
 
 
 def test_build_prompt_lists_blocks_by_index():
@@ -162,3 +162,87 @@ def test_build_prompt_lists_blocks_by_index():
     assert '<block index="0">\nPara one.\n</block>' in prompt
     assert '<block index="2">' in prompt
     assert "only" in prompt.lower() and "json" in prompt.lower()
+
+
+# --- final-review guardrails -------------------------------------------------
+
+def test_run_claude_is_sandboxed(monkeypatch):
+    seen = {}
+
+    def run(args, **kw):
+        import os
+        seen["args"], seen["kw"] = args, kw
+        seen["cwd_existed"] = os.path.isdir(kw["cwd"])
+        seen["cwd_listing"] = os.listdir(kw["cwd"])
+
+        class P:
+            stdout = "[]"
+        return P()
+
+    monkeypatch.setattr(proofread.subprocess, "run", run)
+    monkeypatch.setenv("SMTP_PASSWORD", "secret")
+    assert proofread.run_claude("PROMPT TEXT") == "[]"
+    args, kw = seen["args"], seen["kw"]
+    assert "PROMPT TEXT" not in args and kw["input"] == "PROMPT TEXT"
+    assert args[args.index("--tools") + 1] == ""
+    assert "--no-session-persistence" in args
+    assert "--bare" not in args
+    assert seen["cwd_existed"] and seen["cwd_listing"] == []
+    import os
+    assert not os.path.exists(kw["cwd"])  # removed afterwards
+    assert "/projects/" not in kw["cwd"]
+    assert "SMTP_PASSWORD" not in kw["env"] and "HOME" in kw["env"]
+
+
+@pytest.mark.parametrize("before,after", [("apples", "oranges"), ("good", "great")])
+def test_spelling_must_look_like_the_word(before, after):
+    source = f"I like {before} a lot."
+    assert proofread.validate(0, source, [ok(before, after)]) == []
+
+
+def test_spelling_floor_keeps_real_typos_and_grammar_is_exempt():
+    assert proofread.validate(0, "teh cat", [ok("teh", "the")])
+    assert proofread.validate(0, "They was here.", [ok("was", "were", kind="grammar")])
+
+
+def test_grammar_limited_to_two_word_edits():
+    source = "one two three four"
+    assert proofread.validate(0, source, [ok("one two", "uno dos", kind="grammar")])
+    assert proofread.validate(0, source, [ok("one two three", "uno dos tres", kind="grammar")]) == []
+
+
+def test_before_must_sit_on_word_boundaries():
+    assert proofread.validate(0, "Its formal now", [ok("form", "from")]) == []
+    assert proofread.validate(0, "Its formal now", [ok("mal", "mall")]) == []
+    assert proofread.validate(0, "teh cat", [ok("teh", "the")])
+    # punctuation-led spans aren't held to it
+    assert proofread.validate(0, "Hello ,world", [ok(" ,", ",", kind="punctuation")])
+
+
+def test_inline_image_alt_and_www_domains_protected():
+    assert proofread.validate(0, "See ![teh pic](x.jpg) ok", [ok("teh", "the")]) == []
+    assert proofread.validate(0, "Go to www.exmaple.com today", [ok("exmaple", "example")]) == []
+
+
+def test_review_html_none_when_a_mark_lands_in_a_tag():
+    # Inline HTML may break its tag across a line, which _PROTECTED's
+    # one-line pattern can't see; the render puts the mark in an attribute.
+    source = 'Hi <span\nclass="teh">ok</span> there.'
+    sugg = [{"id": "0-0", "before": "teh", "after": "the", "kind": "spelling"}]
+    assert proofread.review_html(source, sugg) is None
+
+
+@pytest.mark.parametrize("source,before,after,kind", [
+    ("1 Apples are red.", "1 Apples", "1. Apples", "punctuation"),
+    ("Apples are red.", "Apples", "- Apples", "grammar"),
+])
+def test_fix_must_not_change_block_type(source, before, after, kind):
+    assert proofread.validate(0, source, [ok(before, after, kind=kind)]) == []
+    with pytest.raises(ValueError):
+        proofread.apply_one(source, before, after, kind)
+
+
+def test_apply_one_uses_the_suggestion_kind():
+    assert proofread.apply_one("They was here.", "was", "were", "grammar") == "They were here."
+    with pytest.raises(ValueError):
+        proofread.apply_one("I like apples.", "apples", "oranges", "spelling")

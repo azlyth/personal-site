@@ -11,6 +11,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Literal
 
 import boto3
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
@@ -282,15 +283,21 @@ def proofread_post(slug: str, req: ProofreadRequest):
     out = []
     for b in wanted:
         mine = [it for it in items if isinstance(it, dict) and it.get("block") == b.index]
-        suggestions = proofread.validate(b.index, b.source, mine)
+        suggestions = proofread.validate(b.index, b.source, mine, b.kind)
         dropped = len(mine) - len(suggestions)
         if dropped:
             log.info("proofread dropped %d suggestion(s) in %s block %d", dropped, slug, b.index)
+        marked = proofread.review_html(b.source, suggestions) if suggestions else None
+        if suggestions and marked is None:
+            # A fix that can't be shown in place mustn't be offered blind.
+            log.info("proofread dropped %d unmarkable suggestion(s) in %s block %d",
+                     len(suggestions), slug, b.index)
+            suggestions = []
         out.append({
             "index": b.index,
             "block_hash": proofread.block_hash(b.source),
             "suggestions": suggestions,
-            "review_html": proofread.review_html(b.source, suggestions) if suggestions else b.html,
+            "review_html": marked or b.html,
         })
     return {"blocks": out, "errors": []}
 
@@ -300,6 +307,7 @@ class ProofreadApply(BaseModel):
     block_hash: str
     before: str
     after: str
+    kind: Literal["spelling", "grammar", "punctuation"]
     hash: str
 
 
@@ -310,11 +318,11 @@ def proofread_apply(slug: str, req: ProofreadApply):
         blocks = parse_blocks(body)
         if not 0 <= req.index < len(blocks):
             raise IndexError(req.index)
-        source = blocks[req.index].source
+        source, block_kind = blocks[req.index].source, blocks[req.index].kind
         if proofread.block_hash(source) != req.block_hash:
             raise HTTPException(status_code=409, detail="This paragraph changed since it was proofread.")
         try:
-            new_source = proofread.apply_one(source, req.before, req.after)
+            new_source = proofread.apply_one(source, req.before, req.after, req.kind, block_kind)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=f"Can't apply this fix: {exc}.")
         return replace_block(body, req.index, new_source)

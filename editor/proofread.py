@@ -7,25 +7,33 @@ that has moved. Pure apart from run_claude.
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import html
 import json
+import os
 import re
 import subprocess
+import tempfile
 
 from editor import config
-from editor.blocks import _md
+from editor.blocks import _md, parse_blocks
 
 PROSE_KINDS = frozenset({"paragraph", "heading", "list", "blockquote", "pair"})
 KINDS = frozenset({"spelling", "grammar", "punctuation"})
 MAX_BEFORE = 80
-MAX_WORD_EDITS = 3
+MAX_WORD_EDITS = 2
+# A spelling fix must still look like the word it fixes ("teh"->"the" is
+# 0.67); a swap to a different word ("good"->"great") is a rewording.
+MIN_SPELLING_SIMILARITY = 0.6
 _MARKUP = set("[]()*_`#<>|")
 _PROTECTED = re.compile(
     r"`[^`\n]*`"            # inline code
     r"|https?://[^\s)>\]]+"  # bare or linked URLs
     r"|\]\([^)\n]*\)"        # link destinations
     r"|<[^>\n]+>"            # HTML tags
+    r"|!\[[^\]\n]*\]"         # inline image alt text
+    r"|www\.\S+"             # bare www domains
 )
 
 PROMPT = """You are a proofreader for a personal blog. Fix ONLY real spelling, grammar and punctuation mistakes.
@@ -48,12 +56,37 @@ def build_prompt(blocks) -> str:
     return PROMPT + "\n\n".join(parts) + "\n"
 
 
+# Belt and braces with `--tools ""`: denied by name too, so a future CLI
+# default can't quietly hand the proofreader a shell. Same list as split's
+# receipt reader (split/app/services/parse.py).
+DENIED_TOOLS = "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Agent,Task"
+
+
+def _child_env() -> dict:
+    """The smallest environment the CLI runs in: no editor secrets."""
+    env = {"HOME": os.environ.get("HOME", "/home/peter"),
+           "PATH": os.environ.get("PATH", ""),
+           "LANG": "C.UTF-8",
+           "TERM": "dumb"}
+    if os.environ.get("CLAUDE_CONFIG_DIR"):
+        env["CLAUDE_CONFIG_DIR"] = os.environ["CLAUDE_CONFIG_DIR"]
+    return env
+
+
 def run_claude(prompt: str, timeout_s: int = 120) -> str:
-    cmd = [config.claude_bin(), "-p", prompt]
+    """Post text is untrusted input to the model, so it runs boxed in: an
+    empty throwaway cwd (not the repo -- no project CLAUDE.md, nothing to
+    read), no tools, no saved session, the prompt on stdin, and a minimal
+    environment. Not --bare: that skips the OAuth login."""
+    cmd = [config.claude_bin(), "-p", "--output-format", "text",
+           "--tools", "", "--disallowedTools", DENIED_TOOLS,
+           "--no-session-persistence"]
     model = config.proofread_model()
     if model:
         cmd += ["--model", model]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s, check=True)
+    with tempfile.TemporaryDirectory(prefix="proofread-") as cwd:
+        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                              timeout=timeout_s, check=True, cwd=cwd, env=_child_env())
     return proc.stdout
 
 
@@ -101,7 +134,11 @@ def _word_edits(a: str, b: str) -> int:
     return prev[-1]
 
 
-def _problem(source: str, before, after, kind="spelling") -> str | None:
+def _block_kinds(source: str) -> list[str]:
+    return [b.kind for b in parse_blocks(source)]
+
+
+def _problem(source: str, before, after, kind, block_kind=None) -> str | None:
     """Why this fix can't be offered, or None if it can."""
     if not isinstance(before, str) or not isinstance(after, str) or kind not in KINDS:
         return "malformed suggestion"
@@ -113,17 +150,30 @@ def _problem(source: str, before, after, kind="spelling") -> str | None:
         return "this text is no longer in the paragraph exactly once"
     if _word_edits(before, after) > MAX_WORD_EDITS:
         return "changes too many words"
+    if kind == "spelling" and (
+        difflib.SequenceMatcher(None, before, after).ratio() < MIN_SPELLING_SIMILARITY
+    ):
+        return "swaps the word rather than fixing its spelling"
     if _MARKUP & set(before + after):
         return "touches markdown"
     start = source.index(before)
     end = start + len(before)
+    # Whole words only: "form" inside "formal" is not a fix to "formal".
+    if before[0].isalnum() and start > 0 and source[start - 1].isalnum():
+        return "starts inside a word"
+    if before[-1].isalnum() and end < len(source) and source[end].isalnum():
+        return "ends inside a word"
     for m in _PROTECTED.finditer(source):
         if m.start() < end and start < m.end():
             return "inside a link, code or HTML"
+    # "1 Apples" -> "1. Apples" turns a paragraph into a list.
+    expected = [block_kind] if block_kind else _block_kinds(source)
+    if _block_kinds(source.replace(before, after, 1)) != expected:
+        return "would change what kind of block this is"
     return None
 
 
-def validate(index: int, source: str, items: list) -> list[dict]:
+def validate(index: int, source: str, items: list, block_kind: str | None = None) -> list[dict]:
     # Caller must pass only this block's own suggestions -- `before` is
     # matched against `source` alone, so an item meant for another block
     # would be checked (and possibly accepted) against the wrong text.
@@ -132,7 +182,7 @@ def validate(index: int, source: str, items: list) -> list[dict]:
         if not isinstance(item, dict):
             continue
         before, after, kind = item.get("before"), item.get("after"), item.get("kind")
-        if _problem(source, before, after, kind) is None:
+        if _problem(source, before, after, kind, block_kind) is None:
             kept.append((source.index(before), before, after, kind))
     kept.sort(key=lambda k: k[0])
     out, last_end = [], -1
@@ -146,8 +196,14 @@ def validate(index: int, source: str, items: list) -> list[dict]:
     return [{"id": s["id"], "before": s["before"], "after": s["after"], "kind": s["kind"]} for s in out]
 
 
-def review_html(source: str, suggestions: list[dict]) -> str:
-    plain = _md.render(source)
+def _inside_tag(out: str, at: int) -> bool:
+    return out.rfind("<", 0, at) > out.rfind(">", 0, at)
+
+
+def review_html(source: str, suggestions: list[dict]) -> str | None:
+    """The block rendered with its marks, or None when they can't all be
+    placed safely -- the caller then drops the block's suggestions rather
+    than offering a fix Peter can't see."""
     placed = sorted(suggestions, key=lambda s: source.index(s["before"]), reverse=True)
     marked = source
     tokens = []
@@ -162,11 +218,11 @@ def review_html(source: str, suggestions: list[dict]) -> str:
     out = _md.render(marked)
     for n, s in enumerate(placed):
         token = tokens[n]
-        if out.count(token) != 1:
+        if out.count(token) != 1 or _inside_tag(out, out.index(token)):
             # The markdown render didn't preserve the token as a single,
-            # unique run (e.g. it landed across an escaped/altered span) --
-            # safer to show the block unmarked than to mark the wrong text.
-            return plain
+            # unique run in text (it landed across an escaped/altered span,
+            # or inside a tag's attribute) -- no safe place for the mark.
+            return None
         sid = html.escape(s["id"], quote=True)
         out = out.replace(
             token,
@@ -177,8 +233,9 @@ def review_html(source: str, suggestions: list[dict]) -> str:
     return out
 
 
-def apply_one(source: str, before: str, after: str) -> str:
-    problem = _problem(source, before, after)
+def apply_one(source: str, before: str, after: str, kind: str,
+              block_kind: str | None = None) -> str:
+    problem = _problem(source, before, after, kind, block_kind)
     if problem:
         raise ValueError(problem)
     return source.replace(before, after, 1)
