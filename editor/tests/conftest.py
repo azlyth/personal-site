@@ -35,6 +35,16 @@ _SESSION_EMAIL = "ptr.vldz@gmail.com"
 
 
 @pytest.fixture(autouse=True)
+def _no_real_email(monkeypatch):
+    """No test may send a real sign-in email. The suite often runs in the
+    live checkout, where .editor-smtp.env holds real SES creds, and a test
+    that requests a link for the allowlisted address would email Peter on
+    every run (it did, repeatedly, on 2026-10-04). Tests that want to see
+    the call patch send_login_link again on top of this."""
+    monkeypatch.setattr("editor.auth.mailer.send_login_link", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
 def _signed_in_module_client(request):
     """Every test file that predates this auth work does its work through a
     module-level `client = TestClient(app)` with no session at all --
