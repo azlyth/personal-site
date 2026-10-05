@@ -48,6 +48,30 @@ def image_key(post_slug: str, alt_text: str, data: bytes) -> str:
     return f"{post_slug}/{name}.jpg"
 
 
+# The URL `upload` returns for a key `image_key` built, and nothing else:
+# `https://img.cloudy.nyc/<post slug>/<stem>-<8 hex>.jpg`, where the stem is
+# `_slugify` output (lowercase letters, digits and dashes, at most 40 chars --
+# the cut can leave a trailing dash) and may be absent. Anchored with \Z, not
+# $, so a trailing newline can't slip through.
+_UPLOADED_NAME_RE = re.compile(r"(?:[a-z0-9][a-z0-9-]{0,39}-)?[0-9a-f]{8}\.jpg\Z")
+
+
+def is_uploaded_url(url: str, post_slug: str) -> bool:
+    """Whether `url` has exactly the shape this editor's upload pipeline
+    produces for `post_slug`'s photos.
+
+    The Add photo button uploads first and places afterwards, so the place
+    route receives URLs back from the client. Checking them against this
+    shape -- our host, this post's folder, a content-hash file name -- is what
+    keeps that route from writing arbitrary markup or someone else's picture
+    into the post. `markdown_for` doesn't escape URLs, so this is the guard.
+    """
+    prefix = f"https://{IMAGE_HOST}/{post_slug}/"
+    if not url.startswith(prefix):
+        return False
+    return bool(_UPLOADED_NAME_RE.match(url[len(prefix):]))
+
+
 _MD_IMAGE_RE = re.compile(r"^!\[(?P<alt>.*)\]\((?P<url>[^)]*)\)$", re.S)
 _IMG_TAG_RE = re.compile(r'<img\s+src="(?P<url>[^"]*)"\s+alt="(?P<alt>[^"]*)"\s*/?>')
 _IMG_ROW_OPEN_RE = re.compile(

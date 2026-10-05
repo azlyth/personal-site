@@ -44,7 +44,14 @@ from editor.frontmatter import (
     split_post,
 )
 from editor.guard import assert_not_publicly_routed
-from editor.images import image_key, markdown_for, parse_images, process_image, upload
+from editor.images import (
+    image_key,
+    is_uploaded_url,
+    markdown_for,
+    parse_images,
+    process_image,
+    upload,
+)
 from editor.publish import _has_unpushed_commits, publish
 
 assert_not_publicly_routed(config.HOSTNAME, config.CLOUDFLARED_CONFIG)
@@ -1262,6 +1269,44 @@ async def upload_images(
     urls, used_alts = await _upload_files(slug, files, alts)
     return {"images": [{"url": url, "alt": alt} for url, alt in zip(urls, used_alts)]}
 
+
+
+class ImagesPlace(BaseModel):
+    index: int = Field(ge=0)
+    hash: str
+    images: list[ImageItem]
+
+
+@app.post("/api/posts/{slug}/images/place")
+def place_images(slug: str, req: ImagesPlace):
+    """Insert photos `/images/upload` already put in S3 as a new block at gap
+    `index` -- the second half of the Add photo button, which uploads while
+    the person is still choosing where the photos go.
+
+    The block is built by the same `markdown_for` as `/images`, so one photo
+    becomes a standalone image and several become one `.img-row`; it goes in
+    through `_write_body`, so it gets the staleness check, an Undo snapshot
+    and the atomic write. The URLs come back from the client, so each must
+    have exactly the shape this post's uploads produce (`is_uploaded_url`) --
+    `markdown_for` writes URLs verbatim, and anything else here would be a
+    way to put arbitrary markup into the post.
+    """
+    _post_path(slug)
+    if not req.images:
+        raise HTTPException(status_code=400, detail="no photos to place")
+    if len(req.images) > MAX_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"too many photos ({len(req.images)}); max {MAX_FILES} at once",
+        )
+    for position, image in enumerate(req.images):
+        if not is_uploaded_url(image.url, slug):
+            raise HTTPException(
+                status_code=400,
+                detail=f"photo {position + 1} is not one this editor uploaded for this post",
+            )
+    snippet = markdown_for([i.url for i in req.images], [i.alt for i in req.images])
+    return _write_body(slug, req.hash, lambda body: insert_block(body, req.index, snippet))
 
 # A raw phone clip is much bigger than a raw phone photo before ffmpeg gets a
 # chance to shrink it -- a few seconds of 4K video easily clears 100MB, so
