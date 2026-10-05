@@ -977,3 +977,33 @@ a { color: #0066cc; }
     border: 1px solid #e4cfa0; border-radius: 6px;
     background: #fff; color: #7a5212; font: inherit; font-weight: 700; cursor: pointer;
 }
+
+/* --- Proofread ---------------------------------------------------------
+   The progress strip takes the ✨ button's place in the bar while batches
+   are out. Marks: red struck-through old text, green underlined new text,
+   the one the bottom bar is on outlined. The bar is fixed to the bottom so
+   it never covers the toolbar, and the post gets room to scroll past it. */
+.proof-progress { display: inline-flex; align-items: center; gap: 8px; }
+.proof-progress[hidden] { display: none; }
+.proof-track { width: 120px; height: 6px; border-radius: 3px; background: #e5e7eb; overflow: hidden; }
+.proof-fill { display: block; height: 100%; width: 0; background: #2563eb; transition: width 0.3s ease; }
+.proof-text { font-size: 0.85rem; color: #555; white-space: nowrap; }
+del.pr-old { color: #b42318; background: #fde8e7; text-decoration: line-through; }
+/* A hair of space so "teh" + "the" doesn't read as one word "tehthe". */
+ins.pr-new { color: #067647; background: #e3f6ec; text-decoration: underline; margin-left: 0.15em; }
+/* An outline per element drew two overlapping boxes around the pair; a
+   shared bar underneath (the two are adjacent) reads as one selection. */
+del.pr-old.pr-current { background: #fbd0cc; box-shadow: inset 0 -3px 0 #2563eb; }
+ins.pr-new.pr-current { background: #c6ecd6; box-shadow: inset 0 -3px 0 #2563eb; }
+.review-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex;
+  flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px;
+  background: #fff; border-top: 1px solid #d0d5dd; box-shadow: 0 -2px 8px rgba(0,0,0,0.06); }
+.review-bar[hidden] { display: none; }
+.review-bar button { min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid #d0d5dd; background: #fff; font-size: 1rem; cursor: pointer; }
+.review-bar button:disabled { opacity: 0.5; cursor: default; }
+.review-bar .review-accept { background: #067647; border-color: #067647; color: #fff; }
+.review-bar .review-reject { color: #b42318; border-color: #f4b4ae; }
+.review-count { font-variant-numeric: tabular-nums; min-width: 5.5em; text-align: center; }
+.review-kind { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: #667085; }
+body:has(.review-bar:not([hidden])) #blocks { padding-bottom: 120px; }

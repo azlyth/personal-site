@@ -1665,6 +1665,45 @@ edits), Discard (back to the last published version), and "↗ View live".
   `python3`, ~5 min; not in
   pytest, since the venv has no websocket-client).
 
+### Proofread (added 2026-10-04)
+
+The editor bar's ✨ Proofread asks Claude for spelling, grammar and
+punctuation fixes only, and shows them inline for Accept/Reject.
+
+- **The claude CLI runs at an absolute path** (`config.claude_bin()`,
+  default `/home/peter/.local/bin/claude`, override `EDITOR_CLAUDE_BIN`, read
+  live). The systemd unit's PATH has no `~/.local/bin`; that is exactly how
+  recipes' prod parser broke on 2026-09-13. `EDITOR_PROOFREAD_MODEL` adds an
+  optional `--model`.
+- **Two routes.** `POST /api/posts/{slug}/proofread {indices: [<=5]}` runs one
+  claude call for up to five prose blocks and returns, per block, its
+  `block_hash`, the suggestions and a `review_html` with
+  `<del class="pr-old" data-sid>`/`<ins class="pr-new" data-sid>` marks; a
+  failed call comes back as `errors: [{indices, message}]` for that batch
+  only. `POST .../proofread/apply {index, block_hash, before, after, hash}`
+  writes one fix through `_write_body` (so Undo has it) and returns the post
+  payload plus the block's new `block_hash`.
+- **The guardrails live in `editor/proofread.py`** (`validate`/`_problem`):
+  `before` must occur exactly once, be short, avoid markup/URLs/code, and be
+  a small word-level edit, so a rewording can't arrive dressed as a fix.
+  Apply re-checks the same rules AND the block hash, answering 409 when the
+  fix no longer fits; the client skips that one suggestion and carries on
+  (a staleness 409 for the whole post stops Accept all instead).
+- **Review mode locks the blocks.** Starting closes (saving) any open
+  editor through `closeEditor()`; while `state.review` or a batch run is
+  live, `reviewing()` makes the block click handler refuse ("Close
+  proofreading to edit."), drops the block controls, merge buttons and
+  wrap menus from `renderBlocks`, and blocks the draft Restore strip. So
+  every Accept lands with no editor open and never touches the re-attach or
+  draft logic; it goes through `applyWrite` like any other write. Undo,
+  Discard, the post picker, + New and Publish call `closeReview()` first.
+  The client batches five blocks per request with a progress strip, so a
+  long post shows results as they come in.
+- `scripts/verify-proofread.py` checks the whole flow in headless Chromium
+  at 1024x1366 and 820x1180 against a fake claude (`EDITOR_CLAUDE_BIN`)
+  that "finds" planted typos, including a failed batch. System `python3`;
+  it imports the CDP harness from `verify-edit-tap.py`.
+
 
 ## Git Workflow
 - Use simple present tense commit messages (e.g., "Add dark mode toggle")

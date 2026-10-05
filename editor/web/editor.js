@@ -19,6 +19,9 @@ const state = {
   // Whether the primary row in the Links panel is showing its editor
   // (an input + Save/Cancel) instead of the plain "primary" badge.
   editingPrimary: false,
+  // Null, or the proofread review in progress -- see the Proofread section.
+  // While set, blocks show their red/green marks and none can be edited.
+  review: null,
 };
 
 const els = {
@@ -33,6 +36,10 @@ const els = {
   discard: document.getElementById('discard'),
   publish: document.getElementById('publish'),
   signOut: document.getElementById('sign-out'),
+  proofread: document.getElementById('proofread'),
+  proofProgress: document.getElementById('proof-progress'),
+  proofCancel: document.getElementById('proof-cancel'),
+  reviewBar: document.getElementById('review-bar'),
 };
 
 function setStatus(text) {
@@ -617,12 +624,21 @@ function renderBlocks() {
     } else if (block.kind === 'spacer') {
       content.textContent = block.desktop_only ? 'space · desktop only' : 'space';
     } else {
-      content.innerHTML = block.html;
+      // During a proofread review a block with suggestions shows the
+      // server's marked-up copy; its source is untouched until Accept.
+      const marked = state.review && state.review.blocks.get(block.index);
+      content.innerHTML = marked ? marked.review_html : block.html;
     }
     el.appendChild(content);
 
     el.addEventListener('click', async () => {
       if (el.classList.contains('editing')) return;
+      // The review's marks and hashes are for the text as it was
+      // proofread; an edit under them would make every later Accept miss.
+      if (reviewing()) {
+        setStatus('Close proofreading to edit.');
+        return;
+      }
       // One editor at a time: tapping another block saves the open one
       // first (or, for a photo/clip strip with changes, asks), then opens
       // this one. A save that fails leaves the open one as it is.
@@ -661,7 +677,9 @@ function renderBlocks() {
         startEditing(el, content, block);
       }
     });
-    el.appendChild(blockControls(block));
+    // No controls while reviewing: every one of them changes the block
+    // list, which would shift the indices the review's suggestions name.
+    if (!reviewing()) el.appendChild(blockControls(block));
 
     if (state.pendingInsert && state.pendingInsert.index === block.index) {
       el.appendChild(insertChoice(block));
@@ -670,7 +688,7 @@ function renderBlocks() {
     // The wrap picker lives inside the block, so a floated row carries it
     // along; it's behind the ◨ toggle rather than always on, since a strip
     // under every picture is noise when reading a post back.
-    if (state.wrapOpen.has(block.index)) {
+    if (state.wrapOpen.has(block.index) && !reviewing()) {
       if (isMediaRow(block)) el.appendChild(wrapControl(block));
       else if (block.kind === 'pair' && block.text !== undefined) {
         el.appendChild(unpairControl(block));
@@ -679,12 +697,14 @@ function renderBlocks() {
 
     els.blocks.appendChild(el);
 
-    if (canMergeWithNext(block.index)) {
+    if (canMergeWithNext(block.index) && !reviewing()) {
       els.blocks.appendChild(mergeControl(block.index));
     }
   });
 
   if (resume) restoreOpenText(resume);
+  // Off while a review is up (one at a time) or with nothing to read.
+  els.proofread.disabled = reviewing() || !state.blocks.some((b) => PROSE_KINDS.has(b.kind));
 
   // Overlaid last, once every block is laid out: the zones are placed
   // from the blocks' measured positions.
@@ -1513,6 +1533,7 @@ function setCanUndo(canUndo) {
 
 async function undoEdit() {
   if (!state.canUndo) return;
+  await leaveReview();
   // Same reason every control-bar action flushes: the bar's mousedown
   // preventDefault suppresses the blur that would have saved an open
   // textarea, so without this an Undo would step back past text that was
@@ -1539,6 +1560,7 @@ async function discardEdits() {
     'Throw away every change to this post since the last publish?\n\n'
     + 'You can still get it back with Undo.'
   )) return;
+  await leaveReview();
   if (!(await flushPendingEdit())) return;
 
   setStatus('discarding…');
@@ -1590,6 +1612,7 @@ els.discard.addEventListener('mousedown', (e) => e.preventDefault());
 els.discard.addEventListener('click', discardEdits);
 
 els.publish.addEventListener('click', async () => {
+  await leaveReview();
   if (!(await flushPendingEdit())) return;
   const message = prompt('Commit message:', `Update ${state.slug}`);
   if (message === null) return;
@@ -1741,6 +1764,10 @@ function offerDrafts() {
       restore.type = 'button';
       restore.textContent = `Restore into block ${draft.index + 1}`;
       restore.addEventListener('click', async () => {
+        if (reviewing()) {
+          setStatus('Close proofreading to edit.');
+          return;
+        }
         if (!(await closeEditor())) return;
         const block = findDraftBlock(draft);
         const el = block && els.blocks.querySelector(`.block[data-index="${block.index}"]`);
@@ -2661,9 +2688,337 @@ async function splitBlockVideo(index, clips, size, side, split) {
   await applyWrite(res);
 }
 
+// --- Proofread ---------------------------------------------------------------
+// The server (editor/proofread.py) owns the prompt, the guardrails and the
+// red/green marks; this only batches, shows progress and steps through what
+// comes back. Nothing is written until Accept, and each Accept goes through
+// the apply route, which re-checks the fix against the block as it is now.
+//
+// No editor is open during a review, and none can be opened: starting one
+// closes (saving) whatever is open, and the block click handler, the block
+// controls and the draft Restore strip all refuse while reviewing(). That
+// keeps the editor's re-attach and draft logic out of it entirely -- every
+// write here lands with `openEditor` null. Undo, Discard, the post picker,
+// + New and Publish close the review before they act.
+const PROSE_KINDS = new Set(['paragraph', 'heading', 'list', 'blockquote', 'pair']);
+const PROOF_BATCH = 5; // the route takes at most five indices
+// Null, or the batch loop in flight: {cancelled, abort: AbortController}.
+let proofRun = null;
+// True while an Accept is being written, so a second tap waits.
+let reviewBusy = false;
+// The Accept write in flight, if any. leaveReview() waits for it so Undo,
+// Discard, Publish and switching posts never act on a stale hash.
+let reviewWrite = null;
+
+function reviewing() {
+  return Boolean(state.review || proofRun);
+}
+
+function showProofProgress(done, total) {
+  els.proofread.hidden = true;
+  els.proofProgress.hidden = false;
+  els.proofProgress.querySelector('.proof-fill').style.width = `${total ? (100 * done) / total : 0}%`;
+  els.proofProgress.querySelector('.proof-text').textContent = `Proofreading ${done} of ${total} paragraphs`;
+}
+
+function hideProofProgress() {
+  els.proofProgress.hidden = true;
+  els.proofread.hidden = false;
+}
+
+function rangeText(indices) {
+  const first = Math.min(...indices) + 1;
+  const last = Math.max(...indices) + 1;
+  return first === last ? `paragraph ${first}` : `paragraphs ${first}–${last}`;
+}
+
+async function startProofread() {
+  if (reviewing()) return;
+  // Same path as switching posts: save whatever is open, and stop if that
+  // save didn't land (the editor stays open with its text).
+  if (state.moveIndex !== null) cancelMove();
+  state.pendingInsert = null;
+  if (!(await closeEditor())) return;
+  const targets = state.blocks.filter((b) => PROSE_KINDS.has(b.kind)).map((b) => b.index);
+  if (!targets.length) {
+    setStatus('Nothing to proofread.');
+    return;
+  }
+  const run = { cancelled: false, abort: new AbortController() };
+  const review = { blocks: new Map(), items: [], current: 0 };
+  const slug = state.slug;
+  proofRun = run;
+  state.review = review;
+  const failed = [];
+  setStatus('');
+  showProofProgress(0, targets.length);
+  renderBlocks(); // drops the block controls for the duration
+  for (let i = 0; i < targets.length && !run.cancelled; i += PROOF_BATCH) {
+    const batch = targets.slice(i, i + PROOF_BATCH);
+    let data = null;
+    try {
+      const res = await fetch(`/api/posts/${slug}/proofread`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indices: batch }),
+        signal: run.abort.signal,
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      data = await res.json();
+    } catch (err) {
+      if (run.cancelled) break;
+      failed.push(...batch);
+    }
+    // Closed (or replaced) while that batch was out: drop what came back.
+    if (state.review !== review) break;
+    const hadItems = review.items.length > 0;
+    if (data) {
+      for (const b of data.blocks) {
+        if (!b.suggestions.length) continue;
+        review.blocks.set(b.index, { block_hash: b.block_hash, review_html: b.review_html });
+        for (const s of b.suggestions) review.items.push({ ...s, index: b.index });
+      }
+      for (const e of data.errors) failed.push(...e.indices);
+    }
+    // Stable sort: within a block, the server's order (by position).
+    review.items.sort((a, b) => a.index - b.index);
+    if (!run.cancelled) showProofProgress(Math.min(i + PROOF_BATCH, targets.length), targets.length);
+    renderBlocks();
+    renderReviewBar(!hadItems && review.items.length > 0);
+  }
+  // Let a full bar actually paint before it goes: hiding it in the same task
+  // that filled it meant "7 of 7" was never on screen.
+  if (!run.cancelled && state.review === review) await new Promise((r) => setTimeout(r, 400));
+  if (proofRun === run) proofRun = null;
+  if (state.review !== review) return; // closed: closeReview tidied up
+  hideProofProgress();
+  const stopped = run.cancelled ? 'Stopped. ' : '';
+  const couldnt = failed.length ? `Couldn't check ${rangeText(failed)}.` : '';
+  if (!review.items.length) {
+    closeReview();
+    setStatus(couldnt || (stopped ? 'Stopped. No issues found so far.' : 'No spelling or grammar issues found.'));
+    return;
+  }
+  setStatus(`${stopped}${couldnt}`.trim());
+  renderReviewBar();
+}
+
+function currentItem() {
+  return state.review && state.review.items[state.review.current];
+}
+
+function renderReviewBar(scroll = false) {
+  const bar = els.reviewBar;
+  if (!state.review || !state.review.items.length) {
+    bar.hidden = true;
+    bar.innerHTML = '';
+    return;
+  }
+  const { items, current } = state.review;
+  const item = items[current];
+  bar.hidden = false;
+  bar.innerHTML = '';
+  const mk = (label, cls, fn, title) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.textContent = label;
+    if (title) b.title = title;
+    b.disabled = reviewBusy;
+    b.addEventListener('click', () => { if (!reviewBusy) fn(); });
+    return b;
+  };
+  const count = document.createElement('span');
+  count.className = 'review-count';
+  count.textContent = `${current + 1} of ${items.length}`;
+  const kind = document.createElement('span');
+  kind.className = 'review-kind';
+  kind.textContent = item.kind;
+  bar.append(
+    mk('↑', 'review-nav', () => step(-1), 'Previous suggestion'),
+    mk('↓', 'review-nav', () => step(1), 'Next suggestion'),
+    count, kind,
+    mk('Accept', 'review-accept', () => accept(item)),
+    mk('Reject', 'review-reject', () => reject(item)),
+    mk('Accept all', 'review-all', acceptAll),
+    mk('Close', 'review-close', () => { closeReview(); setStatus(''); }),
+  );
+  focusCurrent(scroll);
+}
+
+function focusCurrent(scroll) {
+  document.querySelectorAll('.pr-current').forEach((n) => n.classList.remove('pr-current'));
+  const item = currentItem();
+  if (!item) return;
+  const marks = els.blocks.querySelectorAll(`[data-sid="${CSS.escape(item.id)}"]`);
+  marks.forEach((n) => n.classList.add('pr-current'));
+  if (scroll && marks[0]) marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function step(delta) {
+  const r = state.review;
+  r.current = (r.current + delta + r.items.length) % r.items.length;
+  renderReviewBar(true);
+}
+
+// Accepting keeps the new text; rejecting keeps the old.
+function resolveMark(htmlText, sid, keepNew) {
+  const t = document.createElement('template');
+  t.innerHTML = htmlText;
+  const sel = (tag) => t.content.querySelector(`${tag}[data-sid="${CSS.escape(sid)}"]`);
+  const drop = sel(keepNew ? 'del' : 'ins');
+  const keep = sel(keepNew ? 'ins' : 'del');
+  if (drop) drop.remove();
+  if (keep) keep.replaceWith(document.createTextNode(keep.textContent));
+  return t.innerHTML;
+}
+
+// Takes one suggestion out of the review (state only; callers render).
+function dropItem(item, keepNew) {
+  const r = state.review;
+  const at = r.items.indexOf(item);
+  if (at !== -1) r.items.splice(at, 1);
+  if (at !== -1 && at < r.current) r.current -= 1;
+  const blk = r.blocks.get(item.index);
+  if (blk) {
+    blk.review_html = resolveMark(blk.review_html, item.id, keepNew);
+    // Its last suggestion gone: render the block from the server's html.
+    if (!r.items.some((i) => i.index === item.index)) r.blocks.delete(item.index);
+  }
+  if (r.current >= r.items.length) r.current = 0;
+}
+
+// After an Accept/Reject: step on, or end the review once nothing is left
+// (and the batches have all come back).
+function afterResolve() {
+  if (!state.review) return;
+  if (!state.review.items.length && !proofRun) {
+    closeReview();
+    setStatus('All suggestions reviewed.');
+    return;
+  }
+  renderBlocks();
+  renderReviewBar(true);
+}
+
+// Resolves true when the review can carry on (applied, or skipped because
+// that one fix no longer fits), false when it can't (the whole post is
+// stale, or the network is down) -- Accept all stops there.
+async function accept(item) {
+  if (reviewWrite) return false;
+  reviewWrite = acceptOne(item);
+  try {
+    return await reviewWrite;
+  } finally {
+    reviewWrite = null;
+  }
+}
+
+async function acceptOne(item) {
+  const review = state.review;
+  const blk = review && review.blocks.get(item.index);
+  if (!blk) return false;
+  reviewBusy = true;
+  renderReviewBar();
+  try {
+    let res;
+    try {
+      res = await fetch(`/api/posts/${state.slug}/proofread/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          index: item.index, block_hash: blk.block_hash,
+          before: item.before, after: item.after, hash: state.hash,
+        }),
+      });
+    } catch (err) {
+      setStatus(`Network error. Nothing was changed: ${err.message}`);
+      return false;
+    }
+    const open = state.review === review; // false: closed while it was out
+    if (res.status === 409) {
+      if (!open) return false;
+      const detail = await errorDetail(res, 'That fix no longer fits its paragraph.');
+      // _write_body's staleness 409s ("...; reload before saving") are about
+      // the whole post: every later Accept would hit the same wall.
+      if (/reload/.test(detail)) {
+        setStatus('changed on disk — reload');
+        return false;
+      }
+      dropItem(item, false);
+      setStatus(`${detail} Skipped.`);
+      afterResolve();
+      return true;
+    }
+    if (!res.ok) {
+      setStatus(`couldn't apply — ${await errorDetail(res)}`);
+      return false;
+    }
+    // The block's new hash rides on the post payload; applyWrite (the same
+    // path every other write takes) consumes the body, so read a copy.
+    // Landed on the server either way, so `state` must take it (its new
+    // hash) even if the review was closed while it was out.
+    const data = await res.clone().json();
+    if (open) {
+      blk.block_hash = data.block_hash;
+      dropItem(item, true);
+    }
+    if (!(await applyWrite(res))) return false;
+    if (open) afterResolve();
+    return open;
+  } finally {
+    reviewBusy = false;
+    if (state.review) renderReviewBar();
+  }
+}
+
+function reject(item) {
+  dropItem(item, false);
+  setStatus('');
+  afterResolve();
+}
+
+async function acceptAll() {
+  while (state.review && state.review.items.length) {
+    const before = state.review.items.length;
+    if (!(await accept(state.review.items[0]))) return;
+    if (state.review && state.review.items.length >= before) return; // no progress
+  }
+}
+
+function closeReview() {
+  if (!reviewing()) return;
+  if (proofRun) {
+    proofRun.cancelled = true;
+    proofRun.abort.abort();
+    proofRun = null;
+  }
+  state.review = null;
+  hideProofProgress();
+  renderReviewBar();
+  renderBlocks();
+}
+
+// For the bar actions that leave a review: close it, then let an Accept
+// already on the wire land (applyWrite takes its new hash) before acting.
+async function leaveReview() {
+  closeReview();
+  if (reviewWrite) await reviewWrite;
+}
+
+els.proofread.addEventListener('click', startProofread);
+// Stops after the batch in flight is abandoned; what already came back
+// stays up for review.
+els.proofCancel.addEventListener('click', () => {
+  if (!proofRun) return;
+  proofRun.cancelled = true;
+  proofRun.abort.abort();
+});
+
 async function newPost() {
   const title = prompt('Title for the new post:');
   if (!title) return;
+  await leaveReview();
   if (!(await closeEditor())) return;
 
   setStatus('creating…');
@@ -2693,6 +3048,7 @@ async function newPost() {
 
 els.picker.addEventListener('change', async () => {
   const next = els.picker.value;
+  await leaveReview();
   if (!(await closeEditor())) {
     els.picker.value = state.slug;
     return;

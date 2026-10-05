@@ -12,6 +12,12 @@
     <select id="post-picker"></select>
     <button id="new-post" class="publish" title="Start a new post">+ New</button>
     <span id="status" class="status"></span>
+    <button id="proofread" class="bar-action" title="Check spelling and grammar">✨ Proofread</button>
+    <span id="proof-progress" class="proof-progress" hidden>
+      <span class="proof-track"><span class="proof-fill"></span></span>
+      <span class="proof-text"></span>
+      <button id="proof-cancel" class="bar-action">Cancel</button>
+    </span>
     <button id="undo" class="bar-action" title="Step back through your edits">↶ Undo</button>
     <button id="discard" class="bar-action danger" title="Throw away every change since the last publish">Discard</button>
     <button id="publish" class="publish">Publish</button>
@@ -23,6 +29,7 @@
     <div id="post-links" class="post-links" hidden></div>
     <div id="blocks"></div>
   </main>
+  <div id="review-bar" class="review-bar" hidden></div>
   <script src="/static/editor.js"></script>
 </body>
 </html>
