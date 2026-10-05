@@ -22,6 +22,9 @@ const state = {
   // Null, or the proofread review in progress -- see the Proofread section.
   // While set, blocks show their red/green marks and none can be edited.
   review: null,
+  // Null, or the Add photo placement in progress -- see the Add photo
+  // section. While set, the post is overlaid with move mode's drop lines.
+  placing: null,
 };
 
 const els = {
@@ -40,6 +43,7 @@ const els = {
   proofProgress: document.getElementById('proof-progress'),
   proofCancel: document.getElementById('proof-cancel'),
   reviewBar: document.getElementById('review-bar'),
+  addPhoto: document.getElementById('add-photo'),
 };
 
 function setStatus(text) {
@@ -107,6 +111,9 @@ function applyPost(data) {
   // nothing on another one (Delete draft, a rename, a stray load). The
   // callers leave it first; this is the backstop.
   if (data.slug !== state.slug) closeReview();
+  // Any other write lands a new block list, so the gaps a placement is
+  // aiming at (and any line already tapped) no longer mean what they did.
+  cancelPlacing({ render: false });
   const renamed = state.slug !== null && data.slug !== state.slug;
   state.slug = data.slug;
   state.hash = data.hash;
@@ -584,7 +591,8 @@ function renderBlocks() {
   // Move mode doesn't rebuild the list -- it renders exactly what you were
   // looking at and overlays the drop zones, so the page doesn't shift under
   // you the moment you pick a block up.
-  els.blocks.classList.toggle('moving', state.moveIndex !== null);
+  els.blocks.classList.toggle('moving', state.moveIndex !== null || Boolean(state.placing));
+  els.blocks.classList.toggle('placing', Boolean(state.placing));
 
   state.blocks.forEach((block) => {
     const el = document.createElement('div');
@@ -712,11 +720,14 @@ function renderBlocks() {
 
   if (resume) restoreOpenText(resume);
   // Off while a review is up (one at a time) or with nothing to read.
-  els.proofread.disabled = reviewing() || !state.blocks.some((b) => PROSE_KINDS.has(b.kind));
+  els.proofread.disabled = reviewing() || Boolean(state.placing)
+    || !state.blocks.some((b) => PROSE_KINDS.has(b.kind));
+  syncAddPhoto();
 
   // Overlaid last, once every block is laid out: the zones are placed
   // from the blocks' measured positions.
   if (state.moveIndex !== null) renderMoveOverlay();
+  else if (state.placing) renderPlaceOverlay();
 }
 
 // The Small/Medium/Full and Beside-text controls are mutually constrained: a
@@ -1289,10 +1300,6 @@ function positionMoveZones() {
 }
 
 function renderMoveOverlay() {
-  stopWatchingLayout();
-
-  const banner = document.createElement('div');
-  banner.className = 'move-banner';
   const label = document.createElement('span');
   label.textContent = 'Moving a block — tap where it should land';
   const cancel = document.createElement('button');
@@ -1301,12 +1308,24 @@ function renderMoveOverlay() {
   cancel.textContent = 'Cancel';
   cancel.title = 'Leave move mode without moving anything';
   cancel.addEventListener('click', cancelMove);
-  banner.append(label, cancel);
+  renderDropOverlay([label, cancel], 'Place the block here',
+    (gap) => submitMove(state.moveIndex, gap));
+}
+
+// The banner plus one drop line per gap (N+1 for N blocks), shared by move
+// mode and Add photo's placement. `onPick(gap)` gets the gap in the block
+// list as currently rendered -- the index both the move and place routes
+// take.
+function renderDropOverlay(bannerContent, targetTitle, onPick) {
+  stopWatchingLayout();
+
+  const banner = document.createElement('div');
+  banner.className = 'move-banner';
+  banner.append(...bannerContent);
   // Sits directly under the sticky toolbar. Measured rather than hard-coded:
   // the bar's height depends on its own contents and the font, and a guess
   // that drifts would either cover the toolbar or float below it.
-  const bar = document.querySelector('.bar');
-  banner.style.top = `${bar ? Math.round(bar.getBoundingClientRect().height) : 0}px`;
+  banner.style.top = `${barHeight()}px`;
   els.blocks.appendChild(banner);
 
   const layer = document.createElement('div');
@@ -1316,8 +1335,9 @@ function renderMoveOverlay() {
     const target = document.createElement('button');
     target.type = 'button';
     target.className = 'move-target';
-    target.title = 'Place the block here';
-    target.addEventListener('click', () => submitMove(state.moveIndex, gap));
+    target.title = targetTitle;
+    target.dataset.gap = gap;
+    target.addEventListener('click', () => onPick(gap));
     layer.appendChild(target);
   }
   els.blocks.appendChild(layer);
@@ -1330,6 +1350,12 @@ function renderMoveOverlay() {
   moveResize = new ResizeObserver(() => requestAnimationFrame(positionMoveZones));
   blocks.forEach((el) => moveResize.observe(el));
   moveResize.observe(els.blocks);
+  return banner;
+}
+
+function barHeight() {
+  const bar = document.querySelector('.bar');
+  return bar ? Math.round(bar.getBoundingClientRect().height) : 0;
 }
 
 async function submitMove(fromIndex, toIndex) {
@@ -1504,6 +1530,9 @@ async function applyWrite(res, change = null) {
   }
   const data = await res.json();
   state.hash = data.hash;
+  // See applyPost: a new block list voids the placement's gaps. Its own
+  // write clears state.placing before it gets here.
+  cancelPlacing({ render: false });
   const before = state.blocks.length;
   state.blocks = data.blocks;
   setCanUndo(data.can_undo);
@@ -1776,6 +1805,7 @@ function offerDrafts() {
           setStatus('Close proofreading to edit.');
           return;
         }
+        cancelPlacing();
         if (!(await closeEditor())) return;
         const block = findDraftBlock(draft);
         const el = block && els.blocks.querySelector(`.block[data-index="${block.index}"]`);
@@ -2708,6 +2738,221 @@ async function splitBlockVideo(index, clips, size, side, split) {
 // keeps the editor's re-attach and draft logic out of it entirely -- every
 // write here lands with `openEditor` null. Undo, Discard, the post picker,
 // + New and Publish close the review before they act.
+// --- Add photo -----------------------------------------------------------
+// The round 📷 button: pick photos, then tap one of move mode's blue lines
+// to say where they go. The upload starts the moment the picker closes and
+// runs while you aim, so a tap usually places at once; a tap that beats the
+// upload marks its line and places when the upload lands. The insert is its
+// own route (`/images/place`), so nothing is written until a line is tapped,
+// and Cancel leaves the post as it was (uploaded objects stay in S3, as an
+// abandoned photo-strip upload's do).
+//
+// `state.placing` is {slug, files, thumbs, images, error, gap, busy}: the
+// object URLs for the banner's thumbnails, the uploaded {url, alt} list once
+// it's back, the gap tapped before it was, and whether the place write is on
+// the wire.
+
+function syncAddPhoto() {
+  // Not while anything else owns the screen: a review (its indices would
+  // shift), a placement already running, or move mode.
+  els.addPhoto.hidden = !state.slug || reviewing() || Boolean(state.placing)
+    || state.moveIndex !== null;
+}
+
+// Just under the toolbar, which wraps to two lines on a portrait tablet --
+// so measured, like the move banner, and kept up to date as it changes.
+function positionAddPhoto() {
+  els.addPhoto.style.top = `${barHeight() + 12}px`;
+}
+new ResizeObserver(positionAddPhoto).observe(document.querySelector('.bar'));
+
+async function startAddPhoto() {
+  if (!state.slug || reviewing() || state.placing || state.moveIndex !== null) return;
+  state.pendingInsert = null;
+  // Same rule as every bar action: save what's open first, and stop if that
+  // save didn't land.
+  if (!(await closeEditor())) return;
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.addEventListener('change', () => {
+    if (input.files.length) beginPlacing([...input.files]);
+  });
+  input.click();
+}
+
+function beginPlacing(files) {
+  if (state.moveIndex !== null) cancelMove();
+  const placing = {
+    slug: state.slug, files, thumbs: files.map((f) => URL.createObjectURL(f)),
+    images: null, gap: null, busy: false,
+  };
+  state.placing = placing;
+  setStatus('');
+  renderBlocks();
+  uploadForPlacing(placing);
+}
+
+async function uploadForPlacing(placing) {
+  const form = new FormData();
+  for (const file of placing.files) form.append('files', file);
+  // Alt text is added afterwards in the photo editor, which opens on the new
+  // block -- one prompt per photo before you'd even chosen where they go was
+  // the old flow's worst part.
+  form.append('alts', JSON.stringify(placing.files.map(() => '')));
+  let failure = null;
+  let data = null;
+  try {
+    const res = await fetch(`/api/posts/${placing.slug}/images/upload`, { method: 'POST', body: form });
+    if (res.ok) data = await res.json();
+    else failure = await errorDetail(res);
+  } catch (err) {
+    failure = `network error: ${err.message}`;
+  }
+  if (state.placing !== placing) return; // cancelled while it was out
+  if (failure) {
+    // Nothing was written; say why, and give the screen back.
+    cancelPlacing();
+    setStatus(`upload failed — ${failure}`);
+    return;
+  }
+  placing.images = data.images;
+  if (placing.gap !== null) placeAt(placing.gap);
+  else renderPlaceBanner();
+}
+
+function tapPlacement(gap) {
+  const placing = state.placing;
+  if (!placing || placing.busy) return;
+  if (!placing.images) {
+    // Beat the upload: remember the line (a second tap moves it) and place
+    // as soon as the upload is back.
+    placing.gap = gap;
+    renderPlaceBanner();
+    return;
+  }
+  placeAt(gap);
+}
+
+async function placeAt(gap) {
+  const placing = state.placing;
+  placing.gap = gap;
+  placing.busy = true;
+  renderPlaceBanner();
+  let res;
+  try {
+    res = await fetch(`/api/posts/${placing.slug}/images/place`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ index: gap, hash: state.hash, images: placing.images }),
+    });
+  } catch (err) {
+    cancelPlacing();
+    setStatus(`save failed — network error: ${err.message}`);
+    return;
+  }
+  if (state.placing !== placing) return;
+  // Leave placement either way: a 409 means the gaps were stale, and
+  // applyWrite says "changed on disk — reload" for it, as for any write.
+  cancelPlacing({ render: !res.ok });
+  if (!(await applyWrite(res, { at: gap, delta: 1 }))) return;
+  // Straight into the new block's photo editor, for the alt text.
+  const el = els.blocks.querySelector(`.block[data-index="${gap}"]`);
+  const block = state.blocks[gap];
+  if (el && block && block.images) {
+    startEditingImages(el, el.querySelector(':scope > .block-content'), block);
+    el.scrollIntoView({ block: 'center' });
+    setStatus(placing.images.length > 1 ? 'photos added — add alt text' : 'photo added — add alt text');
+  }
+}
+
+function cancelPlacing({ render = true } = {}) {
+  const placing = state.placing;
+  if (!placing) return;
+  state.placing = null;
+  placing.thumbs.forEach((url) => URL.revokeObjectURL(url));
+  if (render) renderBlocks();
+}
+
+function renderPlaceOverlay() {
+  const placing = state.placing;
+  const thumbs = document.createElement('div');
+  thumbs.className = 'place-thumbs';
+  placing.thumbs.forEach((url) => {
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = '';
+    thumbs.appendChild(img);
+  });
+  const text = document.createElement('span');
+  text.className = 'place-text';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'move-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.title = 'Stop without adding the photos';
+  cancel.addEventListener('click', () => {
+    cancelPlacing();
+    setStatus('');
+  });
+  const banner = renderDropOverlay([thumbs, text, cancel],
+    placing.files.length > 1 ? 'Put the photos here' : 'Put the photo here', tapPlacement);
+  banner.classList.add('place-banner');
+  renderPlaceBanner();
+}
+
+// The banner's words and the tapped line's mark, updated in place: a full
+// renderBlocks() for every step of an upload would rebuild the post.
+function renderPlaceBanner() {
+  const placing = state.placing;
+  const text = els.blocks.querySelector('.place-banner .place-text');
+  if (!placing || !text) return;
+  const many = placing.files.length > 1;
+  let main = many ? `Tap where the ${placing.files.length} photos go` : 'Tap where the photo goes';
+  let sub = placing.images ? 'Uploaded.' : 'Uploading…';
+  if (placing.busy) {
+    main = many ? 'Placing the photos…' : 'Placing the photo…';
+    sub = '';
+  } else if (placing.gap !== null) {
+    main = 'Placing when the upload finishes';
+    sub = 'Tap another line to change it.';
+  }
+  // Once the place write is on the wire, Cancel can't take it back -- and
+  // dropping the placement then would leave this page on the old hash.
+  const cancel = els.blocks.querySelector('.place-banner .move-cancel');
+  if (cancel) cancel.disabled = placing.busy;
+  text.innerHTML = '';
+  const strong = document.createElement('strong');
+  strong.textContent = main;
+  text.appendChild(strong);
+  if (sub) {
+    const small = document.createElement('small');
+    small.textContent = sub;
+    text.appendChild(small);
+  }
+  els.blocks.querySelectorAll('.move-target').forEach((t) => {
+    const on = placing.gap !== null && Number(t.dataset.gap) === placing.gap;
+    t.classList.toggle('pending', on);
+    t.querySelector('.place-pending')?.remove();
+    if (on) {
+      const label = document.createElement('span');
+      label.className = 'place-pending';
+      label.textContent = placing.busy ? 'Placing…' : 'Placing when the upload finishes';
+      t.appendChild(label);
+    }
+  });
+}
+
+els.addPhoto.addEventListener('click', startAddPhoto);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.placing && !state.placing.busy) {
+    cancelPlacing();
+    setStatus('');
+  }
+});
+
 const PROSE_KINDS = new Set(['paragraph', 'heading', 'list', 'blockquote', 'pair']);
 const PROOF_BATCH = 5; // the route takes at most five indices
 // Null, or the batch loop in flight: {cancelled, abort: AbortController}.
@@ -2752,7 +2997,7 @@ function rangeText(indices) {
 }
 
 async function startProofread() {
-  if (reviewing()) return;
+  if (reviewing() || state.placing) return;
   // Same path as switching posts: save whatever is open, and stop if that
   // save didn't land (the editor stays open with its text).
   if (state.moveIndex !== null) cancelMove();

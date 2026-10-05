@@ -1009,3 +1009,47 @@ ins.pr-new.pr-current { background: #c6ecd6; box-shadow: inset 0 -3px 0 #2563eb;
 .review-change { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 0.95rem; color: #344054; }
 body:has(.review-bar:not([hidden])) #blocks { padding-bottom: 120px; }
+
+/* --- Add photo ----------------------------------------------------------
+   A round button fixed just under the toolbar (its `top` is measured from
+   .bar in editor.js, since the bar wraps on a portrait tablet). 56px: it is
+   the main way in for photos on a tablet, so bigger than the 44px floor.
+   Visible without hover, like every control here -- the tablet has none. */
+.add-photo {
+    position: fixed; right: 16px; top: 72px; z-index: 9;
+    width: 56px; height: 56px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; border: 1px solid #0066cc; border-radius: 50%;
+    background: #fff; color: #0066cc;
+    font-size: 1.6rem; line-height: 1;
+    box-shadow: 0 2px 8px rgba(0, 40, 90, 0.18);
+    cursor: pointer;
+}
+.add-photo:hover, .add-photo:active { background: #eef5fc; }
+.add-photo[hidden] { display: none; }
+
+/* Placement reuses move mode's banner and lines (`.moving` is set too); the
+   banner just carries the picked photos. */
+.place-banner { justify-content: flex-start; }
+.place-banner .move-cancel { margin-left: auto; min-height: 44px; }
+.place-thumbs { display: flex; gap: 6px; flex-shrink: 1; min-width: 0; overflow: hidden; }
+.place-thumbs img {
+    width: 48px; height: 48px; flex: 0 0 48px;
+    object-fit: cover; border-radius: 6px; border: 1px solid #f0c96b;
+}
+.place-text { display: flex; flex-direction: column; line-height: 1.3; flex-shrink: 0; }
+.place-text small { font-weight: 400; color: #6b5a2a; font-size: 0.8rem; }
+/* The merge buttons sit in the flow between blocks; while placing they are
+   for looking at, like the blocks. */
+.placing .merge-control { pointer-events: none; }
+
+/* The line tapped before the upload finished. */
+.move-target.pending { background: #0066cc; height: 10px; }
+.place-pending {
+    position: absolute; right: 0; bottom: 14px;
+    padding: 0.2rem 0.55rem; border-radius: 4px;
+    background: #0066cc; color: #fff;
+    font-size: 0.8rem; font-weight: 700; white-space: nowrap;
+    pointer-events: none;
+}
+.place-banner .move-cancel:disabled { opacity: 0.5; cursor: default; }
