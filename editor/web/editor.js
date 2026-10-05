@@ -1686,6 +1686,7 @@ els.publish.addEventListener('click', async () => {
   const message = prompt('Commit message:', `Update ${state.slug}`);
   if (message === null) return; // cancelled: the review stays up
   await leaveReview();
+  await leavePlacing();
 
   els.publish.disabled = true;
   setStatus('publishing…');
