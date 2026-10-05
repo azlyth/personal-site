@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import subprocess
@@ -21,7 +22,7 @@ from PIL import UnidentifiedImageError
 
 import tomlkit
 
-from editor import config, history, importer, pairs, videos
+from editor import config, history, importer, pairs, proofread, videos
 from editor.auth.middleware import AuthMiddleware
 from editor.auth.routes import router as auth_router
 from editor.blocks import (
@@ -247,6 +248,80 @@ def import_post(doc: ImportDoc, x_import_token: str | None = Header(default=None
         raise HTTPException(status_code=400, detail=str(exc))
     slug = _create_draft(title, body)
     return {"slug": slug, "edit_url": f"{config.BASE_URL}/edit/{slug}"}
+
+
+log = logging.getLogger("editor.proofread")
+
+
+class ProofreadRequest(BaseModel):
+    indices: list[int] = Field(max_length=5)
+
+
+@app.post("/api/posts/{slug}/proofread")
+def proofread_post(slug: str, req: ProofreadRequest):
+    """Spelling/grammar suggestions for up to five prose blocks.
+
+    One claude call per request; the client batches and shows progress.
+    A failure is reported for this batch only and writes nothing."""
+    _, _, _, body = _read_post(slug)
+    blocks = parse_blocks(body)
+    wanted = [
+        blocks[i] for i in dict.fromkeys(req.indices)
+        if 0 <= i < len(blocks) and blocks[i].kind in proofread.PROSE_KINDS
+    ]
+    if not wanted:
+        return {"blocks": [], "errors": []}
+    try:
+        items = proofread.parse_response(proofread.run_claude(proofread.build_prompt(wanted)))
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, ValueError) as exc:
+        log.warning("proofread failed for %s %s: %s", slug, [b.index for b in wanted], exc)
+        return {"blocks": [], "errors": [{
+            "indices": [b.index for b in wanted],
+            "message": "The proofreader didn't answer for these paragraphs.",
+        }]}
+    out = []
+    for b in wanted:
+        mine = [it for it in items if isinstance(it, dict) and it.get("block") == b.index]
+        suggestions = proofread.validate(b.index, b.source, mine)
+        dropped = len(mine) - len(suggestions)
+        if dropped:
+            log.info("proofread dropped %d suggestion(s) in %s block %d", dropped, slug, b.index)
+        out.append({
+            "index": b.index,
+            "block_hash": proofread.block_hash(b.source),
+            "suggestions": suggestions,
+            "review_html": proofread.review_html(b.source, suggestions) if suggestions else b.html,
+        })
+    return {"blocks": out, "errors": []}
+
+
+class ProofreadApply(BaseModel):
+    index: int
+    block_hash: str
+    before: str
+    after: str
+    hash: str
+
+
+@app.post("/api/posts/{slug}/proofread/apply")
+def proofread_apply(slug: str, req: ProofreadApply):
+    """Apply one accepted fix. Re-checks it against the block as it is now."""
+    def transform(body):
+        blocks = parse_blocks(body)
+        if not 0 <= req.index < len(blocks):
+            raise IndexError(req.index)
+        source = blocks[req.index].source
+        if proofread.block_hash(source) != req.block_hash:
+            raise HTTPException(status_code=409, detail="This paragraph changed since it was proofread.")
+        try:
+            new_source = proofread.apply_one(source, req.before, req.after)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=f"Can't apply this fix: {exc}.")
+        return replace_block(body, req.index, new_source)
+
+    post = _write_body(slug, req.hash, transform)
+    post["block_hash"] = proofread.block_hash(post["blocks"][req.index]["source"])
+    return post
 
 
 def _post_path(slug: str):
