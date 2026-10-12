@@ -61,8 +61,8 @@ def test_request_then_verify_then_session_then_access():
     assert resp.json() == {"ok": True, "message": "Check your email for a sign-in link."}
 
     token = _mint_token()
-    verify = client.get(f"/auth/verify?token={token}", follow_redirects=False)
-    assert verify.status_code == 302
+    verify = client.post("/auth/verify", data={"token": token}, follow_redirects=False)
+    assert verify.status_code == 303
     assert SESSION_COOKIE in verify.cookies
 
     assert client.get("/api/posts").status_code == 200
@@ -115,14 +115,91 @@ def test_expired_token_is_rejected():
     )
     conn.close()
 
-    resp = _fresh().get(f"/auth/verify?token={raw}", follow_redirects=False)
+    resp = _fresh().post("/auth/verify", data={"token": raw}, follow_redirects=False)
     assert resp.status_code == 400
     assert SESSION_COOKIE not in resp.cookies
 
 
 def test_unknown_token_is_rejected():
-    resp = _fresh().get("/auth/verify?token=not-a-real-token", follow_redirects=False)
+    resp = _fresh().post(
+        "/auth/verify", data={"token": "not-a-real-token"}, follow_redirects=False
+    )
     assert resp.status_code == 400
+
+
+def test_opening_the_link_spends_nothing():
+    """Phones load the emailed URL more than once (an email app's prefetch,
+    or Chrome dropping its first load to reopen it elsewhere). Any number
+    of GETs must leave the token good and must not set a session cookie --
+    only the page's own POST may do either."""
+    client = _fresh()
+    token = _mint_token()
+    for _ in range(3):
+        r = client.get(f"/auth/verify?token={token}", follow_redirects=False)
+        assert r.status_code == 200
+        assert SESSION_COOKIE not in r.cookies
+        assert r.headers["cache-control"] == "no-store"
+        assert 'action="/auth/verify"' in r.text
+        assert f'value="{token}"' in r.text
+
+    verify = client.post("/auth/verify", data={"token": token}, follow_redirects=False)
+    assert verify.status_code == 303
+    assert SESSION_COOKIE in verify.cookies
+
+
+def test_a_spent_token_with_a_live_session_goes_home_not_to_an_error():
+    """A stale, already-spent token (outside the grace window) submitted by
+    a browser that already holds a live session from an earlier sign-in
+    belongs home, not on the error page."""
+    client = _fresh()
+
+    # This browser already has a live session from an earlier, separate login.
+    live_token = _mint_token()
+    live = client.post("/auth/verify", data={"token": live_token}, follow_redirects=False)
+    assert live.status_code == 303
+    assert SESSION_COOKIE in live.cookies
+
+    # A second, unrelated token that was spent well outside the reuse grace
+    # window -- service.complete_login will return None for it.
+    conn = store.connect()
+    raw = security.new_token()
+    now = datetime.now(timezone.utc)
+    stale_used = (now - timedelta(seconds=service.REDEEM_GRACE_S + 5)).isoformat()
+    store.create_login_token(
+        conn, security.hash_token(raw), "ptr.vldz@gmail.com",
+        stale_used, (now + timedelta(minutes=10)).isoformat(),
+    )
+    conn.execute(
+        "UPDATE login_token SET used_at = ? WHERE hash = ?",
+        (stale_used, security.hash_token(raw)),
+    )
+    conn.commit()
+    conn.close()
+
+    resp = client.post("/auth/verify", data={"token": raw}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+
+
+def test_a_spent_token_without_a_live_session_still_errors():
+    conn = store.connect()
+    raw = security.new_token()
+    now = datetime.now(timezone.utc)
+    stale_used = (now - timedelta(seconds=service.REDEEM_GRACE_S + 5)).isoformat()
+    store.create_login_token(
+        conn, security.hash_token(raw), "ptr.vldz@gmail.com",
+        stale_used, (now + timedelta(minutes=10)).isoformat(),
+    )
+    conn.execute(
+        "UPDATE login_token SET used_at = ? WHERE hash = ?",
+        (stale_used, security.hash_token(raw)),
+    )
+    conn.commit()
+    conn.close()
+
+    resp = _fresh().post("/auth/verify", data={"token": raw}, follow_redirects=False)
+    assert resp.status_code == 400
+    assert SESSION_COOKIE not in resp.cookies
 
 
 def test_token_is_rejected_once_spent_outside_the_grace_window():
@@ -156,7 +233,7 @@ def test_token_is_reusable_within_the_grace_window():
 def test_logout_clears_the_session_and_the_cookie():
     client = _fresh()
     token = _mint_token()
-    client.get(f"/auth/verify?token={token}", follow_redirects=False)
+    client.post("/auth/verify", data={"token": token}, follow_redirects=False)
     assert client.get("/api/posts").status_code == 200
 
     logout = client.post("/auth/logout")
@@ -192,7 +269,7 @@ def test_signed_out_edit_route_is_also_the_signin_card():
 def test_signed_in_home_page_is_the_editor():
     client = _fresh()
     token = _mint_token()
-    client.get(f"/auth/verify?token={token}", follow_redirects=False)
+    client.post("/auth/verify", data={"token": token}, follow_redirects=False)
     resp = client.get("/")
     assert resp.status_code == 200
     assert re.search(r"editor(-[0-9a-f]{8})?\.js", resp.text)
