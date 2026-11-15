@@ -7,7 +7,7 @@ draft = true
 <div class="pair pair-right size-small">
 <div class="pair-media">
 <div class="img-row size-small">
-<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/61166f33.jpg" alt="The Spruce map, with the blocks I have cleaned this month in green">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/4924be6a.jpg" alt="Claiming a cleanup in Spruce: a whole block, all four sides, selected for 172 points">
 </div>
 </div>
 <div class="pair-text">
@@ -29,10 +29,13 @@ If you ask people who visit the city, one of the first things they'll always say
 
 So this summer, I wanted to start to help that situation in my own small local way. I bought a litter picker upper, an easy grab garbage bag, and started cleaning up the few blocks around me.
 
-<div class="pair pair-left size-small justify-evenly">
+<div class="pair pair-left size-medium justify-evenly">
 <div class="pair-media">
-<div class="img-row size-small">
-<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/4924be6a.jpg" alt="A whole block, all four sides, selected in Spruce">
+<div class="img-row size-medium">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-00-3d9bfcd6.jpg" alt="A clear bag of collected litter held open in its blue hoop">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-07-28fa039c.jpg" alt="A bag stuffed full of litter from one cleanup round">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-12-7d0d3797.jpg" alt="A full bag of litter dropped into a green corner bin">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-14-a7b307c5.jpg" alt="A tied bag of litter left beside a corner trash can">
 </div>
 </div>
 <div class="pair-text">
