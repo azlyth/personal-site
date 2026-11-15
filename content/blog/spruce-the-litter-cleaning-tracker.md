@@ -1,7 +1,7 @@
 +++
 title = "Spruce, the litter cleaning tracker"
 date = 2026-11-15
-draft = true
+draft = false
 +++
 
 <div class="pair pair-right size-small">
