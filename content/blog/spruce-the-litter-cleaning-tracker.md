@@ -1,6 +1,6 @@
 +++
 title = "Spruce, the litter cleaning tracker"
-date = 2026-10-04
+date = 2026-11-15
 draft = true
 +++
 
