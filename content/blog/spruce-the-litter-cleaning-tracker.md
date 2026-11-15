@@ -59,6 +59,13 @@ All that is to say that I believe we can keep our own streets clean.
 </div>
 </div>
 
+<div class="img-row">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-01-88d0d6a0.jpg" alt="A bag of litter from one of my cleanup rounds">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-02-3fab51e9.jpg" alt="A bag of litter from one of my cleanup rounds">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-03-9315afd0.jpg" alt="A bag of litter from one of my cleanup rounds">
+<img src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/cleanup-04-0de25aa8.jpg" alt="A bag of litter from one of my cleanup rounds">
+</div>
+
 <div class="pair pair-right size-small">
 <div class="pair-media">
 <div class="video-row size-small">
