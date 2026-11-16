@@ -70,7 +70,7 @@ All that is to say that I believe we can keep our own streets clean.
 <div class="pair-media">
 <div class="video-row size-small">
 <video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/steps-loop-c7691292.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/steps-loop-705b53c4.mp4" type="video/mp4">
 </video>
 </div>
 </div>
