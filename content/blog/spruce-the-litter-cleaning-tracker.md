@@ -92,7 +92,7 @@ All that is to say that I believe we can keep our own streets clean.
 <div class="pair-media">
 <div class="video-row size-small">
 <video autoplay loop muted playsinline>
-<source src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/park-loop-e351a037.mp4" type="video/mp4">
+<source src="https://img.cloudy.nyc/spruce-the-litter-cleaning-tracker/park-loop-d271497f.mp4" type="video/mp4">
 </video>
 </div>
 </div>
@@ -111,6 +111,6 @@ So far I've been mainly tending to an open patch on the left side:
 
 ## Next steps
 
-I'm looking for any interested neighbors to collaborate on this with.
+I'm looking for any interested neighbors to collaborate on this with. I really have to make it out to one of the Astoria Trash Club meetups and meet the other pickers!
 
 If you're interested, reach out! Happy to talk about any part of this, or even other ideas: peter@common37.org
