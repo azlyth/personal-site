@@ -1,6 +1,15 @@
-/* Mirrors the site's reading column so editing looks like the real post. */
+/* Mirrors the site's reading column so editing looks like the real post.
+   The two families are the blog's own (templates/base.html, "Typography" in
+   CLAUDE.md), hand-duplicated and pinned equal by test_editor_fonts.py: a
+   block being edited is set exactly like the published text, so opening it
+   doesn't re-wrap a single line. */
+:root {
+    --font-text: 'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Sentient', Georgia, 'Times New Roman', serif;
+}
+
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-text);
     line-height: 1.6;
     color: #333;
     margin: 0;
@@ -44,7 +53,8 @@ body {
 .bar-action.danger { color: #cc3333; border-color: #f0c9c9; }
 .bar-action.danger:hover { background: #fdf0f0; }
 
-.title { font-size: 1.6rem; font-weight: 600; cursor: text; }
+/* The post's title, set as the published page sets it (Sentient, 2rem, 500). */
+.title { font-family: var(--font-display); font-size: 2rem; font-weight: 500; line-height: 1.25; color: #1a1a1a; cursor: text; }
 .title-input { font: inherit; font-weight: inherit; width: 100%; border: none; outline: none; }
 .post-meta { color: #888; font-size: 0.9rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
 .post-meta input[type="date"] { font: inherit; font-size: 0.9rem; }
@@ -242,74 +252,48 @@ a { color: #0066cc; }
     max-width: 100%;
     margin: 0;
 }
+/* Colour only. The open block keeps the border width and padding it had
+   closed, so opening it moves neither its top edge nor anything below it. */
 .block.editing { border-color: #0066cc; background: #fff; cursor: default; }
 
-/* An open text block's controls, its Done button and any menu they open
-   live in one rail (see startEditing). Always shown -- the tablet has no
-   hover -- and every button a 44px target. By default it is a row under the
-   field; `.rail-side`, set when the window has room beside a full-width
-   block, makes it a column to the right of the block instead, so the text
-   keeps the whole column. */
-/* Sized to its text by startEditing, so a drag handle would only fight it. */
-.block textarea.block-source { resize: none; overflow: hidden; }
-/* Row mode sticks to the bottom of the window, so Done is reachable under a
-   field taller than the screen instead of somewhere below it. */
-.edit-rail {
-    position: sticky; bottom: 0; z-index: 2;
-    margin-top: 0.25rem; padding: 0.4rem 0;
-    background: #fff;
+/* The published type scale (base.html): headings in Sentient at 2 / 1.5 /
+   1.25 / 1.0625rem, weight 500. Rendered AND edited at these sizes -- see
+   the heading-N classes on .block-source below. */
+.block-content :is(h1, h2, h3, h4) {
+    font-family: var(--font-display); font-weight: 500; line-height: 1.25; color: #1a1a1a;
 }
-.edit-rail-inner {
-    display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.4rem;
-}
-.block.text-editing .block-controls {
-    position: static; display: flex; flex-wrap: wrap; gap: 0.4rem;
-}
-.block.text-editing .block-controls button {
-    width: 44px; height: 44px; font-size: 1.15rem;
-}
-.edit-done {
-    order: 1; margin-left: auto;
-    min-width: 44px; height: 44px; padding: 0 1.1rem;
-    border: 1px solid #0066cc; border-radius: 6px;
-    background: #0066cc; color: #fff;
-    font: inherit; font-size: 0.9rem; font-weight: 700;
-    cursor: pointer;
-}
-/* The insert menu takes its own line under the buttons that opened it. */
-.edit-rail-inner .insert-choice { order: 2; flex: 1 0 100%; margin: 0; }
-.edit-rail-inner .insert-choice button { min-height: 44px; }
+.block-content h1 { font-size: 2rem; }
+.block-content h2 { font-size: 1.5rem; }
+.block-content h3 { font-size: 1.25rem; }
+.block-content h4 { font-size: 1.0625rem; }
 
-.block.rail-side .edit-rail {
-    position: absolute; top: -1px; bottom: -1px; left: calc(100% + 8px);
-    width: 72px; margin: 0; padding: 0; background: none;
-}
-/* Sticky inside a rail as tall as the block, so on a long paragraph the
-   buttons ride along as you scroll it. `top` (below the toolbar) is set
-   from the toolbar's measured height. */
-.block.rail-side .edit-rail-inner {
-    position: sticky;
-    flex-direction: column; flex-wrap: nowrap; align-items: stretch;
-}
-.block.rail-side .edit-done { order: 0; margin: 0 0 0.25rem; padding: 0; }
-.block.rail-side .block-controls { flex-direction: column; flex-wrap: nowrap; }
-.block.rail-side .block-controls button { width: 100%; }
-.block.rail-side .insert-choice {
-    flex-direction: column; flex-wrap: nowrap; align-items: stretch;
-    gap: 0.3rem; padding: 0.3rem;
-    font-size: 0.65rem; text-align: center;
-    text-transform: none; letter-spacing: normal;
-}
-.block.rail-side .insert-choice button {
-    flex: 0 0 auto; min-height: 44px; padding: 0 0.15rem; font-size: 0.75rem;
-    white-space: nowrap;
-}
-
+/* The open text field is set like the rendered text it replaces: the
+   blog's face, the paragraph's size and line height, no padding, no border,
+   no background -- so the words stay on the lines they were on. startEditing
+   copies the rendered element's outer margins onto it, which is what keeps
+   the block's height (and so every block below it) where it was. Sized to
+   its text by startEditing, so a drag handle would only fight it. */
 .block textarea {
-    width: 100%; box-sizing: border-box;
-    font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.95rem; line-height: 1.5;
-    border: none; outline: none; resize: vertical; background: transparent;
+    display: block; width: 100%; box-sizing: border-box;
+    margin: 0; padding: 0; border: 0; outline: none; resize: none;
+    background: transparent; color: inherit;
+    font: inherit; font-family: var(--font-text); font-size: 1rem; line-height: 1.6;
+}
+.block textarea.block-source { overflow: hidden; }
+.block textarea.block-source.heading-1,
+.block textarea.block-source.heading-2,
+.block textarea.block-source.heading-3,
+.block textarea.block-source.heading-4 {
+    font-family: var(--font-display); font-weight: 500; line-height: 1.25; color: #1a1a1a;
+}
+.block textarea.block-source.heading-1 { font-size: 2rem; }
+.block textarea.block-source.heading-2 { font-size: 1.5rem; }
+.block textarea.block-source.heading-3 { font-size: 1.25rem; }
+.block textarea.block-source.heading-4 { font-size: 1.0625rem; }
+/* The one place monospace stays: markup that isn't prose (raw HTML the
+   structured editors couldn't parse, and code, which publishes in mono). */
+.block textarea.block-source.raw-source {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.95rem; line-height: 1.5;
 }
 
 .block img { max-width: 100%; height: auto; border-radius: 6px; display: block; margin: 1rem auto; }
@@ -455,12 +439,6 @@ a { color: #0066cc; }
     border: 1px solid #ddd; border-radius: 6px;
     background: #fff; cursor: pointer; font-size: 1rem;
 }
-/* The layout toggle stays lit while its controls are showing, so the bar
-   reports the state rather than just triggering it. */
-.block-controls button.active {
-    border-color: #b7791f; background: #b7791f; color: #fff;
-}
-
 /* Thumbnail editor for an image / img-row block. Buttons are sized for a
    thumb on the tablet this is built for, not a mouse -- 44px is the usual
    touch-target floor. */
@@ -505,27 +483,10 @@ a { color: #0066cc; }
     font: inherit; font-size: 0.95rem; cursor: pointer;
 }
 
-.image-editor-actions {
-    display: flex; gap: 0.5rem;
-    padding: 0.75rem 0 0.25rem;
-    border-top: 1px solid #e9ecef; margin-top: 0.5rem;
-}
-.image-editor-actions button {
-    flex: 1; height: 44px;
-    font: inherit; font-size: 1rem;
-    border-radius: 6px; cursor: pointer;
-}
-.image-done {
-    border: 1px solid #0066cc; background: #0066cc; color: #fff;
-}
-.image-cancel {
-    border: 1px solid #ddd; background: #fff; color: #333;
-}
-
 /* Row editor for a `video` block -- same layout as the photo thumbnail
    strip above (.image-strip etc.), just with a <video> preview instead of
-   an <img>, no alt-text input (a <video> carries none), and a size-preset
-   row before Done/Cancel. */
+   an <img>, no alt-text input (a <video> carries none), and its size and
+   side in the edit bar. */
 .video-strip {
     display: flex; flex-wrap: wrap; gap: 0.75rem;
     padding: 0.5rem 0;
@@ -578,50 +539,6 @@ a { color: #0066cc; }
     border: 2px dashed #cbd6e2; border-radius: 6px;
     background: #fbfdff; color: #0066cc;
     font: inherit; font-size: 0.95rem; cursor: pointer;
-}
-
-/* Shared by both the photo and video row editors' Small/Medium/Full
-   control -- same look and behaviour either way, so one class instead of
-   a near-duplicate per media type. */
-.size-buttons {
-    display: flex; gap: 0.5rem;
-    padding: 0.75rem 0 0.25rem;
-}
-.size-buttons button {
-    flex: 1; height: 44px;
-    font: inherit; font-size: 0.95rem;
-    border: 1px solid #ddd; border-radius: 6px;
-    background: #fff; color: #333; cursor: pointer;
-}
-.size-buttons button.active {
-    border-color: #0066cc; background: #0066cc; color: #fff;
-}
-
-/* The size row and the beside-text row, built together by framingControls()
-   because they constrain each other (nothing floats at full width). The side
-   buttons deliberately reuse .size-buttons' look -- they're the same kind of
-   choice about how the row is framed, just on a second axis. */
-.framing-controls { padding-bottom: 0.25rem; }
-
-.framing-label {
-    display: block;
-    padding-top: 0.6rem;
-    font-size: 0.8rem; font-weight: 700; color: #667;
-    text-transform: uppercase; letter-spacing: 0.04em;
-}
-
-.side-buttons {
-    display: flex; gap: 0.5rem;
-    padding: 0.3rem 0 0.25rem;
-}
-.side-buttons button {
-    flex: 1; height: 44px;
-    font: inherit; font-size: 0.95rem;
-    border: 1px solid #ddd; border-radius: 6px;
-    background: #fff; color: #333; cursor: pointer;
-}
-.side-buttons button.active {
-    border-color: #0066cc; background: #0066cc; color: #fff;
 }
 
 /* Merge control -- sits between two adjacent, same-family media blocks.
@@ -738,43 +655,15 @@ a { color: #0066cc; }
     .pair.size-medium .pair-media { width: auto; }
 }
 
-/* Editing a paired section: its picture, then its prose as one markdown
-   field. The section is one block, so it is edited as one thing -- the trade
-   the pair makes in exchange for being able to centre. */
-.pair-edit-media {
-    display: flex; flex-wrap: wrap; gap: 0.5rem;
-    padding: 0.5rem 0;
-}
-.pair-edit-media img,
-.pair-edit-media video {
-    width: 140px; height: 140px; object-fit: cover;
-    border-radius: 6px; margin: 0; display: block;
-    border: 1px solid #e9ecef; background: #000;
-}
-/* One cell per picture, so the star has something to position against. */
-.pair-edit-thumb { position: relative; line-height: 0; }
+/* The pair's prose field sits in the pair's own text column, set like the
+   prose it replaces (the .block textarea rule above does the type). */
+.block textarea.pair-text-input { overflow: hidden; }
 
-.pair-text-input {
-    width: 100%; box-sizing: border-box;
-    font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.95rem; line-height: 1.5;
-    padding: 0.5rem;
-    border: 1px solid #ddd; border-radius: 6px;
-    outline: none; resize: vertical; background: #fff;
-}
-.pair-text-input:focus { border-color: #0066cc; }
-
-/* Reads as a sibling of the wrap picker's buttons, since it belongs to the
-   same decision about how the picture relates to the words. */
-.pair-button {
-    flex: 1 1 auto; min-height: 40px; padding: 0 0.6rem;
-    border: 1px solid #e4cfa0; border-radius: 6px;
-    background: #fff; color: #8a6d1f;
-    font: inherit; font-size: 0.8rem; font-weight: 700;
-    text-transform: none; letter-spacing: normal;
-    cursor: pointer;
-}
-.pair-button:hover { background: #fdf0d5; }
+/* A centred block, as the site draws it (templates/base.html; a test checks
+   both define it). The open field takes the class too, so the toggle shows
+   at once. */
+.align-center { text-align: center; }
+.align-center :is(ul, ol) { list-style-position: inside; padding-left: 0; }
 
 /* Asks which side of a block an insert meant. Blue rather than the picture
    chrome's amber -- this is about the writing, not about a photo. */
@@ -800,43 +689,6 @@ a { color: #0066cc; }
 }
 .insert-choice button:hover { background: #d5e6f7; }
 .insert-choice .insert-cancel { flex: 0 0 auto; color: #667; border-color: #ccd4dc; }
-
-/* The wrap picker, under every media row and always visible (it began as an
-   icon in the hover-only .block-controls bar -- a control that does not
-   exist on a tablet). It sits INSIDE the row's block, so when that block
-   floats the picker goes with it and lands under the picture with no rules
-   of its own.
-
-   Amber so it reads as chrome belonging to the picture rather than as part
-   of the writing. */
-.wrap-control {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
-    box-sizing: border-box;
-    margin: 0.4rem 0 0.15rem;
-    padding: 0.4rem 0.5rem;
-    border: 2px dashed #b7791f; border-radius: 6px;
-    background: #fffaf0; color: #b7791f;
-    font-size: 0.75rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.04em;
-    cursor: default;
-}
-
-.wrap-control button {
-    flex: 1 1 auto; min-height: 40px; padding: 0 0.6rem;
-    border: 1px solid #e4cfa0; border-radius: 6px;
-    background: #fff; color: #8a6d1f;
-    font: inherit; font-size: 0.8rem; font-weight: 700;
-    text-transform: none; letter-spacing: normal;
-    cursor: pointer;
-}
-.wrap-control button:hover { background: #fdf0d5; }
-.wrap-control button.active {
-    border-color: #b7791f; background: #b7791f; color: #fff;
-}
-
-
-
-
 
 /* Move mode overlays; it never inserts. Everything here is positioned out
    of flow, so picking a block up reflows nothing -- the post you're aiming
@@ -1009,9 +861,8 @@ ins.pr-new.pr-current { background: #c6ecd6; box-shadow: inset 0 -3px 0 #2563eb;
 .review-bar .review-accept { background: #067647; border-color: #067647; color: #fff; }
 .review-bar .review-reject { color: #b42318; border-color: #f4b4ae; }
 .review-count { font-variant-numeric: tabular-nums; min-width: 5.5em; text-align: center; }
-.review-kind { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: #667085; }
-.review-change { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 0.95rem; color: #344054; }
+.review-kind { font-size: 0.9rem; color: #667085; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
 body:has(.review-bar:not([hidden])) #blocks { padding-bottom: 120px; }
 
 /* --- Add photo ----------------------------------------------------------
@@ -1078,3 +929,158 @@ body:has(.review-bar:not([hidden])) #blocks { padding-bottom: 120px; }
     font-size: 0.8rem; font-weight: 700; white-space: nowrap;
     pointer-events: none;
 }
+
+/* --- The edit bar ---------------------------------------------------------
+   The open block's controls, in one slim strip fixed to the bottom of the
+   window (editor.js, showEditBar). Quiet on purpose: white, one hairline,
+   the blog's text face, outlined controls in small groups, and a single
+   filled button -- Done, in the editor's blue. Nothing in it is all-caps and
+   nothing sits on top of the post. */
+.edit-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; flex-wrap: nowrap; align-items: center; gap: 0.75rem;
+    padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    box-sizing: border-box;
+    background: #fff; border-top: 1px solid #e3e6ea;
+    font-family: var(--font-text); font-size: 0.95rem; color: #333;
+}
+.edit-bar[hidden] { display: none; }
+.edit-group { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+/* A hairline between the block's own controls and its settings. */
+.edit-group-settings { padding-left: 0.75rem; border-left: 1px solid #eceef1; }
+.edit-group-end { margin-left: auto; }
+
+/* The block's own controls, moved here from the block while it is open. */
+.edit-bar .block-controls {
+    position: static; display: flex; gap: 0.25rem;
+}
+.edit-bar .block-controls button {
+    width: 44px; height: 44px; font-size: 1.3rem; line-height: 1;
+    border: 0; border-radius: 8px; background: transparent; color: #445;
+}
+.edit-bar .block-controls button:hover { background: #f1f3f5; }
+/* The glyphs come from different fonts at different optical sizes; even
+   them out so the row reads as one set. 🖼 is a colour emoji, which would be
+   the loudest thing in the bar, so it is greyed and softened. */
+.edit-bar .block-controls button[data-icon="add"],
+.edit-bar .block-controls button[data-icon="delete"] { font-size: 1.7rem; font-weight: 300; }
+.edit-bar .block-controls button[data-icon="spacer"] { font-size: 1.5rem; padding-bottom: 0.45rem; }
+.edit-bar .block-controls button[data-icon="photo"] { font-size: 1.15rem; filter: grayscale(1); opacity: 0.7; }
+
+.edit-bar button { font-family: inherit; cursor: pointer; }
+.edit-done {
+    height: 44px; min-width: 44px; padding: 0 1.25rem;
+    border: 1px solid #0066cc; border-radius: 8px;
+    background: #0066cc; color: #fff;
+    font-size: 0.95rem; font-weight: 600;
+}
+.edit-cancel, .bar-button {
+    height: 44px; min-width: 44px; padding: 0 0.85rem;
+    border: 1px solid transparent; border-radius: 8px;
+    background: transparent; color: #445; font-size: 0.95rem;
+    white-space: nowrap;
+}
+/* Outlined like the toggles, so Pair / Photo / Unpair read as buttons and
+   not as labels; Cancel stays plain text beside Done. */
+.bar-button { border-color: #cfd4db; background: #fff; color: #1a1a1a; }
+.edit-cancel:hover, .bar-button:hover { background: #f1f3f5; }
+.bar-button.is-open { border-color: #1a1a1a; }
+.bar-button:disabled { opacity: 0.4; cursor: default; }
+
+/* Compact segmented toggles: outlined, and the chosen one filled with the
+   post's own ink colour rather than a second accent. */
+.segmented {
+    display: inline-flex; border: 1px solid #cfd4db; border-radius: 8px; overflow: hidden;
+}
+.segmented button {
+    height: 44px; min-width: 44px; padding: 0 0.75rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-left: 1px solid #e3e6ea; background: #fff; color: #333;
+    font-size: 0.95rem; line-height: 1;
+}
+.segmented button:first-child { border-left: 0; }
+.segmented button.active { background: #1a1a1a; color: #fff; border-left-color: #1a1a1a; }
+.segmented button.active + button { border-left-color: #1a1a1a; }
+.segmented svg { width: 18px; height: 18px; display: block; }
+/* Two toggle groups in one settings group (size and side). */
+.edit-group-settings .framing { display: flex; gap: 0.5rem; }
+
+/* The insert menu pops up from the bar, over the button that opened it. */
+.edit-bar .insert-choice {
+    position: absolute; bottom: calc(100% + 8px); left: 8px;
+    margin: 0; padding: 0.4rem;
+    border: 1px solid #e3e6ea; border-radius: 10px;
+    background: #fff; color: #445;
+    box-shadow: 0 6px 20px rgba(20, 30, 50, 0.12);
+    font-size: 0.85rem; font-weight: 500;
+    text-transform: none; letter-spacing: normal;
+    flex-wrap: nowrap; white-space: nowrap;
+}
+.edit-bar .insert-choice > span { padding: 0 0.4rem; }
+.edit-bar .insert-choice button {
+    min-height: 44px; padding: 0 0.9rem;
+    border: 1px solid #cfd4db; border-radius: 8px;
+    background: #fff; color: #1a1a1a; font-weight: 500; font-size: 0.9rem;
+}
+.edit-bar .insert-choice button:hover { background: #f1f3f5; }
+.edit-bar .insert-choice .insert-cancel { color: #667; border-color: transparent; }
+
+/* When one row can't hold it all (layoutEditBar measures), the settings
+   take a second row of their own, under the block controls and Done. */
+.edit-bar.two-rows { flex-wrap: wrap; row-gap: 0; }
+/* A zero-height line break between the rows (pseudo-elements are flex
+   items too), so nothing from the settings can ride up beside Done. */
+.edit-bar.two-rows::after { content: ''; order: 2; flex-basis: 100%; height: 0; }
+.edit-bar.two-rows .edit-group-settings {
+    order: 3; margin-top: 0.5rem; padding-left: 0; border-left: 0;
+}
+
+/* The pair's Photo sheet: above the bar, one row per picture -- the
+   thumbnail with its link-preview star, and its alt text. */
+.pair-photo-sheet {
+    position: absolute; left: 8px; bottom: calc(100% + 8px);
+    width: min(26rem, calc(100vw - 24px)); box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid #e3e6ea; border-radius: 12px;
+    background: #fff; box-shadow: 0 6px 20px rgba(20, 30, 50, 0.12);
+}
+.pair-photo-row { display: flex; align-items: center; gap: 0.75rem; }
+.pair-edit-thumb { position: relative; line-height: 0; flex: 0 0 auto; }
+.pair-edit-thumb img {
+    width: 88px; height: 88px; object-fit: cover; display: block; margin: 0;
+    border-radius: 6px; border: 1px solid #e9ecef; background: #f3f4f6;
+}
+.pair-photo-alt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.pair-photo-alt span { font-size: 0.85rem; color: #667; }
+.pair-photo-alt input {
+    min-height: 44px; box-sizing: border-box; padding: 0 0.6rem;
+    font: inherit; font-size: 1rem;
+    border: 1px solid #cfd4db; border-radius: 8px; background: #fff;
+}
+.pair-photo-alt input:focus { outline: none; border-color: #0066cc; }
+
+/* 🔗 is a colour emoji; greyed like 🖼 so it isn't the loudest thing in the
+   bar. Its address field pops up above the bar, like the insert menu. */
+.edit-bar .link-button { font-size: 1.1rem; filter: grayscale(1); }
+.edit-bar .link-sheet {
+    position: absolute; bottom: calc(100% + 8px); left: 8px;
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.4rem; box-sizing: border-box;
+    max-width: calc(100vw - 16px);
+    border: 1px solid #e3e6ea; border-radius: 10px;
+    background: #fff; box-shadow: 0 6px 20px rgba(20, 30, 50, 0.12);
+}
+.edit-bar .link-sheet input {
+    width: min(20rem, 55vw); min-height: 44px; box-sizing: border-box; padding: 0 0.6rem;
+    font: inherit; font-size: 1rem;
+    border: 1px solid #cfd4db; border-radius: 8px; background: #fff;
+}
+.edit-bar .link-sheet input:focus { outline: none; border-color: #0066cc; }
+.edit-bar .link-sheet button {
+    min-height: 44px; min-width: 44px; padding: 0 0.9rem;
+    border: 1px solid #cfd4db; border-radius: 8px;
+    background: #fff; color: #1a1a1a; font-size: 0.9rem; font-weight: 500; white-space: nowrap;
+}
+.edit-bar .link-sheet button:disabled { opacity: 0.4; cursor: default; }
+.edit-bar .link-sheet .link-cancel { color: #667; border-color: transparent; }

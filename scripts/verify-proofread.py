@@ -52,8 +52,12 @@ SLUG = "zz-proofread-scratch"
 POST = BLOG / f"{SLUG}.md"
 HISTORY = REPO / "editor" / ".history" / SLUG
 
-# Seven paragraphs, so two batches (5 + 2). Five planted typos across
-# paragraphs 1, 2 and 6; paragraph 4 is clean on purpose.
+# Eight paragraphs, so two batches (5 + 3). Five planted typos across
+# paragraphs 1, 2 and 6, plus one broken sentence (a multi-mark fix) in the
+# last; paragraph 4 is clean on purpose.
+SENTENCE = "I'm sharing it with to share it for people to track their cleaning too."
+FIXED_SENTENCE = "I'm sharing it so people can track their cleaning too."
+SENTENCE_IDX = 7
 PARAS = [
     "I hope you recieve this before teh weekend starts.",
     "We leave tomorow morning, early.",
@@ -62,12 +66,13 @@ PARAS = [
     "Fifth paragraph, still fine.",
     "Did you recieve the tickets for tomorow?",
     "And the seventh closes it out.",
+    SENTENCE,
 ]
 BODY = (
     "+++\ntitle = \"Proofread scratch\"\ndate = 2026-10-04\ndraft = true\n+++\n\n"
     + "\n\n".join(PARAS) + "\n"
 )
-N_SUGGESTIONS = 5
+N_SUGGESTIONS = 6
 
 FAKE_CLAUDE = r'''#!/usr/bin/env python3
 import json, os, re, sys, time
@@ -88,7 +93,12 @@ out = []
 for idx, body in re.findall(r'<block index="(\d+)">\n(.*?)\n</block>', prompt, re.S):
     for wrong, right in (("recieve", "receive"), ("teh", "the"), ("tomorow", "tomorrow")):
         if body.count(wrong) == 1:
-            out.append({"block": int(idx), "before": wrong, "after": right, "kind": "spelling"})
+            out.append({"block": int(idx), "before": wrong, "after": right,
+                        "kind": "spelling", "reason": "Typo"})
+    if "with to share it for people to track" in body:
+        out.append({"block": int(idx), "before": "with to share it for people to track",
+                    "after": "so people can track", "kind": "grammar",
+                    "reason": "Missing words"})
 print(json.dumps(out))
 '''
 
@@ -116,7 +126,7 @@ def load(cdp: CDP, base: str) -> None:
     for _ in range(80):
         time.sleep(0.25)
         try:
-            if cdp.js("!!document.querySelector('.block[data-index=\"6\"]')"):
+            if cdp.js("!!document.querySelector('.block[data-index=\"7\"]')"):
                 time.sleep(0.3)
                 return
         except RuntimeError:
@@ -148,6 +158,9 @@ def count_text(cdp) -> str:
     return text(cdp, ".review-bar .review-count")
 
 
+# Counts suggestions, not marks: one suggestion can span several marks.
+UNIQUE_SIDS = """[new Set([...document.querySelectorAll('del.pr-old[data-sid]')].map((n) => n.dataset.sid)).size,
+  new Set([...document.querySelectorAll('ins.pr-new[data-sid]')].map((n) => n.dataset.sid)).size]"""
 BAR_VISIBLE = "!document.getElementById('review-bar').hidden"
 RUN_DONE = "document.getElementById('proof-progress').hidden"
 NEXT = '.review-bar button[title="Next suggestion"]'
@@ -180,11 +193,19 @@ def run_viewport(cdp, base, w, h, results, shots):
     cdp.tap_el('.block[data-index="2"]', 0.6)
     cdp.js("(() => { const t = document.querySelector('.block.editing textarea');"
            " t.value = t.value + ' Saved first.'; t.dispatchEvent(new Event('input')); })()")
+    edit_bar_up = cdp.js("!document.getElementById('edit-bar').hidden")
     started = start_proofread(cdp)
     check("0: ✨ saves the open editor first and closes it",
           started and "Saved first." in POST.read_text()
           and not cdp.js("!!document.querySelector('.block.editing')"),
           {"started": started, "status": status(cdp)})
+    # Never both bars: the edit bar goes as the review bar comes up.
+    wait_for(cdp, BAR_VISIBLE, 5)
+    check("0: the edit bar was up, and hides when the review bar shows",
+          edit_bar_up and cdp.js("document.getElementById('edit-bar').hidden")
+          and cdp.js(BAR_VISIBLE)
+          and cdp.js("document.getElementById('edit-bar').childElementCount") == 0,
+          {"edit_bar_up": edit_bar_up})
 
     # --- 1. progress -----------------------------------------------------------
     load(cdp, base)
@@ -193,21 +214,25 @@ def run_viewport(cdp, base, w, h, results, shots):
     log = json.loads(log) if log else []
     texts = [e["text"] for e in log if e["shown"]]
     fills = [e["fill"] for e in log if e["shown"]]
-    check("1: progress shows and reaches 'Proofreading 7 of 7 paragraphs'",
-          ok and "Proofreading 7 of 7 paragraphs" in texts, texts)
+    check("1: progress shows and reaches 'Proofreading 8 of 8 paragraphs'",
+          ok and "Proofreading 8 of 8 paragraphs" in texts, texts)
     check("1: the fill grows between batches",
-          "Proofreading 5 of 7 paragraphs" in texts and fills and max(fills) == 100
+          "Proofreading 5 of 8 paragraphs" in texts and fills and max(fills) == 100
           and any(0 < f < 100 for f in fills), fills)
 
     # --- 2. marks, bar, stepping -----------------------------------------------
-    marks = cdp.js("[document.querySelectorAll('del.pr-old[data-sid]').length,"
-                   " document.querySelectorAll('ins.pr-new[data-sid]').length]")
+    marks = cdp.js(UNIQUE_SIDS)
     check("2: red/green pairs render for every suggestion",
           marks == [N_SUGGESTIONS, N_SUGGESTIONS], marks)
+    sentence_marks = cdp.js(f"[document.querySelectorAll('del[data-sid=\"{SENTENCE_IDX}-0\"]').length,"
+                            f" document.querySelectorAll('ins[data-sid=\"{SENTENCE_IDX}-0\"]').length]")
+    check("2: the sentence fix renders as several marks sharing one sid, counted once",
+          sentence_marks[0] >= 2 and sentence_marks[1] >= 2 and marks[0] == N_SUGGESTIONS,
+          sentence_marks)
     check("2: the bar says 1 of N", wait_for(cdp, BAR_VISIBLE, 2)
           and count_text(cdp) == f"1 of {N_SUGGESTIONS}", count_text(cdp))
-    change = text(cdp, ".review-bar .review-change")
-    check("2: the bar spells out the change", change == "recieve → receive", change)
+    kind = text(cdp, ".review-bar .review-kind")
+    check("2: the bar shows kind and reason", kind == "spelling · Typo", kind)
     check("2: no block controls while reviewing",
           cdp.js("document.querySelectorAll('.block-controls').length") == 0)
     # 9. touch targets
@@ -237,6 +262,9 @@ def run_viewport(cdp, base, w, h, results, shots):
     cdp.tap_el(PREV, 0.4)
     check("2: ↑ wraps from 1 to N", count_text(cdp) == f"{N_SUGGESTIONS} of {N_SUGGESTIONS}",
           count_text(cdp))
+    kind = text(cdp, ".review-bar .review-kind")
+    check("2: the sentence fix's bar reads 'grammar · Missing words'",
+          kind == "grammar · Missing words", kind)
     cdp.tap_el(NEXT, 0.6)  # back to 1
 
     # --- 3. a block tap during review -----------------------------------------
@@ -271,14 +299,14 @@ def run_viewport(cdp, base, w, h, results, shots):
     check("6: Accept all writes every remaining fix",
           "We leave tomorrow morning" in src
           and "Did you receive the tickets for tomorrow?" in src
-          and "teh weekend" in src, src[-400:])
+          and "teh weekend" in src and FIXED_SENTENCE in src, src[-400:])
     check("6: the bar hides and says so",
           cdp.js("document.getElementById('review-bar').hidden")
           and status(cdp) == "All suggestions reviewed."
           and cdp.js("document.querySelectorAll('del.pr-old, ins.pr-new').length") == 0,
           status(cdp))
     check("6: blocks are editable again",
-          cdp.js("document.querySelectorAll('.block-controls').length") == 7)
+          cdp.js("document.querySelectorAll('.block-controls').length") == len(PARAS))
 
     # --- 7. Close mid-review ---------------------------------------------------
     load(cdp, base)
@@ -387,9 +415,28 @@ def run_viewport(cdp, base, w, h, results, shots):
     time.sleep(0.5)
     check("14: cancelled Publish leaves the review up",
           cdp.js("window.__prompted === true") and cdp.js(BAR_VISIBLE) and count_text(cdp) == f"1 of {N_SUGGESTIONS}"
-          and cdp.js("document.querySelectorAll('del.pr-old').length") == N_SUGGESTIONS,
+          and cdp.js(UNIQUE_SIDS)[0] == N_SUGGESTIONS,
           count_text(cdp))
     cdp.tap_el(".review-bar .review-close", 0.4)
+
+    # --- 15. the sentence fix: Reject leaves nothing, Accept writes it ------
+    for verb in ("reject", "accept"):
+        load(cdp, base)
+        start_proofread(cdp)
+        wait_for(cdp, BAR_VISIBLE, 5)
+        cdp.tap_el(PREV, 0.4)  # wraps to the sentence fix
+        sent_sid = f"{SENTENCE_IDX}-0"
+        cdp.tap_el(f".review-bar .review-{verb}", 1.2)
+        src = POST.read_text()
+        left = cdp.js(f"document.querySelectorAll('[data-sid=\"{sent_sid}\"]').length")
+        if verb == "reject":
+            check("15: Reject on the sentence fix leaves no marks and the source alone",
+                  left == 0 and src == BODY and cdp.js("document.querySelectorAll('ins.pr-new').length") == N_SUGGESTIONS - 1
+                  and SENTENCE in src, {"left": left})
+        else:
+            check("15: Accept writes the repaired sentence",
+                  left == 0 and FIXED_SENTENCE in src and SENTENCE not in src, {"left": left})
+        cdp.tap_el(".review-bar .review-close", 0.4)
 
     # --- 13. Delete draft mid-run leaves the review --------------------------
     load(cdp, base)

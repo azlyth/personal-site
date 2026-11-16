@@ -94,5 +94,5 @@ def claude_bin() -> str:
 
 
 def proofread_model() -> str:
-    """Optional --model for the proofreader; empty means the CLI default."""
-    return os.environ.get("EDITOR_PROOFREAD_MODEL", "").strip()
+    """--model for the proofreader; sonnet unless EDITOR_PROOFREAD_MODEL says otherwise."""
+    return os.environ.get("EDITOR_PROOFREAD_MODEL", "").strip() or "sonnet"

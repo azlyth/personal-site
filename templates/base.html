@@ -319,6 +319,28 @@
             max-width: 100%;
         }
 
+        /* No picture or clip is ever taller than the window, so a reader sees
+           all of it on one screen with a little room around it. Tall phone
+           screenshots and clips broke this on phones, where a stacked pair
+           gives its picture the whole column width (a 9:20 clip at 380px is
+           ~845px tall). A replaced element with auto width and height keeps
+           its aspect ratio under max-height, so a capped picture narrows
+           instead of stretching or cropping -- which is why a lone item drops
+           its flex sizing below. svh, with a vh fallback, so a phone's
+           collapsing URL bar can't push it over. */
+        .container img,
+        .container video {
+            max-height: calc(100vh - 4rem);
+            max-height: calc(100svh - 4rem);
+        }
+
+        .img-row img:only-child,
+        .video-row video:only-child {
+            flex: 0 1 auto;
+            width: auto;
+            min-width: 0;
+        }
+
         /* Same three presets as .video-row below, and the same reason a
            single photo still gets wrapped in a sized row: without a wrapper
            there's nowhere to put the size class. Unlike .video-row, the
@@ -511,6 +533,14 @@
         /* A heading inside a pair must not clear: it is IN the section, and
            clearing would drop it below any float above. */
         .pair-text :is(h1, h2, h3, h4) { clear: none; }
+
+        /* A centred block (the editor's Left | Center toggle): a wrapper around
+           the block's own markdown, blank lines inside it so the markdown still
+           parses -- the pair's mechanism. Left writes no wrapper. A list keeps
+           its bullets beside its words rather than out at the column's edge.
+           Mirrored in editor/web/editor.css; a test checks both. */
+        .align-center { text-align: center; }
+        .align-center :is(ul, ol) { list-style-position: inside; padding-left: 0; }
 
         /* Plain breathing room between sections, added deliberately from the
            editor. Named `post-spacer` rather than `spacer` because

@@ -62,3 +62,7 @@ node_modules
 
 # Zola build output from `zola check` -- 25MB of HTML and multi-MB PNGs.
 .build-test/
+
+# Editor draft Preview build output (see editor/preview.py)
+/editor/.preview
+/.build-preview-legacy-config.toml

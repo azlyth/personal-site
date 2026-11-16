@@ -5,14 +5,11 @@
 // currently sees the block list) of the block picked up by the Move
 // control. While set, renderBlocks() renders the post exactly as normal and
 // overlays the drop zones on top -- see renderMoveOverlay().
-// `wrapOpen` holds the indices whose layout controls are showing. They're
-// hidden by default: a picture usually just sits there, and an always-on
-// strip under every one of them is noise in a post you're reading back.
 // `pendingInsert` is null, or `{index, source, label}` for a block whose
 // insert is waiting on an above-or-below answer.
 const state = {
   slug: null, hash: null, url: null, blocks: [], moveIndex: null,
-  wrapOpen: new Set(), pendingInsert: null, canUndo: false,
+  pendingInsert: null, canUndo: false,
   // Whether the Links panel (the post's primary URL and its redirects) is
   // open. Survives re-renders so adding a link doesn't snap it shut.
   linksOpen: false,
@@ -37,6 +34,7 @@ const els = {
   status: document.getElementById('status'),
   undo: document.getElementById('undo'),
   discard: document.getElementById('discard'),
+  preview: document.getElementById('preview'),
   publish: document.getElementById('publish'),
   signOut: document.getElementById('sign-out'),
   proofread: document.getElementById('proofread'),
@@ -239,8 +237,7 @@ function renderMeta(meta) {
 
   // Where the post lives. Tapping it opens the Links panel underneath:
   // the primary URL plus any others that redirect to it. Behind a toggle
-  // for the same reason as the ◨ layout controls -- most posts have one
-  // link and nothing to do about it.
+  // because most posts have one link and nothing to do about it.
   const aliases = meta.aliases || [];
   const linksBtn = document.createElement('button');
   linksBtn.type = 'button';
@@ -612,10 +609,50 @@ function refreshPreviewPicks() {
   document.querySelectorAll('.preview-pick').forEach(paintPreviewPick);
 }
 
+// Every save re-renders the whole list, and a freshly created <video> is the
+// browser's default 300x150 until its metadata loads again (a 9:20 clip is
+// ~530px tall). With three clips in a post the page lost ~1070px for a frame:
+// near the bottom the scroll position clamped up, mid-page everything below
+// the clips jumped up and back. So the shape of every picture and clip is
+// remembered by URL and stamped on the rebuilt element as `aspect-ratio`,
+// which holds its height while it reloads. Images get the same treatment for
+// an uncached reload.
+const mediaShapes = new Map();
+
+function mediaKey(el) {
+  if (el.tagName === 'VIDEO') {
+    const source = el.querySelector('source');
+    return (source && source.src) || el.currentSrc || el.src || '';
+  }
+  return el.currentSrc || el.src || '';
+}
+
+function learnMediaShape(el) {
+  const w = el.tagName === 'VIDEO' ? el.videoWidth : el.naturalWidth;
+  const h = el.tagName === 'VIDEO' ? el.videoHeight : el.naturalHeight;
+  const key = mediaKey(el);
+  if (key && w && h) mediaShapes.set(key, `${w} / ${h}`);
+}
+
+function holdMediaShapes(root) {
+  root.querySelectorAll('img, video').forEach((el) => {
+    const known = mediaShapes.get(mediaKey(el));
+    if (known) el.style.aspectRatio = known;
+    learnMediaShape(el);
+    el.addEventListener(el.tagName === 'VIDEO' ? 'loadedmetadata' : 'load',
+      () => learnMediaShape(el), { once: true });
+  });
+}
+
 function renderBlocks() {
   // An open text editor survives a rebuild (a menu opening or cancelling,
   // its own save landing) -- see captureOpenText().
   const resume = captureOpenText();
+  // Learn the shapes of what's on screen before it's thrown away.
+  els.blocks.querySelectorAll('img, video').forEach(learnMediaShape);
+  // The bar holds the old block's controls, which are about to be thrown
+  // away; an editor put back below refills it.
+  clearEditBar();
   // The overlay's observer points at nodes that are about to be thrown away.
   stopWatchingLayout();
   els.blocks.innerHTML = '';
@@ -675,6 +712,7 @@ function renderBlocks() {
       // server's marked-up copy; its source is untouched until Accept.
       const marked = state.review && state.review.blocks.get(block.index);
       content.innerHTML = marked ? marked.review_html : block.html;
+      holdMediaShapes(content);
     }
     el.appendChild(content);
 
@@ -712,6 +750,10 @@ function renderBlocks() {
       // editing is always safe, so that's the fallback.
       if (block.kind === 'pair' && block.text !== undefined) {
         startEditingPair(el, content, block);
+      } else if (block.kind === 'spacer') {
+        // Its one setting -- which screens the gap shows on -- is a toggle
+        // in the edit bar; there is no source worth typing.
+        startEditingSpacer(el, content, block);
       } else if (block.images) {
         startEditingImages(el, content, block);
       } else if (block.videos) {
@@ -732,16 +774,6 @@ function renderBlocks() {
       el.appendChild(insertChoice(block));
     }
 
-    // The wrap picker lives inside the block, so a floated row carries it
-    // along; it's behind the ◨ toggle rather than always on, since a strip
-    // under every picture is noise when reading a post back.
-    if (state.wrapOpen.has(block.index) && !reviewing()) {
-      if (isMediaRow(block)) el.appendChild(wrapControl(block));
-      else if (block.kind === 'pair' && block.text !== undefined) {
-        el.appendChild(unpairControl(block));
-      } else if (block.kind === 'spacer') el.appendChild(spacerControl(block));
-    }
-
     els.blocks.appendChild(el);
 
     if (canMergeWithNext(block.index) && !reviewing()) {
@@ -750,6 +782,7 @@ function renderBlocks() {
   });
 
   if (resume) restoreOpenText(resume);
+  if (!openEditor) hideEditBar();
   // Off while a review is up (one at a time) or with nothing to read.
   els.proofread.disabled = reviewing() || Boolean(state.placing)
     || !state.blocks.some((b) => PROSE_KINDS.has(b.kind));
@@ -765,86 +798,104 @@ function renderBlocks() {
 // full-width row can't float, because a row capped at 100% leaves the text no
 // column to flow into (editor/videos.py refuses the combination outright). So
 // picking a side narrows a full-width row to medium, and picking Full drops
-// the side. Both row editors show this pair, and the constraint has to live in
-// one place or the two will drift apart.
+// the side. Both row editors and the pair editor show these, and the
+// constraint has to live in one place or they will drift apart.
 //
-// Returns the element plus live getters -- the callers read `.size`/`.side`
-// when Done (or Split) fires, not when this is built.
+// Two compact toggles for the edit bar. Returns the element plus live
+// getters -- the callers read `.size`/`.side` when Done (or Split) fires,
+// not when this is built. `options.onChange` hears every change (the pair
+// editor re-applies its classes live).
 function framingControls(initialSize, initialSide, options = {}) {
   let size = initialSize;
   let side = initialSide || 'none';
   // A pair is a picture BESIDE something, so it has no unfloated state and
   // no full width -- taking either away is what Unpair is for.
+  const isPair = Boolean(options.sides);
   const sideChoices = options.sides || ['none', 'left', 'right'];
-  const sizeChoices = options.sides ? ['small', 'medium'] : ['small', 'medium', 'full'];
+  const sizeChoices = isPair ? ['small', 'medium'] : ['small', 'medium', 'full'];
+  const changed = () => { if (options.onChange) options.onChange(size, side); };
 
-  const wrap = document.createElement('div');
-  wrap.className = 'framing-controls';
-
-  function buttonRow(className, options, isActive, onPick) {
-    const row = document.createElement('div');
-    row.className = className;
-    options.forEach(([value, label]) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = label;
-      btn.dataset.value = value;
-      if (isActive(value)) btn.classList.add('active');
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onPick(value);
-        repaint();
-      });
-      row.appendChild(btn);
-    });
-    return row;
-  }
-
-  const sizes = buttonRow(
-    'size-buttons',
-    [['small', 'Small'], ['medium', 'Medium'], ['full', 'Full']]
+  const sizes = segmented(
+    [['small', 'S', 'Small'], ['medium', 'M', 'Medium'], ['full', 'Full', 'Full width']]
       .filter(([v]) => sizeChoices.includes(v)),
-    (v) => v === size,
+    size,
     (v) => {
       size = v;
       // Nothing can float at full width -- see above.
-      if (size === 'full') side = 'none';
+      if (size === 'full' && side !== 'none') {
+        side = 'none';
+        sides.set(side);
+      }
+      changed();
     },
   );
-
-  const sideLabel = document.createElement('span');
-  sideLabel.className = 'framing-label';
-  sideLabel.textContent = 'Beside text';
-
-  const sides = buttonRow(
-    'side-buttons',
-    [['none', 'No'], ['left', '◧ Left'], ['right', 'Right ◨']]
+  const beside = isPair ? '' : ', text beside it';
+  const sides = segmented(
+    [['none', sideIcon('none'), 'On its own line'],
+     ['left', sideIcon('left'), `Picture on the left${beside}`],
+     ['right', sideIcon('right'), `Picture on the right${beside}`]]
       .filter(([v]) => sideChoices.includes(v)),
-    (v) => v === side,
+    side,
     (v) => {
       side = v;
       // Floating implies picking a width, and medium is the one that still
       // leaves a readable measure beside it -- same rule the server applies
       // in the one-tap "put beside this text" action.
-      if (side !== 'none' && size === 'full') size = 'medium';
+      if (side !== 'none' && size === 'full') {
+        size = 'medium';
+        sizes.set(size);
+      }
+      changed();
     },
   );
 
-  function repaint() {
-    sizes.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('active', b.dataset.value === size);
-    });
-    sides.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('active', b.dataset.value === side);
-    });
-  }
-
-  wrap.append(sizes, sideLabel, sides);
+  const wrap = document.createElement('div');
+  wrap.className = 'framing';
+  wrap.append(sizes.el, sides.el);
   return {
     el: wrap,
     get size() { return size; },
     get side() { return side; },
   };
+}
+
+// Small line drawings for the toggles: a picture (the solid block) and lines
+// of text, in currentColor so the active segment inverts with it.
+function svgIcon(shapes) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 20 20');
+  svg.setAttribute('aria-hidden', 'true');
+  shapes.forEach(([x, y, w, h, outline]) => {
+    const r = document.createElementNS(ns, 'rect');
+    r.setAttribute('x', x); r.setAttribute('y', y);
+    r.setAttribute('width', w); r.setAttribute('height', h);
+    r.setAttribute('rx', outline ? 2 : 0.8);
+    if (outline) {
+      r.setAttribute('fill', 'none');
+      r.setAttribute('stroke', 'currentColor');
+      r.setAttribute('stroke-width', '1.3');
+      r.setAttribute('opacity', '0.45');
+    } else {
+      r.setAttribute('fill', 'currentColor');
+    }
+    svg.appendChild(r);
+  });
+  return svg;
+}
+
+function sideIcon(side) {
+  const lines = (x, w) => [[x, 5, w, 1.6], [x, 9, w, 1.6], [x, 13, w * 0.7, 1.6]];
+  if (side === 'left') return svgIcon([[2, 4, 8, 11], ...lines(12, 6)]);
+  if (side === 'right') return svgIcon([[10, 4, 8, 11], ...lines(2, 6)]);
+  return svgIcon([[3, 2, 14, 9], [3, 13, 14, 1.6], [3, 16.5, 10, 1.6]]);
+}
+
+// How the prose sits against the picture: two lines of text inside the
+// picture's height (the outline), placed as each choice places them.
+function justifyIcon(justify) {
+  const at = { top: [4, 7.5], center: [8, 11.5], spread: [4, 14.5], evenly: [6.5, 12] }[justify];
+  return svgIcon([[3, 2, 14, 16, true], [6, at[0], 8, 1.6], [6, at[1], 8, 1.6]]);
 }
 
 // A block's "family" for merge purposes -- `images`/`videos` are only
@@ -907,128 +958,6 @@ function isMediaRow(block) {
   return block.kind !== 'pair' && mergeFamily(block) !== null;
 }
 
-// How the text flows around a media row. Just a side -- page widths are
-// fluid, so how much text ends up beside a row isn't knowable when the post
-// is written; the text simply wraps and returns to full width once it's past
-// the picture. (This replaced a mode that had you select a fixed set of
-// blocks to sit alongside, which couldn't survive a change of screen width.)
-//
-// It lives inside the row's own block, so when that block floats the picker
-// floats with it and lands under the picture automatically.
-function wrapControl(block) {
-  const side = block.side || 'none';
-  const wrap = document.createElement('div');
-  wrap.className = 'wrap-control';
-  // It sits inside the block, whose own click opens the row editor.
-  wrap.addEventListener('click', (e) => e.stopPropagation());
-
-  const label = document.createElement('span');
-  label.textContent = 'Text wraps:';
-  wrap.appendChild(label);
-
-  [['none', 'No'], ['left', '◧ Left'], ['right', 'Right ◨']].forEach(([value, text]) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = text;
-    btn.dataset.value = value;
-    if (value === side) btn.classList.add('active');
-    btn.title = value === 'none'
-      ? 'Full width, on its own line'
-      : `Sit on the ${value} with the text running past it`;
-    btn.addEventListener('mousedown', (e) => e.preventDefault());
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (value === side) return;
-      if (!(await flushPendingEdit())) return;
-      setRowSide(block, value);
-    });
-    wrap.appendChild(btn);
-  });
-
-  // Only a floated row can become a paired section -- a pair is a picture
-  // BESIDE something, and on an unfloated row the section boundary would
-  // mean nothing. Offered here because this is where the author is already
-  // deciding how the picture relates to the words.
-  if (side !== 'none') {
-    const pair = document.createElement('button');
-    pair.type = 'button';
-    pair.className = 'pair-button';
-    pair.textContent = '⧉ Centre';
-    pair.title = 'Pair the picture with the section beside it, vertically centred';
-    pair.addEventListener('mousedown', (e) => e.preventDefault());
-    pair.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (!(await flushPendingEdit())) return;
-      pairBlock(block.index);
-    });
-    wrap.appendChild(pair);
-  }
-
-  return wrap;
-}
-
-// Under a paired section: take it back apart into a floated row and loose
-// blocks. The picture keeps its side and a stop marker goes back in, so the
-// section's boundary survives the round trip.
-function unpairControl(block) {
-  const wrap = document.createElement('div');
-  wrap.className = 'wrap-control';
-  wrap.addEventListener('click', (e) => e.stopPropagation());
-
-  const label = document.createElement('span');
-  label.textContent = 'Paired section:';
-  wrap.appendChild(label);
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.textContent = '⤢ Unpair';
-  btn.title = 'Split back into a picture and separate text blocks';
-  btn.addEventListener('mousedown', (e) => e.preventDefault());
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if (!(await flushPendingEdit())) return;
-    unpairBlock(block.index);
-  });
-  wrap.appendChild(btn);
-  return wrap;
-}
-
-// Under a spacer: where the gap applies. A phone renders the post as one
-// narrow column, so a deliberate section break can read as a scroll of blank
-// screen there while being exactly right on a wide screen -- this is how you
-// say "only where there's room". Nothing needs a route of its own: the two
-// shapes differ by a class, so the toggle is an ordinary block edit.
-function spacerControl(block) {
-  const wrap = document.createElement('div');
-  wrap.className = 'wrap-control';
-  // It sits inside the block, whose own click opens the raw source editor.
-  wrap.addEventListener('click', (e) => e.stopPropagation());
-
-  const label = document.createElement('span');
-  label.textContent = 'Space shows:';
-  wrap.appendChild(label);
-
-  [[false, 'Everywhere', SPACER_SOURCE, 'A gap on every screen'],
-   [true, 'Desktop only', DESKTOP_SPACER_SOURCE, 'A gap on wide screens, nothing on a phone'],
-  ].forEach(([value, text, source, title]) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = text;
-    btn.title = title;
-    if (value === Boolean(block.desktop_only)) btn.classList.add('active');
-    btn.addEventListener('mousedown', (e) => e.preventDefault());
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (value === Boolean(block.desktop_only)) return;
-      if (!(await flushPendingEdit())) return;
-      saveBlock(block.index, source);
-    });
-    wrap.appendChild(btn);
-  });
-
-  return wrap;
-}
-
 async function pairBlock(index) {
   await postBlockAction(index, 'pair', 'pairing…');
 }
@@ -1053,17 +982,6 @@ async function postBlockAction(index, action, status) {
     return;
   }
   await applyWrite(res);
-}
-
-// Nothing here needs a route of its own: a side is an ordinary property of
-// the row, so this is the same save the row editor performs. A full-width
-// row can't float (the text would have no column left, and the server
-// refuses the combination), so choosing a side narrows it to medium -- the
-// same rule framingControls() applies.
-function setRowSide(block, side) {
-  const size = side !== 'none' && block.size === 'full' ? 'medium' : block.size;
-  if (block.images) saveBlockImages(block.index, block.images, size, side);
-  else if (block.videos) saveBlockVideos(block.index, block.videos, size, side);
 }
 
 async function mergeBlock(index) {
@@ -1156,6 +1074,9 @@ function wrapIsActiveAt(index) {
 function blockControls(block) {
   const bar = document.createElement('div');
   bar.className = 'block-controls';
+  // Which block these belong to, wherever they are: an open block's controls
+  // live in the edit bar, not in the block.
+  bar.dataset.index = block.index;
 
   // preventDefault() on mousedown keeps the open textarea focused (and the
   // tablet's keyboard up) through a tap on a control. It began as the fix
@@ -1171,6 +1092,7 @@ function blockControls(block) {
   const add = document.createElement('button');
   add.textContent = '+';
   add.title = 'Insert a paragraph';
+  add.dataset.insert = 'a paragraph';
   add.addEventListener('click', async (e) => {
     e.stopPropagation();
     const at = await flushThenFind(block.index, block.source);
@@ -1188,7 +1110,7 @@ function blockControls(block) {
     // Deleting another one saves the open one, then finds this block again
     // -- that save can split, merge or remove the open block, shifting
     // every index after it.
-    if (openEditor && openEditor.el.contains(del)) {
+    if (openEditor && (openEditor.el.contains(del) || openEditor.controls === bar)) {
       const count = state.blocks.length;
       if (!(await closeEditor())) return;
       // Its own save may have split, merged or removed it: then "this
@@ -1216,30 +1138,10 @@ function blockControls(block) {
     pickImages(at);
   });
 
-  // Shows/hides this block's layout controls. Only on the things that HAVE
-  // any: a picture, a clip, a paired section, or a spacer.
-  let layout = null;
-  const isPair = block.kind === 'pair' && block.text !== undefined;
-  if (isMediaRow(block) || isPair || block.kind === 'spacer') {
-    layout = document.createElement('button');
-    layout.textContent = '◨';
-    // A spacer has no text to wrap -- its one choice is which screens the
-    // gap applies to -- so the button says what it opens.
-    layout.title = block.kind === 'spacer' ? 'Where this space applies' : 'Text wrapping';
-    if (state.wrapOpen.has(block.index)) layout.classList.add('active');
-    layout.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const at = await flushThenFind(block.index, block.source);
-      if (at < 0) return;
-      if (state.wrapOpen.has(at)) state.wrapOpen.delete(at);
-      else state.wrapOpen.add(at);
-      renderBlocks();
-    });
-  }
-
   const spacer = document.createElement('button');
   spacer.textContent = '␣';
   spacer.title = 'Insert a spacer — blank space between sections';
+  spacer.dataset.insert = 'a spacer';
   spacer.addEventListener('click', async (e) => {
     e.stopPropagation();
     const at = await flushThenFind(block.index, block.source);
@@ -1254,6 +1156,7 @@ function blockControls(block) {
     stop = document.createElement('button');
     stop.textContent = '⊟';
     stop.title = 'Stop the text wrapping here — start a new full-width section';
+    stop.dataset.insert = 'the stop';
     stop.addEventListener('click', async (e) => {
       e.stopPropagation();
       const at = await flushThenFind(block.index, block.source);
@@ -1272,7 +1175,16 @@ function blockControls(block) {
     enterMoveMode(at);
   });
 
-  bar.append(...[add, photo, spacer, layout, stop, move, del].filter(Boolean));
+  const buttons = [add, photo, spacer, stop, move, del].filter(Boolean);
+  // Icon-only buttons: the title is also their accessible name.
+  buttons.forEach((b) => {
+    b.type = 'button';
+    b.setAttribute('aria-label', b.title);
+  });
+  // Names for the glyphs, so the edit bar can even out their optical sizes.
+  [[add, 'add'], [photo, 'photo'], [spacer, 'spacer'], [stop, 'stop'], [move, 'move'], [del, 'delete']]
+    .forEach(([b, name]) => { if (b) b.dataset.icon = name; });
+  bar.append(...buttons);
   return bar;
 }
 
@@ -1283,6 +1195,7 @@ function blockControls(block) {
 // in the block list as the client currently sees it" convention
 // move_block() uses server-side, so no translation happens on the way in.
 function enterMoveMode(index) {
+  hideEditBar();
   state.moveIndex = index;
   renderBlocks();
 }
@@ -1681,6 +1594,41 @@ els.undo.addEventListener('click', undoEdit);
 els.discard.addEventListener('mousedown', (e) => e.preventDefault());
 els.discard.addEventListener('click', discardEdits);
 
+// Preview: the tab must open synchronously inside the tap or the browser
+// blocks it as a popup, so it opens on a placeholder before the build starts
+// and is pointed at the result (or the error) afterwards.
+els.preview.addEventListener('mousedown', (e) => e.preventDefault());
+els.preview.addEventListener('click', async () => {
+  if (!state.slug) return;
+  const tab = window.open('', '_blank');
+  const show = (text) => {
+    if (!tab || tab.closed) return;
+    tab.document.body.style.cssText = 'font:16px/1.5 system-ui;padding:2rem;white-space:pre-wrap';
+    tab.document.body.textContent = text;
+  };
+  show('Building preview…');
+  if (!(await flushPendingEdit())) { if (tab) tab.close(); return; }
+  els.preview.disabled = true;
+  setStatus('building preview…');
+  try {
+    const res = await fetch(`/api/posts/${encodeURIComponent(state.slug)}/preview`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data.detail || `HTTP ${res.status}`;
+      show(msg);
+      setStatus(`preview failed — ${msg.slice(0, 120)}`);
+    } else {
+      if (tab && !tab.closed) tab.location.href = data.url;
+      setStatus('preview ready');
+    }
+  } catch (err) {
+    show(`Preview failed — network error: ${err.message}`);
+    setStatus(`preview failed — network error: ${err.message}`);
+  } finally {
+    els.preview.disabled = false;
+  }
+});
+
 els.publish.addEventListener('click', async () => {
   if (!(await flushPendingEdit())) return;
   const message = prompt('Commit message:', `Update ${state.slug}`);
@@ -1721,10 +1669,6 @@ els.publish.addEventListener('click', async () => {
 // `expect` is set by whoever is about to change the block list, naming the
 // index the open text block will have afterwards (see restoreOpenText).
 let openEditor = null;
-
-// Room the side rail needs: its 72px column (editor.css) plus the 8px gap
-// to the block.
-const RAIL_ROOM = 80;
 
 function isTextEditable(block) {
   return block && !block.images && !block.videos
@@ -1777,6 +1721,7 @@ function rememberDraft(ed, text, original) {
     if (ed.dirty()) {
       localStorage.setItem(ed.draftKey, JSON.stringify({
         kind: ed.kind, index: ed.index, original, text, at: Date.now(),
+        align: ed.getAlign ? ed.getAlign() : null,
       }));
     } else {
       localStorage.removeItem(ed.draftKey);
@@ -1848,6 +1793,7 @@ function offerDrafts() {
         if (draft.kind === 'pair') startEditingPair(el, content, block, draft.text);
         else startEditing(el, content, block, {
           value: draft.text, start: draft.text.length, end: draft.text.length, focused: true,
+          align: draft.align || null,
         });
         // The editor now owns it under the same key; this only drops a key
         // left over from a different index.
@@ -1887,13 +1833,43 @@ function findDraftBlock(draft) {
 // saved draft: it carries the in-progress text, caret and focus.
 function startEditing(el, content, block, resume = null) {
   if (el.classList.contains('editing')) return;
+  // A centred block is edited as its inner markdown; the wrapper is put
+  // back on save (alignedSource). Alignment is a setting in the bar, saved
+  // with the text on Done like the other bars' settings.
+  const text0 = editText(block);
+  const alignable = TEXT_KINDS.has(block.kind) && block.align !== undefined;
+  let align = alignable ? ((resume && resume.align) || block.align) : null;
+  // Measured before the rendered text goes: the field takes its place at the
+  // same outer margins and, until fit() runs, the same height -- so opening
+  // moves neither this block's top nor anything below it. A paragraph's
+  // source is its rendered text, set in the same face, size, line height and
+  // width, so it wraps on the same lines (see editor.css). A centred block's
+  // wrapper has no margins of its own (its text's collapse through it), so
+  // measure the text inside.
+  const unwrap = (n) => (n && n.classList.contains('align-center') ? n : null);
+  const first = unwrap(content.firstElementChild)
+    ? content.firstElementChild.firstElementChild : content.firstElementChild;
+  const last = unwrap(content.lastElementChild)
+    ? content.lastElementChild.lastElementChild : content.lastElementChild;
+  const marginTop = first ? getComputedStyle(first).marginTop : '0px';
+  const marginBottom = last ? getComputedStyle(last).marginBottom : '0px';
+  const renderedHeight = content.getBoundingClientRect().height;
   el.classList.add('editing', 'text-editing');
   content.innerHTML = '';
 
   const textarea = document.createElement('textarea');
   textarea.className = 'block-source';
-  textarea.value = resume ? resume.value : block.source;
-  textarea.rows = 2;
+  // A heading is edited at its own level's size, in Sentient; markup that
+  // isn't prose (raw HTML, code) keeps monospace.
+  const level = block.kind === 'heading' && /^(#{1,6})\s/.exec(text0);
+  if (level) textarea.classList.add(`heading-${Math.min(level[1].length, 4)}`);
+  else if (!TEXT_KINDS.has(block.kind)) textarea.classList.add('raw-source');
+  textarea.classList.toggle('align-center', align === 'center');
+  textarea.value = resume ? resume.value : text0;
+  textarea.rows = 1;
+  textarea.style.marginTop = marginTop;
+  textarea.style.marginBottom = marginBottom;
+  textarea.style.height = `${renderedHeight}px`;
   content.appendChild(textarea);
 
   const ed = {
@@ -1905,9 +1881,14 @@ function startEditing(el, content, block, resume = null) {
     savingSource: resume ? resume.savingSource || null : null,
     // parse_blocks stores each block rstripped, so "Hello " saved comes
     // back as "Hello": compare without trailing whitespace on both sides.
-    dirty: () => textarea.value.trimEnd() !== block.source.trimEnd(),
+    dirty: () => textarea.value.trimEnd() !== text0.trimEnd()
+      || (alignable && align !== block.align),
+    getAlign: () => align,
     save: (options) => {
-      const source = textarea.value;
+      // What is PUT is the whole block -- the wrapper too, for a centred
+      // one -- so everything that checks a save against the block's source
+      // (re-attach, drafts, flushThenFind) compares like with like.
+      const source = alignable ? alignedSource(textarea.value, align) : textarea.value;
       ed.savingSource = source;
       // The PUT targets this index, so that is where the block is after
       // it -- if it is still there (see restoreOpenText).
@@ -1916,45 +1897,29 @@ function startEditing(el, content, block, resume = null) {
   };
   openEditor = ed;
 
-  // The block's controls, a Done button and any menu those controls open
-  // move into one rail: a column beside the block when the window has room
-  // for one, a row under the field (sticky to the bottom of the window)
-  // when it doesn't. Either way nothing sits on top of the text.
-  const rail = document.createElement('div');
-  rail.className = 'edit-rail';
-  const inner = document.createElement('div');
-  inner.className = 'edit-rail-inner';
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'edit-done';
-  done.textContent = 'Done';
-  done.title = 'Save and stop editing';
-  done.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeEditor();
+  // The block's controls (moved, not rebuilt) and Done go to the edit bar
+  // at the bottom of the window, and the insert menu pops up from it.
+  // Nothing is added to the block, so nothing around it moves, and nothing
+  // sits on top of the text. Text has Done only: there is no Cancel, the
+  // way there never was (typing is saved, Undo walks it back).
+  ed.controls = el.querySelector(':scope > .block-controls');
+  const alignToggle = alignable ? segmented(
+    [['left', alignIcon('left'), 'Align left'], ['center', alignIcon('center'), 'Align center']],
+    align,
+    (v) => {
+      align = v;
+      textarea.classList.toggle('align-center', align === 'center');
+      rememberDraft(ed, textarea.value, block.source);
+    },
+  ) : null;
+  // Links are for prose; raw markup and code are typed as they are.
+  const link = TEXT_KINDS.has(block.kind) ? linkButton(() => textarea) : null;
+  showEditBar({
+    left: [ed.controls],
+    settings: [[alignToggle && alignToggle.el, link]],
+    onDone: () => closeEditor(),
+    popover: el.querySelector(':scope > .insert-choice'),
   });
-  inner.appendChild(done);
-  const bar = el.querySelector(':scope > .block-controls');
-  if (bar) inner.appendChild(bar);
-  const menu = el.querySelector(':scope > .insert-choice');
-  if (menu) inner.appendChild(menu);
-  rail.appendChild(inner);
-  el.appendChild(rail);
-
-  // Beside the block only when the window has the room AND the block spans
-  // the whole column: a block narrowed by a floated picture would put the
-  // rail on top of the picture.
-  const placeRail = () => {
-    const r = el.getBoundingClientRect();
-    const column = els.blocks.getBoundingClientRect();
-    const full = r.right >= column.right;
-    const room = document.documentElement.clientWidth - r.right;
-    const side = full && room >= RAIL_ROOM;
-    el.classList.toggle('rail-side', side);
-    // Stick below the toolbar, whose height depends on its own contents.
-    const toolbar = document.querySelector('.bar');
-    inner.style.top = side ? `${(toolbar ? toolbar.offsetHeight : 0) + 8}px` : '';
-  };
 
   // Sized to its content, not to its count of source lines. A paragraph is
   // usually ONE source line that wraps to a dozen on screen, so `rows` from
@@ -1966,39 +1931,251 @@ function startEditing(el, content, block, resume = null) {
   // rewraps the text. The `auto` step briefly shrinks the page, which near
   // the end of a long post clamps the scroll position -- so put it back.
   const fit = () => {
-    if (!textarea.isConnected) {
-      window.removeEventListener('resize', fit);
-      return;
-    }
-    placeRail();
     const y = window.scrollY;
     textarea.style.height = 'auto';
     textarea.style.height = `${textarea.scrollHeight}px`;
     if (window.scrollY !== y) window.scrollTo(window.scrollX, y);
+  };
+  // A rotation reflows everything above the block too; hold the block's top
+  // where it was on screen. Width changes only: a height change is the
+  // keyboard, and there the browser's own scroll to the caret must win.
+  let lastTop = el.getBoundingClientRect().top;
+  let lastWidth = window.innerWidth;
+  const onScroll = () => {
+    if (!textarea.isConnected) {
+      window.removeEventListener('scroll', onScroll);
+      return;
+    }
+    lastTop = el.getBoundingClientRect().top;
+  };
+  const onResize = () => {
+    if (!textarea.isConnected) {
+      window.removeEventListener('resize', onResize);
+      return;
+    }
+    fit();
+    if (window.innerWidth !== lastWidth) {
+      lastWidth = window.innerWidth;
+      const drift = el.getBoundingClientRect().top - lastTop;
+      if (Math.abs(drift) > 0.5) window.scrollBy(0, drift);
+    }
+    lastTop = el.getBoundingClientRect().top;
   };
   fit();
   textarea.addEventListener('input', () => {
     fit();
     rememberDraft(ed, textarea.value, block.source);
   });
-  window.addEventListener('resize', fit);
+  window.addEventListener('resize', onResize);
+  window.addEventListener('scroll', onScroll, { passive: true });
   rememberDraft(ed, textarea.value, block.source);
 
+  // Never scrolls on its own: the block opens where it is. The one exception
+  // is a field whose first lines would sit under the bar.
   if (!resume || resume.focused) {
-    textarea.focus({ preventScroll: Boolean(resume) });
+    textarea.focus({ preventScroll: true });
     if (resume) textarea.setSelectionRange(resume.start, resume.end);
   }
+  if (!resume) keepClearOfBar(textarea);
 
-  // A tap on the open block that misses the field -- its padding, the rail
-  // around the buttons -- keeps the focus, and so the keyboard, where it
-  // is. Same mousedown-preventDefault trick the control bar uses (which
-  // handles its own, so it's left alone).
+  // A tap on the open block that misses the field -- its padding -- keeps
+  // the focus, and so the keyboard, where it is. Same
+  // mousedown-preventDefault trick the control buttons use.
   el.addEventListener('mousedown', (e) => {
     if (!el.classList.contains('editing') || !textarea.isConnected) return;
     if (e.target === textarea || e.target.closest('.block-controls')) return;
     e.preventDefault();
     textarea.focus({ preventScroll: true });
   });
+}
+
+// Prose kinds edit in the blog's text face; anything else in a text field
+// is markup (or code) and keeps monospace.
+const TEXT_KINDS = new Set(['paragraph', 'heading', 'list', 'blockquote']);
+
+// --- alignment -------------------------------------------------------------
+// A centred block is its markdown inside a wrapper, blank lines around it so
+// the markdown still parses (the pair's mechanism). Must be the opener
+// blocks.py's ALIGN_CENTER_OPEN groups on; a test reads it from this file.
+const ALIGN_CENTER_OPEN = '<div class="align-center">';
+
+// A text block's source for `text` at `align` -- the same normalisation as
+// blocks.aligned_source, so what the server parses back is byte-for-byte
+// what was sent (re-attach after a save compares the two). Left writes no
+// wrapper; a centred block saved empty is "" and removed like any other.
+function alignedSource(text, align) {
+  if (align !== 'center') return text;
+  const inner = text.replace(/^(?:[ \t]*\n)+/, '').trimEnd();
+  if (!inner) return '';
+  return `${ALIGN_CENTER_OPEN}\n\n${inner}\n\n</div>`;
+}
+
+// What a text field shows for a block: a centred block's inner markdown,
+// anything else its source.
+function editText(block) {
+  return block.align === 'center' && typeof block.text === 'string' ? block.text : block.source;
+}
+
+function alignIcon(align) {
+  const rows = [[4, 14], [8, 10], [12, 14], [16, 8]];
+  return svgIcon(rows.map(([y, w]) => [align === 'center' ? (20 - w) / 2 : 3, y - 0.8, w, 1.6]));
+}
+
+// --- links -----------------------------------------------------------------
+// 🔗 in an open text field's bar. A selected URL becomes [url](url) in one
+// tap; other selected words ask for the address; no selection inserts
+// [link text](url) with "link text" selected to type over. Every change goes
+// in as typing would (input event: dirty, draft, saved on Done).
+const URL_TEXT_RE = /^(?:https?:\/\/|www\.)\S+$/i;
+
+function linkHref(raw) {
+  const url = raw.trim();
+  if (!url) return '';
+  const full = /^[a-z][a-z0-9+.-]*:/i.test(url) || /^[/#]/.test(url) ? url : `https://${url}`;
+  // Spaces and parentheses would end the markdown link early.
+  return full.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29');
+}
+
+function linkLabel(text) {
+  return text.replace(/([[\]])/g, '\\$1');
+}
+
+// Replace start..end with `text` as an edit the browser knows about (its own
+// undo has it, and it fires `input`), then put the selection where asked.
+function writeIntoField(field, start, end, text, selStart, selEnd) {
+  field.focus({ preventScroll: true });
+  field.setSelectionRange(start, end);
+  let done = false;
+  try { done = document.execCommand('insertText', false, text); } catch { done = false; }
+  if (!done) {
+    field.setRangeText(text, start, end, 'end');
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  field.setSelectionRange(selStart, selEnd);
+}
+
+function linkButton(getField) {
+  const btn = barButton('🔗', 'Link', () => {
+    const field = getField();
+    if (!field || !field.isConnected) return;
+    if (closeLinkSheet()) {
+      field.focus({ preventScroll: true });
+      return;
+    }
+    let start = field.selectionStart;
+    let end = field.selectionEnd;
+    // A double-tap selection can carry the space after the word.
+    const picked = field.value.slice(start, end);
+    start += picked.length - picked.trimStart().length;
+    end -= picked.length - picked.trimEnd().length;
+    if (end < start) end = start;
+    const words = field.value.slice(start, end);
+    if (words && URL_TEXT_RE.test(words)) {
+      const md = `[${linkLabel(words)}](${linkHref(words)})`;
+      writeIntoField(field, start, end, md, start + md.length, start + md.length);
+      return;
+    }
+    openLinkSheet(field, start, end, btn);
+  }, 'link-button');
+  return btn;
+}
+
+function closeLinkSheet() {
+  const sheet = editBar.querySelector('.link-sheet');
+  if (!sheet) return false;
+  sheet.remove();
+  const btn = editBar.querySelector('.link-button');
+  if (btn) {
+    btn.classList.remove('is-open');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+  return true;
+}
+
+function openLinkSheet(field, start, end, btn) {
+  // One popover at a time: the pair's Photo sheet closes through its button.
+  const photo = editBar.querySelector('.pair-photo-sheet');
+  if (photo) {
+    const opener = editBar.querySelector('button[aria-expanded="true"]');
+    if (opener && opener !== btn) opener.click();
+  }
+  const sheet = document.createElement('div');
+  sheet.className = 'link-sheet';
+  const input = document.createElement('input');
+  input.type = 'url';
+  input.inputMode = 'url';
+  input.placeholder = 'https://';
+  input.autocapitalize = 'off';
+  input.spellcheck = false;
+  input.setAttribute('autocorrect', 'off');
+  input.setAttribute('aria-label', 'Link address');
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'link-add';
+  add.textContent = 'Add link';
+  add.setAttribute('aria-label', 'Add link');
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'link-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.setAttribute('aria-label', 'Cancel link');
+  const sync = () => { add.disabled = !input.value.trim(); };
+  const back = () => {
+    closeLinkSheet();
+    field.focus({ preventScroll: true });
+    field.setSelectionRange(start, end);
+  };
+  const commit = () => {
+    const href = linkHref(input.value);
+    if (!href || !field.isConnected) return;
+    closeLinkSheet();
+    if (start === end) {
+      const md = `[link text](${href})`;
+      writeIntoField(field, start, end, md, start + 1, start + 1 + 'link text'.length);
+    } else {
+      const md = `[${linkLabel(field.value.slice(start, end))}](${href})`;
+      writeIntoField(field, start, end, md, start + md.length, start + md.length);
+    }
+  };
+  input.addEventListener('input', sync);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); back(); }
+  });
+  add.addEventListener('click', (e) => { e.stopPropagation(); commit(); });
+  cancel.addEventListener('click', (e) => { e.stopPropagation(); back(); });
+  sheet.append(input, add, cancel);
+  sync();
+  editBar.appendChild(sheet);
+  btn.classList.add('is-open');
+  btn.setAttribute('aria-expanded', 'true');
+  anchorPopovers();
+  input.focus({ preventScroll: true });
+  // A URL already on the clipboard is the likely target. Only where the
+  // browser lets the page read it; a refusal just leaves the field empty.
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then((t) => {
+        const url = (t || '').trim();
+        if (sheet.isConnected && !input.value && URL_TEXT_RE.test(url)) {
+          input.value = url;
+          input.select();
+          sync();
+        }
+      }).catch(() => {});
+    }
+  } catch { /* no clipboard access */ }
+}
+
+// Scroll just enough that a newly opened field's first lines clear the edit
+// bar -- and not at all when they already do.
+function keepClearOfBar(field) {
+  if (editBar.hidden) return;
+  const barTop = editBar.getBoundingClientRect().top;
+  const r = field.getBoundingClientRect();
+  const line = parseFloat(getComputedStyle(field).lineHeight) || 24;
+  const want = Math.min(r.bottom, r.top + line * 2) + 8;
+  if (want > barTop) window.scrollBy(0, want - barTop);
 }
 
 // Save the open editor if it changed, then close it. Resolves false,
@@ -2019,6 +2196,220 @@ async function closeEditor() {
   return true;
 }
 
+// --- the edit bar ---------------------------------------------------------
+// One slim bar fixed to the bottom of the window holds the OPEN block's
+// controls: its own control buttons (moved out of the block, not rebuilt, so
+// their handlers keep working), its settings as compact toggles, and Cancel /
+// Done at the right. Nothing is inserted into the page, so opening a block
+// reflows nothing -- the block stays where it was. Same pattern as the
+// Proofread review bar, and never shown at the same time as it: review,
+// move mode and placing all close the editor first, and showEditBar refuses
+// while any of them is up.
+//
+// The bar is filled by whichever editor opens and emptied by renderBlocks()
+// (every close path re-renders), so it can never hold one block's controls
+// while another block is open: a text editor put back by restoreOpenText
+// refills it from the fresh block.
+const editBar = document.getElementById('edit-bar');
+// While the bar shows, #blocks gets enough bottom padding that the last
+// block can scroll clear of it. Only what the page's own bottom padding
+// doesn't already provide, so on a tablet it is usually nothing -- and
+// closing the editor then can't shrink the page and jump the scroll.
+let editBarSizer = null;
+
+function editBarBlocked() {
+  return reviewing() || state.moveIndex !== null || Boolean(state.placing);
+}
+
+// Groups are arrays of nodes; each becomes one `.edit-group` so related
+// toggles read as one control. `left` is the block's own controls,
+// `settings` its toggles; Cancel (only when the editor has one) and Done sit
+// at the right end. Done is the only filled button in the bar.
+function showEditBar({
+  left = [], settings = [], onDone, onCancel = null, popover = null, doneTitle = 'Save and stop editing',
+}) {
+  if (editBarBlocked()) return;
+  clearEditBar();
+  const group = (nodes, cls) => {
+    const g = document.createElement('div');
+    g.className = `edit-group ${cls}`;
+    g.append(...nodes.filter(Boolean));
+    return g;
+  };
+  // An array in `settings` is several nodes sharing one group.
+  const nodes = (n) => (Array.isArray(n) ? n.filter(Boolean) : [n]);
+  left.filter(Boolean).forEach((n) => editBar.appendChild(group(nodes(n), 'edit-group-block')));
+  settings.filter((n) => n && nodes(n).length)
+    .forEach((n) => editBar.appendChild(group(nodes(n), 'edit-group-settings')));
+
+  const end = [];
+  if (onCancel) {
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'edit-cancel';
+    cancel.textContent = 'Cancel';
+    cancel.title = 'Close without saving';
+    cancel.setAttribute('aria-label', 'Cancel');
+    cancel.addEventListener('click', (e) => { e.stopPropagation(); onCancel(); });
+    end.push(cancel);
+  }
+  const done = document.createElement('button');
+  done.type = 'button';
+  done.className = 'edit-done';
+  done.textContent = 'Done';
+  done.title = doneTitle;
+  done.setAttribute('aria-label', 'Done');
+  done.addEventListener('click', (e) => { e.stopPropagation(); onDone(); });
+  end.push(done);
+  editBar.appendChild(group(end, 'edit-group-end'));
+  if (popover) editBar.appendChild(popover);
+
+  editBar.hidden = false;
+  placeEditBar();
+  layoutEditBar();
+  if (!editBarSizer) {
+    editBarSizer = new ResizeObserver(() => { layoutEditBar(); });
+    editBarSizer.observe(editBar);
+  }
+}
+
+// One row when everything fits; otherwise the settings drop to a second
+// row of their own, so Done never leaves the screen. Measured, because what
+// fits depends on the block (a pair has three toggle groups, text none) and
+// on the window.
+function layoutEditBar() {
+  if (editBar.hidden) return;
+  const two = editBar.classList.contains('two-rows');
+  editBar.classList.remove('two-rows');
+  const overflows = editBar.scrollWidth > editBar.clientWidth + 1;
+  editBar.classList.toggle('two-rows', overflows);
+  // Only re-reserve when the height can have changed.
+  if (overflows !== two || !els.blocks.style.paddingBottom) reserveEditBar();
+  anchorPopovers();
+}
+
+// Empties the bar but leaves it (and its padding) up: renderBlocks() calls
+// this before rebuilding, and an editor put back by that rebuild refills it
+// in the same task, so the page never shrinks in between.
+function clearEditBar() {
+  editBar.replaceChildren();
+}
+
+function hideEditBar() {
+  clearEditBar();
+  editBar.hidden = true;
+  if (editBarSizer) editBarSizer.disconnect();
+  editBarSizer = null;
+  els.blocks.style.paddingBottom = '';
+}
+
+function reserveEditBar() {
+  if (editBar.hidden) return;
+  // Room already below #blocks: the container's and the body's own bottom
+  // padding (6rem + 1rem), which is space the page has with or without the bar.
+  const pad = (node) => parseFloat(getComputedStyle(node).paddingBottom) || 0;
+  const room = pad(document.body) + pad(els.blocks.parentElement);
+  const need = editBar.offsetHeight + 16 - room;
+  els.blocks.style.paddingBottom = need > 0 ? `${Math.ceil(need)}px` : '';
+}
+
+// Above an on-screen keyboard. `interactive-widget=resizes-content` (the
+// viewport meta) makes the layout viewport shrink with the keyboard where
+// the browser supports it, which keeps a `bottom: 0` bar on top of it; where
+// it doesn't, the visual viewport still knows, so lift the bar by the part
+// of the layout viewport the keyboard covers. Headless can't prove this one;
+// it needs a check on the tablet.
+function placeEditBar() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const covered = window.innerHeight - (vv.height + vv.offsetTop);
+  editBar.style.bottom = covered > 0 ? `${Math.round(covered)}px` : '';
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', placeEditBar);
+  window.visualViewport.addEventListener('scroll', placeEditBar);
+}
+
+// The "insert above or below?" menu and the pair's Photo sheet pop up from
+// the bar, over the button that opened them, rather than taking a row.
+function anchorPopovers() {
+  const label = state.pendingInsert && state.pendingInsert.label;
+  anchorPopover(editBar.querySelector('.insert-choice'),
+    [...editBar.querySelectorAll('.block-controls button')].find((b) => b.dataset.insert === label));
+  anchorPopover(editBar.querySelector('.pair-photo-sheet'),
+    editBar.querySelector('.bar-button:not(.link-button)[aria-expanded="true"]'));
+  anchorPopover(editBar.querySelector('.link-sheet'), editBar.querySelector('.link-button'));
+}
+
+function anchorPopover(pop, opener) {
+  if (!pop) return;
+  const bar = editBar.getBoundingClientRect();
+  const width = pop.offsetWidth;
+  let left = opener ? opener.getBoundingClientRect().left - bar.left - 8 : 8;
+  left = Math.max(8, Math.min(left, bar.width - width - 8));
+  pop.style.left = `${left}px`;
+}
+
+// A compact toggle group: one short label or icon per choice, the active
+// one filled. `choices` are [value, label, ariaLabel] (label may be a node).
+// Returns the element plus set(v), for a caller that changes the value
+// from elsewhere (size and side constrain each other).
+function segmented(choices, current, onPick) {
+  const el = document.createElement('div');
+  el.className = 'segmented';
+  el.setAttribute('role', 'group');
+  let value = current;
+  const buttons = choices.map(([v, label, aria]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.value = v;
+    if (typeof label === 'string') b.textContent = label;
+    else b.appendChild(label);
+    b.setAttribute('aria-label', aria);
+    b.title = aria;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (v === value) return;
+      set(v);
+      onPick(v);
+    });
+    el.appendChild(b);
+    return b;
+  });
+  function set(v) {
+    value = v;
+    buttons.forEach((b) => {
+      const on = b.dataset.value === String(v);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+  set(current);
+  return { el, set, get value() { return value; } };
+}
+
+// A plain bar button: a word or an icon, never filled (Done is the one).
+function barButton(label, title, onClick, cls = '') {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `bar-button ${cls}`.trim();
+  b.textContent = label;
+  b.title = title;
+  b.setAttribute('aria-label', title);
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
+  return b;
+}
+
+// A tap anywhere on the bar that isn't a field keeps the focus (and the
+// tablet's keyboard) in the open block's text: same mousedown trick the
+// block controls use.
+editBar.addEventListener('mousedown', (e) => {
+  if (e.target.closest('input, textarea')) return;
+  e.preventDefault();
+});
+// Taps inside the bar are not taps on the page under it.
+editBar.addEventListener('click', (e) => e.stopPropagation());
+
 // What renderBlocks() needs to put the open text editor back after it
 // rebuilds the list, or null. Any other kind of editor is simply closed by
 // the rebuild -- every path that rebuilds with one open flushed it first.
@@ -2033,6 +2424,7 @@ function captureOpenText() {
     index: ed.index, original: ed.original, blocks: ed.blocks,
     expect: ed.expect, savingSource: ed.savingSource,
     draftKey: ed.draftKey,
+    align: ed.getAlign ? ed.getAlign() : null,
     value: ta.value,
     start: ta.selectionStart,
     end: ta.selectionEnd,
@@ -2283,56 +2675,73 @@ function startEditingImages(el, content, block) {
     input.click();
   }
 
-  // Same Small/Medium/Full + Beside-text control as the video row editor --
+  // Same size and side toggles as the video row editor, in the edit bar --
   // server-side, choosing a non-default size (or a side) on a lone photo is
   // what promotes it from plain markdown to a wrapped, sized `.img-row` (see
-  // images.py's markdown_for); the button UI itself doesn't need to know that.
-  const framing = framingControls(block.size, block.side);
-  content.appendChild(framing.el);
-
-  const actions = document.createElement('div');
-  actions.className = 'image-editor-actions';
-
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'image-done';
-  done.textContent = 'Done';
-  done.addEventListener('click', (e) => {
-    e.stopPropagation();
+  // images.py's markdown_for); the toggles don't need to know that.
+  const ed = {
+    kind: 'images', el, index: block.index, save: null,
+    controls: el.querySelector(':scope > .block-controls'),
+  };
+  const framing = showRowBar(el, block, ed, {
+    working: () => images,
+    save: () => saveBlockImages(block.index, images, framing.size, framing.side),
     // Removing the last thumbnail and hitting Done deletes the whole block
     // (PUT .../images with an empty list -- see the server route). That's
     // a legitimate action, but unlike deleting a paragraph it's easy to
     // reach by just clearing thumbnails one at a time without meaning to
     // lose the block's placement and alt text (the photo itself is still
     // in S3, but nothing here points at it anymore). Confirm first.
-    if (images.length === 0 && !confirm('Remove this photo block?')) return;
-    saveBlockImages(block.index, images, framing.size, framing.side);
+    emptyConfirm: 'Remove this photo block?',
   });
-
-  const cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'image-cancel';
-  cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', (e) => {
-    e.stopPropagation();
-    // Re-render from current state instead of hand-patching `content` --
-    // nothing was saved, so state.blocks is exactly what it was before
-    // editing started, and a full renderBlocks() restores this block
-    // (controls included) by construction rather than by trying to
-    // remember everything renderBlocks() itself sets up.
-    renderBlocks();
-  });
-
-  actions.append(done, cancel);
-  content.appendChild(actions);
-
-  const before = JSON.stringify([images, framing.size, framing.side]);
-  openEditor = {
-    kind: 'images', el, index: block.index, save: null,
-    dirty: () => JSON.stringify([images, framing.size, framing.side]) !== before,
-  };
+  openEditor = ed;
 
   renderThumbs();
+}
+
+// The edit bar for an open photo or clip row: its block controls, its size
+// and side, Pair, then Cancel and Done. The strip in the block is all that
+// changes on the page. Returns the framing toggles (read on Done and Split).
+// `working()` is the row's local list, `save()` writes it with the framing.
+function showRowBar(el, block, ed, { working, save, emptyConfirm }) {
+  let pair = null;
+  const framing = framingControls(block.size, block.side, {
+    onChange: () => { if (pair) pair.disabled = framing.side === 'none'; },
+  });
+  const before = JSON.stringify([working(), framing.size, framing.side]);
+  ed.dirty = () => JSON.stringify([working(), framing.size, framing.side]) !== before;
+  // Only a floated row can become a paired section -- a pair is a picture
+  // BESIDE something, and on an unfloated row the section boundary would
+  // mean nothing. Pairing changes the block's structure, so it acts at
+  // once rather than on Done; the row's working copy (the side just
+  // picked, a reorder, alt text) is written first, since the server pairs
+  // the row as it is on disk.
+  pair = barButton('Pair', 'Pair with the text beside it', async () => {
+    if (framing.side === 'none' || !working().length) return;
+    if (ed.dirty() && !(await save())) return;
+    await pairBlock(block.index);
+  });
+  pair.disabled = framing.side === 'none';
+  showEditBar({
+    left: [ed.controls],
+    settings: [framing.el, pair],
+    onDone: () => {
+      if (!ed.dirty()) {
+        closeEditor();
+        return;
+      }
+      if (!working().length && !confirm(emptyConfirm)) return;
+      save();
+    },
+    // Nothing was saved, so state.blocks is exactly what it was before
+    // editing started, and a full renderBlocks() restores this block
+    // (controls included) by construction rather than by hand-patching.
+    onCancel: () => {
+      openEditor = null;
+      renderBlocks();
+    },
+  });
+  return framing;
 }
 
 async function saveBlockImages(index, images, size, side) {
@@ -2346,136 +2755,92 @@ async function saveBlockImages(index, images, size, side) {
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);
-    return;
+    return false;
   }
   // applyWrite re-renders every block from the fresh server response on
   // success, and on failure leaves the DOM untouched -- exactly right here
   // too: a failed save keeps the thumbnail editor open with the user's
   // reorder/remove/alt-text edits intact, not silently discarded.
-  await applyWrite(res);
+  return await applyWrite(res);
 }
 
-// Editor for a paired section. Its picture is an ordinary row stored inside
-// the pair, so the existing thumbnail strip drives it unchanged; what's new
-// is the prose, which is edited as markdown in one textarea rather than as
-// separate blocks. That's the trade the pair makes: a section becomes one
-// thing, so it is edited as one thing.
+// Editor for a paired section. It opens AS a pair: the published layout
+// (`.pair.pair-<side>.size-<size>.justify-<j>`), the real picture in its
+// media column, and the prose as markdown in one field in the text column --
+// so the section doesn't change shape under you. Size, side and prose
+// position are toggles in the edit bar and re-apply their classes live;
+// they're a working copy, saved on Done through the pair route like the
+// prose. That's the trade the pair makes: a section becomes one thing, so it
+// is edited as one thing.
+//
+// The picture's own tools (alt text and the link-preview star) are behind a
+// `Photo` button, in a sheet above the bar. Reordering, removing, adding and
+// Split out are not: Unpair the section first, and the row editor has them.
 function startEditingPair(el, content, block, draftText = null) {
   if (el.classList.contains('editing')) return;
+  const pair = content.querySelector('.pair');
+  const textCol = pair && pair.querySelector(':scope > .pair-text');
+  if (!pair || !textCol) return; // not the markup the parser vouched for
+  const renderedHeight = textCol.getBoundingClientRect().height;
   el.classList.add('editing');
-  content.innerHTML = '';
 
+  // A working copy. Alt text is the only part of it the sheet can change.
   const media = block.images
     ? { images: block.images.map((i) => ({ ...i })) }
     : { videos: block.videos.map((v) => ({ ...v })) };
-
-  const preview = document.createElement('div');
-  preview.className = 'pair-edit-media';
-  // Built as nodes rather than one innerHTML string so a photo can carry the
-  // preview star. A pair's picture needs it as much as a row's does -- the
-  // photos in guerilla-gardening are mostly inside pairs -- and a <video>
-  // deliberately doesn't get one: og:image has to be a picture a crawler can
-  // fetch, not a frame nobody has rendered.
-  (block.images || block.videos || []).forEach((item) => {
-    const cell = document.createElement('div');
-    cell.className = 'pair-edit-thumb';
-    if (block.images) {
-      const img = document.createElement('img');
-      img.src = item.url;
-      img.alt = '';
-      cell.append(img, previewPickButton(item.url));
-    } else {
-      const clip = document.createElement('video');
-      clip.src = item.url;
-      clip.muted = true;
-      clip.playsInline = true;
-      cell.appendChild(clip);
-    }
-    preview.appendChild(cell);
-  });
-  content.appendChild(preview);
+  const mediaBefore = JSON.stringify(media);
+  let size = block.size;
+  let side = block.side;
+  let justify = block.justify || 'center';
 
   const area = document.createElement('textarea');
   area.className = 'pair-text-input';
   area.value = draftText === null ? block.text : draftText;
-  area.rows = Math.max(6, area.value.split('\n').length + 1);
-  content.appendChild(area);
+  area.rows = 1;
+  area.style.height = `${renderedHeight}px`;
+  textCol.replaceChildren(area);
 
-  const framing = framingControls(block.size, block.side, { sides: ['left', 'right'] });
-  content.appendChild(framing.el);
-
-  // How the prose sits against the picture. Its own row rather than a fourth
-  // state on the side buttons: side and justify are independent, and a
-  // spread section is still a left- or right-hand one.
-  const justifyLabel = document.createElement('span');
-  justifyLabel.className = 'framing-label';
-  justifyLabel.textContent = 'Prose sits';
-  const justify = document.createElement('div');
-  justify.className = 'side-buttons';
-  let chosen = block.justify || 'center';
-  [['center', 'Centred'], ['top', 'Top'], ['spread', 'Spread'], ['evenly', 'Evenly']]
-    .forEach(([value, text]) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = text;
-    btn.dataset.value = value;
-    if (value === chosen) btn.classList.add('active');
-    btn.title = {
-      center: 'Centred against the picture',
-      top: 'Aligned with the top of the picture',
-      spread: 'Flush top and bottom, all the slack between the blocks',
-      evenly: 'Equal gaps everywhere, including above and below',
-    }[value];
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      chosen = value;
-      justify.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-    justify.appendChild(btn);
-  });
-  content.append(justifyLabel, justify);
-
-  const actions = document.createElement('div');
-  actions.className = 'image-editor-actions';
-
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'image-done';
-  done.textContent = 'Done';
-  done.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!area.value.trim()) {
-      alert('A paired section needs some text. Unpair it if you want just the picture.');
+  // The classes the published markup carries (pairs.py writes them in this
+  // order; `center` writes no class).
+  const paint = () => {
+    pair.className = ['pair', `pair-${side}`, `size-${size}`,
+      justify !== 'center' ? `justify-${justify}` : ''].filter(Boolean).join(' ');
+  };
+  const fit = () => {
+    if (!area.isConnected) {
+      window.removeEventListener('resize', fit);
       return;
     }
-    closeEditor();
+    const y = window.scrollY;
+    area.style.height = 'auto';
+    area.style.height = `${area.scrollHeight}px`;
+    if (window.scrollY !== y) window.scrollTo(window.scrollX, y);
+  };
+
+  const framing = framingControls(size, side, {
+    sides: ['left', 'right'],
+    onChange: (sz, sd) => { size = sz; side = sd; paint(); fit(); },
   });
+  const prose = segmented(
+    [['center', justifyIcon('center'), 'Prose centred on the picture'],
+     ['top', justifyIcon('top'), 'Prose at the top'],
+     ['spread', justifyIcon('spread'), 'Prose spread, flush top and bottom'],
+     ['evenly', justifyIcon('evenly'), 'Prose spaced evenly']],
+    justify,
+    (v) => { justify = v; paint(); },
+  );
 
-  const cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'image-cancel';
-  cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', (e) => {
-    e.stopPropagation();
-    // Cancel is the one way to throw the prose away on purpose.
-    forgetDraft(ed.draftKey);
-    openEditor = null;
-    renderBlocks();
-  });
-
-  actions.append(done, cancel);
-  content.appendChild(actions);
-
-  // Registered like the text editor, so every flush path saves the prose
-  // through the PAIR route -- never the plain block PUT, which would write
-  // the prose over the whole pair and drop its picture.
   const ed = {
     kind: 'pair', el, index: block.index,
+    controls: el.querySelector(':scope > .block-controls'),
     draftKey: draftKey(state.slug, block.index, block.source),
+    // Registered like the text editor, so every flush path saves the prose
+    // through the PAIR route -- never the plain block PUT, which would write
+    // the prose over the whole pair and drop its picture.
     dirty: () => area.value.trimEnd() !== block.text.trimEnd()
-      || framing.size !== block.size || framing.side !== block.side
-      || chosen !== (block.justify || 'center'),
+      || size !== block.size || side !== block.side
+      || justify !== (block.justify || 'center')
+      || JSON.stringify(media) !== mediaBefore,
     save: async (options) => {
       // An empty section is refused by the server; keep the editor open
       // rather than let an action go on without the save.
@@ -2486,7 +2851,7 @@ function startEditingPair(el, content, block, draftText = null) {
         return false;
       }
       const text = area.value;
-      const ok = await saveBlockPair(block.index, text, framing.size, framing.side, chosen, media, options);
+      const ok = await saveBlockPair(block.index, text, size, side, justify, media, options);
       // Saved, so the editor closed with the re-render; clear the draft
       // unless typing carried on while the save was in flight.
       if (ok && area.value === text) forgetDraft(ed.draftKey);
@@ -2494,9 +2859,137 @@ function startEditingPair(el, content, block, draftText = null) {
     },
   };
   openEditor = ed;
-  area.addEventListener('input', () => rememberDraft(ed, area.value, block.source));
+
+  let sheet = null;
+  const photo = block.images
+    ? barButton('Photo', 'Photo: alt text and link preview', () => {
+      if (sheet) {
+        sheet.remove();
+        sheet = null;
+        photo.classList.remove('is-open');
+        photo.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      sheet = pairPhotoSheet(media.images);
+      editBar.appendChild(sheet);
+      photo.classList.add('is-open');
+      photo.setAttribute('aria-expanded', 'true');
+      anchorPopovers();
+    })
+    : null; // a clip has no alt text, and og:image can't be a video frame
+  if (photo) photo.setAttribute('aria-expanded', 'false');
+
+  // Unpair changes the block's structure, so it acts at once -- after the
+  // prose and settings are saved, like every other control.
+  const unpair = barButton('Unpair', 'Unpair', async () => {
+    if (!(await flushPendingEdit())) return;
+    unpairBlock(block.index);
+  });
+  unpair.title = 'Split back into a picture and separate text blocks';
+
+  showEditBar({
+    left: [ed.controls],
+    settings: [framing.el, prose.el, [linkButton(() => area), photo, unpair]],
+    onDone: () => {
+      if (!area.value.trim()) {
+        alert('A paired section needs some text. Unpair it if you want just the picture.');
+        return;
+      }
+      closeEditor();
+    },
+    // Cancel is the one way to throw the prose away on purpose.
+    onCancel: () => {
+      forgetDraft(ed.draftKey);
+      openEditor = null;
+      renderBlocks();
+    },
+  });
+
+  fit();
+  area.addEventListener('input', () => {
+    fit();
+    rememberDraft(ed, area.value, block.source);
+  });
+  window.addEventListener('resize', fit);
   if (draftText !== null) rememberDraft(ed, area.value, block.source);
-  area.focus();
+  area.focus({ preventScroll: true });
+  keepClearOfBar(area);
+  // A tap on the pair that misses the field keeps the focus (and the
+  // keyboard) in it.
+  el.addEventListener('mousedown', (e) => {
+    if (!el.classList.contains('editing') || !area.isConnected) return;
+    if (e.target === area) return;
+    e.preventDefault();
+    area.focus({ preventScroll: true });
+  });
+}
+
+// The pair's Photo sheet: one row per picture, its thumbnail with the
+// preview star on it, and its alt text. Edits go into the pair editor's
+// working copy (`images`), so they're saved on Done and dropped on Cancel.
+function pairPhotoSheet(images) {
+  const sheet = document.createElement('div');
+  sheet.className = 'pair-photo-sheet';
+  images.forEach((img) => {
+    const row = document.createElement('div');
+    row.className = 'pair-photo-row';
+    const thumb = document.createElement('div');
+    thumb.className = 'pair-edit-thumb';
+    const pic = document.createElement('img');
+    pic.src = img.url;
+    pic.alt = '';
+    thumb.append(pic, previewPickButton(img.url));
+    const label = document.createElement('label');
+    label.className = 'pair-photo-alt';
+    const caption = document.createElement('span');
+    caption.textContent = 'Alt text';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = img.alt;
+    input.placeholder = 'What the photo shows';
+    input.addEventListener('input', () => { img.alt = input.value; });
+    label.append(caption, input);
+    row.append(thumb, label);
+    sheet.appendChild(row);
+  });
+  return sheet;
+}
+
+// A spacer's one setting: which screens the gap shows on. A phone renders
+// the post as one narrow column, so a deliberate section break can read as
+// a scroll of blank screen there while being exactly right on a wide screen
+// -- Desktop only is how you say "only where there's room". The two shapes
+// differ by a class, so Done is an ordinary block edit with the same
+// SPACER_SOURCE strings the old toggle wrote. Shown live on the block.
+function startEditingSpacer(el, content, block) {
+  if (el.classList.contains('editing')) return;
+  el.classList.add('editing');
+  let desktop = Boolean(block.desktop_only);
+  const label = () => {
+    el.classList.toggle('desktop-only', desktop);
+    content.textContent = desktop ? 'space · desktop only' : 'space';
+  };
+  const toggle = segmented(
+    [['all', 'Everywhere', 'Everywhere'], ['desktop', 'Desktop only', 'Desktop only']],
+    desktop ? 'desktop' : 'all',
+    (v) => { desktop = v === 'desktop'; label(); },
+  );
+  const ed = {
+    kind: 'spacer', el, index: block.index,
+    controls: el.querySelector(':scope > .block-controls'),
+    dirty: () => desktop !== Boolean(block.desktop_only),
+    save: (options) => saveBlock(block.index, desktop ? DESKTOP_SPACER_SOURCE : SPACER_SOURCE, options),
+  };
+  openEditor = ed;
+  showEditBar({
+    left: [ed.controls],
+    settings: [toggle.el],
+    onDone: () => closeEditor(),
+    onCancel: () => {
+      openEditor = null;
+      renderBlocks();
+    },
+  });
 }
 
 async function saveBlockPair(index, text, size, side, justify, media, { keepalive = false } = {}) {
@@ -2657,46 +3150,18 @@ function startEditingVideos(el, content, block) {
     input.click();
   }
 
-  const framing = framingControls(block.size, block.side);
-  content.appendChild(framing.el);
-
-  const actions = document.createElement('div');
-  actions.className = 'image-editor-actions';
-
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'image-done';
-  done.textContent = 'Done';
-  done.addEventListener('click', (e) => {
-    e.stopPropagation();
+  const ed = {
+    kind: 'videos', el, index: block.index, save: null,
+    controls: el.querySelector(':scope > .block-controls'),
+  };
+  const framing = showRowBar(el, block, ed, {
+    working: () => clips,
+    save: () => saveBlockVideos(block.index, clips, framing.size, framing.side),
     // Same confirm-before-delete rule as the photo strip: clearing every
     // clip and hitting Done deletes the whole block.
-    if (clips.length === 0 && !confirm('Remove this video row?')) return;
-    saveBlockVideos(block.index, clips, framing.size, framing.side);
+    emptyConfirm: 'Remove this video row?',
   });
-
-  const cancel = document.createElement('button');
-  cancel.type = 'button';
-  cancel.className = 'image-cancel';
-  cancel.textContent = 'Cancel';
-  cancel.addEventListener('click', (e) => {
-    e.stopPropagation();
-    // Same reasoning as the photo strip's Cancel: re-render from current
-    // state (nothing was saved) instead of hand-patching `content`, so
-    // this block -- controls included -- comes back exactly as
-    // renderBlocks() would build it fresh, not as a manual reconstruction
-    // that can drift from that.
-    renderBlocks();
-  });
-
-  actions.append(done, cancel);
-  content.appendChild(actions);
-
-  const before = JSON.stringify([clips, framing.size, framing.side]);
-  openEditor = {
-    kind: 'videos', el, index: block.index, save: null,
-    dirty: () => JSON.stringify([clips, framing.size, framing.side]) !== before,
-  };
+  openEditor = ed;
 
   renderThumbs();
 }
@@ -2733,9 +3198,9 @@ async function saveBlockVideos(index, clips, size, side) {
     });
   } catch (err) {
     setStatus(`save failed — network error: ${err.message}`);
-    return;
+    return false;
   }
-  await applyWrite(res);
+  return await applyWrite(res);
 }
 
 // Unlike the strip's other controls, splitting commits immediately instead of
@@ -2822,6 +3287,7 @@ async function addPhotoPicked() {
 
 function beginPlacing(files) {
   if (state.moveIndex !== null) cancelMove();
+  hideEditBar();
   const placing = {
     slug: state.slug, files, thumbs: files.map((f) => URL.createObjectURL(f)),
     images: null, gap: null, busy: false,
@@ -3086,6 +3552,8 @@ async function startProofread() {
   if (state.moveIndex !== null) cancelMove();
   state.pendingInsert = null;
   if (!(await closeEditor())) return;
+  // Never both bars: the review bar takes the bottom of the screen.
+  hideEditBar();
   const targets = state.blocks.filter((b) => PROSE_KINDS.has(b.kind)).map((b) => b.index);
   if (!targets.length) {
     setStatus('Nothing to proofread.');
@@ -3188,27 +3656,18 @@ function renderReviewBar(scroll = false) {
   count.textContent = `${current + 1} of ${items.length}`;
   const kind = document.createElement('span');
   kind.className = 'review-kind';
-  kind.textContent = item.kind;
-  // The change itself, as text, so a mark that's hard to spot (a comma, a
-  // space) is still readable before Accept.
-  const change = document.createElement('span');
-  change.className = 'review-change';
-  change.textContent = `${clip(item.before)} → ${clip(item.after)}`;
-  change.title = `${item.before} → ${item.after}`;
+  kind.textContent = item.reason ? `${item.kind} · ${item.reason}` : item.kind;
+  kind.title = `${item.before} → ${item.after}`;
   bar.append(
     mk('↑', 'review-nav', () => step(-1), 'Previous suggestion'),
     mk('↓', 'review-nav', () => step(1), 'Next suggestion'),
-    count, kind, change,
+    count, kind,
     mk('Accept', 'review-accept', () => accept(item)),
     mk('Reject', 'review-reject', () => reject(item)),
     mk('Accept all', 'review-all', acceptAll),
     mk('Close', 'review-close', () => { closeReview(); setStatus(''); }),
   );
   focusCurrent(scroll);
-}
-
-function clip(text, max = 32) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function focusCurrent(scroll) {
@@ -3230,11 +3689,10 @@ function step(delta) {
 function resolveMark(htmlText, sid, keepNew) {
   const t = document.createElement('template');
   t.innerHTML = htmlText;
-  const sel = (tag) => t.content.querySelector(`${tag}[data-sid="${CSS.escape(sid)}"]`);
-  const drop = sel(keepNew ? 'del' : 'ins');
-  const keep = sel(keepNew ? 'ins' : 'del');
-  if (drop) drop.remove();
-  if (keep) keep.replaceWith(document.createTextNode(keep.textContent));
+  // A suggestion may carry several marks (one per changed run).
+  const sel = (tag) => t.content.querySelectorAll(`${tag}[data-sid="${CSS.escape(sid)}"]`);
+  sel(keepNew ? 'del' : 'ins').forEach((n) => n.remove());
+  sel(keepNew ? 'ins' : 'del').forEach((n) => n.replaceWith(document.createTextNode(n.textContent)));
   return t.innerHTML;
 }
 

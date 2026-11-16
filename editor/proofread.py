@@ -21,8 +21,11 @@ from editor.blocks import _md, parse_blocks
 
 PROSE_KINDS = frozenset({"paragraph", "heading", "list", "blockquote", "pair"})
 KINDS = frozenset({"spelling", "grammar", "punctuation"})
-MAX_BEFORE = 80
-MAX_WORD_EDITS = 2
+MAX_BEFORE = 80            # spelling
+MAX_BEFORE_SENTENCE = 300  # grammar / punctuation
+MAX_WORD_EDITS = 2         # spelling
+MAX_REASON = 40
+_SENTENCE_END = re.compile(r"[.!?][\"')\]]?\s+\S")
 # A spelling fix must still look like the word it fixes ("teh"->"the" is
 # 0.67); a swap to a different word ("good"->"great") is a rewording.
 MIN_SPELLING_SIMILARITY = 0.6
@@ -36,13 +39,15 @@ _PROTECTED = re.compile(
     r"|www\.\S+"             # bare www domains
 )
 
-PROMPT = """You are a proofreader for a personal blog. Fix ONLY real spelling, grammar and punctuation mistakes.
+PROMPT = """You are a proofreader for a personal blog. Fix ONLY real spelling, grammar and punctuation mistakes. That includes broken sentences (missing, doubled or leftover words, such as a sentence left half-edited) and "--" used as a dash.
 
-Do not rephrase, reword, restyle or tighten anything. Keep the author's wording, voice, sentence fragments, informal phrasing, names and capitalization choices. Do not touch markdown syntax, links, URLs, HTML or code. If a sentence is correct, leave it alone. Return nothing rather than something doubtful.
+Do not rephrase, reword, restyle or tighten anything. Keep the author's wording, voice, sentence fragments, informal phrasing, names and capitalization choices. Do not touch markdown syntax, links, URLs, HTML or code. If a sentence is correct, leave it alone. Never restate a correct sentence in other words. Return nothing rather than something doubtful.
+
+Use the smallest span and change the fewest words. Span a whole sentence only when the sentence itself is broken; a typo fix touches one word. A span never crosses a sentence end.
 
 Return ONLY a JSON array and no other text:
-[{"block": <block index>, "before": "<exact text from that block>", "after": "<corrected text>", "kind": "spelling" | "grammar" | "punctuation"}]
-"before" must be copied character for character from the block, and be the shortest span (usually one word, at most a few) that appears exactly once in that block. Return [] if there are no mistakes.
+[{"block": <block index>, "before": "<exact text from that block>", "after": "<corrected text>", "kind": "spelling" | "grammar" | "punctuation", "reason": "<2-4 plain words, e.g. Typo, Missing words, Double hyphen>"}]
+"before" must be copied character for character from the block and appear exactly once in that block. Return [] if there are no mistakes.
 
 """
 
@@ -134,6 +139,18 @@ def _word_edits(a: str, b: str) -> int:
     return prev[-1]
 
 
+def _crosses_sentence(before: str) -> bool:
+    return _SENTENCE_END.search(before) is not None
+
+
+def _new_words(before: str, after: str) -> int:
+    """Words of `after` that replace or add to `before`; deletions are free."""
+    a, b = before.split(), after.split()
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    return sum(j2 - j1 for tag, _, _, j1, j2 in sm.get_opcodes()
+               if tag in ("replace", "insert"))
+
+
 def _block_kinds(source: str) -> list[str]:
     return [b.kind for b in parse_blocks(source)]
 
@@ -144,16 +161,23 @@ def _problem(source: str, before, after, kind, block_kind=None) -> str | None:
         return "malformed suggestion"
     if not before or before == after:
         return "no change"
-    if "\n" in before or "\n" in after or len(before) > MAX_BEFORE:
+    spelling = kind == "spelling"
+    limit = MAX_BEFORE if spelling else MAX_BEFORE_SENTENCE
+    if "\n" in before or "\n" in after or len(before) > limit:
         return "too long"
+    if not after.strip():
+        return "empty replacement"
+    if _crosses_sentence(before):
+        return "crosses a sentence end"
     if source.count(before) != 1:
         return "this text is no longer in the paragraph exactly once"
-    if _word_edits(before, after) > MAX_WORD_EDITS:
-        return "changes too many words"
-    if kind == "spelling" and (
-        difflib.SequenceMatcher(None, before, after).ratio() < MIN_SPELLING_SIMILARITY
-    ):
-        return "swaps the word rather than fixing its spelling"
+    if spelling:
+        if _word_edits(before, after) > MAX_WORD_EDITS:
+            return "changes too many words"
+        if difflib.SequenceMatcher(None, before, after).ratio() < MIN_SPELLING_SIMILARITY:
+            return "swaps the word rather than fixing its spelling"
+    elif _new_words(before, after) > max(2, len(before.split()) // 2):
+        return "rewrites rather than fixes"
     if _MARKUP & set(before + after):
         return "touches markdown"
     start = source.index(before)
@@ -183,21 +207,43 @@ def validate(index: int, source: str, items: list, block_kind: str | None = None
             continue
         before, after, kind = item.get("before"), item.get("after"), item.get("kind")
         if _problem(source, before, after, kind, block_kind) is None:
-            kept.append((source.index(before), before, after, kind))
+            reason = item.get("reason")
+            reason = reason.strip()[:MAX_REASON] if isinstance(reason, str) else ""
+            kept.append((source.index(before), before, after, kind, reason))
     kept.sort(key=lambda k: k[0])
     out, last_end = [], -1
-    for start, before, after, kind in kept:
+    for start, before, after, kind, reason in kept:
         if start < last_end:
             continue  # overlaps an earlier fix
-        out.append({"before": before, "after": after, "kind": kind})
+        out.append({"before": before, "after": after, "kind": kind, "reason": reason})
         last_end = start + len(before)
     for n, s in enumerate(out):
         s["id"] = f"{index}-{n}"
-    return [{"id": s["id"], "before": s["before"], "after": s["after"], "kind": s["kind"]} for s in out]
+    return [{"id": s["id"], "before": s["before"], "after": s["after"], "kind": s["kind"],
+             "reason": s["reason"]} for s in out]
 
 
 def _inside_tag(out: str, at: int) -> bool:
     return out.rfind("<", 0, at) > out.rfind(">", 0, at)
+
+
+_TOKEN = re.compile(r"\s+|\w+|[^\w\s]")
+
+
+def _diff_html(before: str, after: str, sid: str) -> str:
+    """Escaped text with del/ins around the changed runs only."""
+    sid = html.escape(sid, quote=True)
+    a, b = _TOKEN.findall(before), _TOKEN.findall(after)
+    out = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if tag == "equal":
+            out.append(html.escape("".join(a[i1:i2])))
+            continue
+        if i2 > i1:
+            out.append(f'<del class="pr-old" data-sid="{sid}">{html.escape("".join(a[i1:i2]))}</del>')
+        if j2 > j1:
+            out.append(f'<ins class="pr-new" data-sid="{sid}">{html.escape("".join(b[j1:j2]))}</ins>')
+    return "".join(out)
 
 
 def review_html(source: str, suggestions: list[dict]) -> str | None:
@@ -223,13 +269,7 @@ def review_html(source: str, suggestions: list[dict]) -> str | None:
             # unique run in text (it landed across an escaped/altered span,
             # or inside a tag's attribute) -- no safe place for the mark.
             return None
-        sid = html.escape(s["id"], quote=True)
-        out = out.replace(
-            token,
-            f'<del class="pr-old" data-sid="{sid}">{html.escape(s["before"])}</del>'
-            f'<ins class="pr-new" data-sid="{sid}">{html.escape(s["after"])}</ins>',
-            1,
-        )
+        out = out.replace(token, _diff_html(s["before"], s["after"], s["id"]), 1)
     return out
 
 

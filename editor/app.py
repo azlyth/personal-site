@@ -23,7 +23,7 @@ from PIL import UnidentifiedImageError
 
 import tomlkit
 
-from editor import config, history, importer, pairs, proofread, videos
+from editor import config, history, importer, pairs, preview, proofread, videos
 from editor.auth.middleware import AuthMiddleware
 from editor.auth.routes import router as auth_router
 from editor.blocks import (
@@ -433,6 +433,14 @@ def get_post(slug: str):
 
 def _block_json(block) -> dict:
     out = {"index": block.index, "kind": block.kind, "source": block.source, "html": block.html}
+    if block.align is not None:
+        # Text kinds only. A centred block is a wrapper around its markdown;
+        # `text` is that inner markdown, which is what the text editor edits
+        # -- the client rebuilds the wrapper with the same opener on save, and
+        # blocks.py only reports `text` when that rebuild is byte-exact.
+        out["align"] = block.align
+        if block.align == "center":
+            out["text"] = block.text
     if block.kind in ("image", "img_row"):
         # parse_images returns None for anything it can't losslessly
         # reproduce -- omit the key entirely rather than sending `null` or
@@ -1814,6 +1822,36 @@ def _stamp_assets(html: str) -> str:
         return f'{match.group("attr")}="/static/{stem}-{digest}.{ext}"'
 
     return _ASSET_REF.sub(stamp, html)
+
+
+@app.post("/api/posts/{slug}/preview")
+def preview_post(slug: str):
+    """Build the working tree with drafts and return where the post lives in
+    that build. Serialized inside preview.build; touches nothing public."""
+    _post_path(slug)  # 404 before any build
+    try:
+        preview.build()
+    except subprocess.CalledProcessError as err:
+        detail = (err.stderr or err.stdout or "").strip() or "the build failed"
+        raise HTTPException(status_code=500, detail=f"Preview build failed: {detail[-1500:]}")
+    return {"url": f"/preview/blog/{slug}/"}
+
+
+@app.get("/preview/{path:path}")
+def preview_file(path: str):
+    """Serve the preview build. Not public: AuthMiddleware gates it like any
+    other route. Traversal out of the preview dir is refused."""
+    root = preview.PREVIEW_DIR.resolve()
+    target = (root / path).resolve()
+    if target != root and root not in target.parents:
+        raise HTTPException(status_code=404, detail="not found")
+    if target.is_dir():
+        target = target / "index.html"
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(target, headers={
+        "Cache-Control": "no-store", "X-Robots-Tag": "noindex",
+    })
 
 
 @app.get("/")

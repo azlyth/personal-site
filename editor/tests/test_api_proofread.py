@@ -46,7 +46,7 @@ def test_returns_marked_suggestions(monkeypatch):
     calls = fake(monkeypatch, [
         {"block": 0, "before": "recieve", "after": "receive", "kind": "spelling"},
         {"block": 0, "before": "tomorow", "after": "tomorrow", "kind": "spelling"},
-        {"block": 0, "before": "I will recieve teh letter", "after": "The letter arrives", "kind": "grammar"},
+        {"block": 0, "before": "I will recieve teh letter", "after": "Mail should reach me soon", "kind": "grammar"},
     ])
     res = client.post(f"/api/posts/{SLUG}/proofread", json={"indices": [0, 1, 2]})
     assert res.status_code == 200
@@ -115,7 +115,7 @@ def test_apply_refuses_stale_post_hash():
 
 
 def test_apply_rechecks_guardrails():
-    assert apply("I will recieve teh letter", "Letters come", kind="grammar").status_code == 409
+    assert apply("I will recieve teh letter", "Mail should reach me soon", kind="grammar").status_code == 409
 
 
 def test_apply_rechecks_with_the_suggestion_kind():

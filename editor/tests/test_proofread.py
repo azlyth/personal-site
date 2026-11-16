@@ -15,7 +15,8 @@ def test_claude_bin_default_is_absolute(monkeypatch):
 
 def test_clean_suggestion_survives_with_id():
     out = proofread.validate(3, "I will recieve it.", [ok("recieve", "receive", block=3)])
-    assert out == [{"id": "3-0", "before": "recieve", "after": "receive", "kind": "spelling"}]
+    assert out == [{"id": "3-0", "before": "recieve", "after": "receive", "kind": "spelling",
+                    "reason": ""}]
 
 
 def test_drops_before_not_in_source():
@@ -32,6 +33,7 @@ def test_drops_ambiguous_before():
     ok("same", "same"),
     ok("a\nb", "a b"),
     ok("x" * 81, "y" * 81),
+    ok("x" * 301, "y" * 301, kind="grammar"),
     ok("one two three four five", "five four three two one", kind="grammar"),
     ok("bold", "**bold**"),
     ok("word", "word", kind="style"),
@@ -117,8 +119,9 @@ def test_review_html_two_suggestions_one_block():
     html = proofread.review_html(source, sugg)
     assert '<del class="pr-old" data-sid="0-0">Thier</del>' in html
     assert '<ins class="pr-new" data-sid="0-0">Their</ins>' in html
-    assert '<del class="pr-old" data-sid="0-1">house is</del>' in html
-    assert '<ins class="pr-new" data-sid="0-1">house&#x27;s</ins>' in html
+    # only the changed run is marked: "house" stays plain, " is" -> "'s"
+    assert 'house<del class="pr-old" data-sid="0-1"> is</del>' in html
+    assert '<ins class="pr-new" data-sid="0-1">&#x27;s</ins>' in html
 
 
 def test_review_html_heading_block():
@@ -205,10 +208,10 @@ def test_spelling_floor_keeps_real_typos_and_grammar_is_exempt():
     assert proofread.validate(0, "They was here.", [ok("was", "were", kind="grammar")])
 
 
-def test_grammar_limited_to_two_word_edits():
+def test_grammar_new_word_cap():
     source = "one two three four"
     assert proofread.validate(0, source, [ok("one two", "uno dos", kind="grammar")])
-    assert proofread.validate(0, source, [ok("one two three", "uno dos tres", kind="grammar")]) == []
+    assert proofread.validate(0, source, [ok("one two three four", "uno dos tres cuatro", kind="grammar")]) == []
 
 
 def test_before_must_sit_on_word_boundaries():
@@ -246,3 +249,84 @@ def test_apply_one_uses_the_suggestion_kind():
     assert proofread.apply_one("They was here.", "was", "were", "grammar") == "They were here."
     with pytest.raises(ValueError):
         proofread.apply_one("I like apples.", "apples", "oranges", "spelling")
+
+
+def test_model_defaults_to_sonnet(monkeypatch):
+    monkeypatch.delenv("EDITOR_PROOFREAD_MODEL", raising=False)
+    assert config.proofread_model() == "sonnet"
+    monkeypatch.setenv("EDITOR_PROOFREAD_MODEL", "opus")
+    assert config.proofread_model() == "opus"
+    monkeypatch.setenv("EDITOR_PROOFREAD_MODEL", "  ")
+    assert config.proofread_model() == "sonnet"
+
+
+def test_grammar_can_repair_a_broken_sentence():
+    source = "I'm sharing it with to share it for people to track their cleaning too."
+    out = proofread.validate(0, source, [ok("with to share it for people to track", "so people can track", kind="grammar")])
+    assert len(out) == 1
+    assert proofread.validate(0, "say the the thing", [ok("the the", "the", kind="grammar")])
+    assert proofread.validate(0, "say the the thing", [ok("the the", "", kind="grammar")]) == []
+
+
+def test_grammar_rewrite_of_most_words_dropped():
+    source = "the city is very dirty today"
+    assert proofread.validate(0, source, [ok(source, "our town looks filthy now", kind="grammar")]) == []
+
+
+def test_fix_may_not_cross_a_sentence():
+    assert proofread.validate(0, "It was late. we left.", [ok("late. we", "late. We", kind="grammar")]) == []
+    assert proofread.validate(0, "Use e.g. the thing.", [ok("e.g. the", "e.g. a", kind="grammar")]) == []
+
+
+def test_spelling_still_short():
+    assert proofread.validate(0, "teh cta adn", [ok("teh cta adn", "the cat and")]) == []
+    long = "x" * 81
+    assert proofread.validate(0, long, [ok(long, "y" * 81)]) == []
+
+
+def test_punctuation_double_hyphen():
+    source = "they'll say -- no matter what"
+    out = proofread.validate(0, source, [ok("say -- no", "say, no", kind="punctuation")])
+    assert len(out) == 1
+
+
+def test_reason_kept_trimmed_and_defaulted():
+    def one(**extra):
+        item = ok("teh", "the")
+        item.update(extra)
+        return proofread.validate(0, "teh cat", [item])[0]["reason"]
+    assert one(reason="  Missing words  ") == "Missing words"
+    assert len(one(reason="r" * 60)) == 40
+    assert one() == ""
+    assert one(reason=5) == ""
+    assert one(reason="<b>x</b>") == "<b>x</b>"
+
+
+def test_review_html_marks_only_changed_words():
+    source = "I'm sharing it with to share it for people to track."
+    sugg = proofread.validate(0, source, [ok("with to share it for people to track", "so people can track", kind="grammar")])
+    h = proofread.review_html(source, sugg)
+    import re
+    stripped = re.sub(r"<(del|ins)[^>]*>.*?</\1>", "", h)
+    assert "people" in stripped and "track" in stripped
+    assert h.count("<del") >= 1
+    assert set(re.findall(r'data-sid="([^"]*)"', h)) == {"0-0"}
+
+
+def test_review_html_punctuation_only_change():
+    source = "they say -- no matter"
+    sugg = proofread.validate(0, source, [ok("say -- no", "say, no", kind="punctuation")])
+    h = proofread.review_html(source, sugg)
+    import re
+    stripped = re.sub(r"<(del|ins)[^>]*>.*?</\1>", "", h)
+    assert "say" in stripped and "no" in stripped
+    assert re.search(r"<del[^>]*>[^<]*--[^<]*</del>", h)
+
+
+def test_diff_html_round_trip():
+    import html as H, re
+    before, after = "say -- no matter", "say, no matter"
+    d = proofread._diff_html(before, after, "0-0")
+    old = re.sub(r"</?del[^>]*>", "", re.sub(r"<ins[^>]*>.*?</ins>", "", d))
+    new = re.sub(r"</?ins[^>]*>", "", re.sub(r"<del[^>]*>.*?</del>", "", d))
+    assert old == H.escape(before) and new == H.escape(after)

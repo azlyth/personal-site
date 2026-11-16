@@ -70,6 +70,17 @@ _PAIR_OPEN_RE = re.compile(
 )
 _PAIR_CLOSE_RE = re.compile(r"^</div>\n</div>$")
 
+# A centred block: the block's own markdown inside a wrapper, with blank
+# lines around it -- the same mechanism as the pair (CommonMark only parses
+# markdown in an HTML block once a blank line has closed it). Left is the
+# default and writes no wrapper, so a post nobody centred stays
+# byte-identical. `editor.js` writes the same opener (ALIGN_CENTER_OPEN); a
+# test reads it back out of the script.
+ALIGN_CENTER_OPEN = '<div class="align-center">'
+ALIGN_CLOSE = "</div>"
+# What may be centred: prose. Not pairs, media rows, spacers or code.
+ALIGNABLE_KINDS = frozenset({"paragraph", "heading", "list", "blockquote"})
+
 
 @dataclass
 class Block:
@@ -79,6 +90,11 @@ class Block:
     start_line: int  # 0-based, inclusive
     end_line: int    # 0-based, exclusive
     html: str
+    # Text kinds only: "left" (no wrapper) or "center". Anything else: None.
+    align: str | None = None
+    # A centred block's inner markdown (its source minus the wrapper), which
+    # is what the text editor edits. None when there is no wrapper.
+    text: str | None = None
 
 
 def _lines(body: str) -> list[str]:
@@ -93,6 +109,36 @@ def spacer_is_desktop_only(source: str) -> bool:
     """
     match = _SPACER_RE.match(source.strip())
     return bool(match and match.group("modifier"))
+
+
+def aligned_source(text: str, align: str | None) -> str:
+    """A text block's source for `text` at `align`.
+
+    Left (or no alignment) is the text itself. Centre wraps it, after the
+    same normalisation `parse_blocks` applies to every block (trailing
+    whitespace off, and no leading blank lines), so parsing what this writes
+    gives back the same text and this same source byte for byte. Text that
+    is all whitespace gives "", which -- like any block saved empty --
+    removes the block rather than leaving an empty wrapper behind.
+    """
+    if align != "center":
+        return text
+    inner = re.sub(r"^(?:[ \t]*\n)+", "", text).rstrip()
+    if not inner:
+        return ""
+    return f"{ALIGN_CENTER_OPEN}\n\n{inner}\n\n{ALIGN_CLOSE}"
+
+
+def _align_inner(source: str) -> str | None:
+    """The inner text of a centred wrapper, or None unless `source` is
+    exactly what `aligned_source` writes for it (lossless or not at all)."""
+    lines = source.split("\n")
+    if len(lines) < 5 or lines[0] != ALIGN_CENTER_OPEN or lines[-1] != ALIGN_CLOSE:
+        return None
+    if lines[1] != "" or lines[-2] != "":
+        return None
+    inner = "\n".join(lines[2:-2])
+    return inner if aligned_source(inner, "center") == source else None
 
 
 def _refine_kind(kind: str, source: str) -> str:
@@ -144,7 +190,7 @@ def parse_blocks(body: str) -> list[Block]:
             )
         depth += token.nesting
 
-    return _group_pairs(blocks, lines)
+    return _group_aligns(_group_pairs(blocks, lines), lines)
 
 
 def _group_pairs(blocks: list[Block], lines: list[str]) -> list[Block]:
@@ -200,6 +246,64 @@ def _group_pairs(blocks: list[Block], lines: list[str]) -> list[Block]:
                 html=block.html,
             )
         )
+        i += 1
+
+    return grouped
+
+
+def _group_aligns(blocks: list[Block], lines: list[str]) -> list[Block]:
+    """Fold each centred wrapper and the prose inside it into one block.
+
+    Like `_group_pairs`: matched on the opener's exact source; the closer is
+    the first lone `</div>` after it, and everything between must be prose
+    (an html block in between could hold a `</div>` of its own). A wrapper
+    that doesn't match exactly what `aligned_source` writes -- no closer, a
+    missing blank line, something that isn't prose inside -- is left as raw
+    fragments, which can be seen and repaired.
+
+    The grouped block keeps its inner kind (several prose blocks inside one
+    wrapper read as a paragraph), so everything that gates on `kind` --
+    proofreading, the text face -- treats it as the prose it is. Every other
+    text block reports `align = "left"`.
+    """
+    grouped: list[Block] = []
+    i = 0
+    while i < len(blocks):
+        block = blocks[i]
+        if block.kind == "html" and block.source.strip() == ALIGN_CENTER_OPEN:
+            close = next(
+                (j for j in range(i + 1, len(blocks)) if blocks[j].source.strip() == ALIGN_CLOSE),
+                None,
+            )
+            inside = blocks[i + 1:close] if close is not None else []
+            if inside and all(b.kind in ALIGNABLE_KINDS for b in inside):
+                end = blocks[close].end_line
+                source = "\n".join(lines[block.start_line:end]).rstrip()
+                inner = _align_inner(source)
+                if inner is not None:
+                    kinds = {b.kind for b in inside}
+                    grouped.append(Block(
+                        index=len(grouped),
+                        kind=kinds.pop() if len(kinds) == 1 else "paragraph",
+                        source=source,
+                        start_line=block.start_line,
+                        end_line=end,
+                        html=_md.render(source),
+                        align="center",
+                        text=inner,
+                    ))
+                    i = close + 1
+                    continue
+
+        grouped.append(Block(
+            index=len(grouped),
+            kind=block.kind,
+            source=block.source,
+            start_line=block.start_line,
+            end_line=block.end_line,
+            html=block.html,
+            align="left" if block.kind in ALIGNABLE_KINDS else None,
+        ))
         i += 1
 
     return grouped

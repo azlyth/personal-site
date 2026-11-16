@@ -24,7 +24,7 @@ uvicorn of THIS checkout on a free port with its own auth db under
 Needs `websocket-client` (installed for the system python3, not the venv)
 and /usr/bin/chromium.
 
-Usage: python3 scripts/verify-edit-tap.py [--shots DIR] [--shot-prefix NAME]
+Usage: python3 scripts/verify-edit-tap.py [--shots DIR] [--shot-prefix NAME] [--viewport WxH ...]
   --shots writes DIR/<prefix>-<width>.png of the long paragraph open for
   editing at each viewport, and <prefix>-<width>-menu.png with the insert
   menu open.
@@ -72,10 +72,11 @@ BODY = (
     f"{PAIR}\n\n"
     "- one\n- two\n\n"
     "After the list.\n\n"
+    "## A heading set in Sentient\n\n"
     "Final words.\n"
 )
 # Block indices in BODY.
-FIRST, LONG_IDX, CLOSING, PAIR_IDX, LIST_IDX, AFTER_LIST, FINAL = 0, 1, 2, 3, 4, 5, 6
+FIRST, LONG_IDX, CLOSING, PAIR_IDX, LIST_IDX, AFTER_LIST, HEADING, FINAL = 0, 1, 2, 3, 4, 5, 6, 7
 
 VIEWPORTS = [(1024, 1366), (1366, 1024), (820, 1180)]
 
@@ -162,19 +163,24 @@ STATE = """(() => {
   const ed = ta && ta.closest('.block');
   const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect();
     return {x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom}; };
-  const rail = ed && ed.querySelector('.edit-rail');
+  const bar = document.getElementById('edit-bar');
+  const shown = bar && !bar.hidden;
   const menu = document.querySelector('.insert-choice');
-  const buttons = rail ? [...rail.querySelectorAll('button')].map((b) => r(b)) : [];
+  const buttons = shown ? [...bar.querySelectorAll('button')].map((b) => r(b)) : [];
+  const ctl = shown ? bar.querySelectorAll('.block-controls') : [];
   return JSON.stringify({
     editing: ed ? Number(ed.dataset.index) : null,
     focused: !!ta && document.activeElement === ta,
     value: ta ? ta.value : null,
     ta: ta && {...r(ta), client: ta.clientHeight, scroll: ta.scrollHeight},
+    font: ta ? getComputedStyle(ta).fontFamily : null,
     block: r(ed),
-    rail: r(rail),
+    bar: shown ? r(bar) : null,
+    done: shown ? r(bar.querySelector('.edit-done')) : null,
+    barControls: [...ctl].map((c) => Number(c.dataset.index)),
     menu: r(menu),
     buttons,
-    vw: innerWidth,
+    vw: innerWidth, vh: innerHeight, sy: scrollY,
   });
 })()"""
 
@@ -218,13 +224,30 @@ def overlaps(a: dict | None, b: dict | None) -> bool:
     return a["x"] < b["r"] - 1 and b["x"] < a["r"] - 1 and a["y"] < b["b"] - 1 and b["y"] < a["b"] - 1
 
 
-def run_viewport(cdp, base, w, h, results, shots, prefix):
+def run_viewport(cdp, base, w, h, results, shots, prefix, only=()):
     cdp("Emulation.setDeviceMetricsOverride", width=w, height=h,
         deviceScaleFactor=1, mobile=True)
     cdp("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=5)
 
     def check(name, ok, detail=None):
         results.append((f"{w}x{h} {name}", bool(ok), detail))
+
+    def want(group):
+        return not only or group in only
+
+    if want("tap"):
+        run_tap_cases(cdp, base, w, h, check, shots, prefix)
+    if want("inplace"):
+        run_in_place_cases(cdp, base, w, h, check, shots, prefix)
+    if want("media"):
+        run_media_cases(cdp, base, w, h, check, shots, prefix)
+    if want("review"):
+        run_review_cases(cdp, base, w, h, check)
+    if want("align"):
+        run_align_cases(cdp, base, w, h, check, shots, prefix)
+
+
+def run_tap_cases(cdp, base, w, h, check, shots, prefix):
 
     def editing_long(s):
         return s["editing"] == LONG_IDX
@@ -240,17 +263,17 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
         check("open: block keeps its height (within 25%)",
               s["block"]["h"] >= before["h"] * 0.75,
               {"before": before["h"], "after": s["block"]["h"]})
-        check("open: Done/controls never overlap the text",
-              s["rail"] and not overlaps(s["rail"], s["ta"]), s)
-        check("open: every rail button is a 44px target",
+        check("open: the bar never overlaps the text",
+              s["bar"] and not overlaps(s["bar"], s["ta"]), s)
+        check("open: every bar button is a 44px target",
               s["buttons"] and all(b["w"] >= 43.5 and b["h"] >= 43.5 for b in s["buttons"]),
               s["buttons"])
-        if w >= 1000:
-            check("open: controls are a rail to the right of the block",
-                  s["rail"] and s["rail"]["x"] >= s["block"]["r"] and s["rail"]["r"] <= w, s)
-        else:
-            check("open: controls sit in a row under the textarea",
-                  s["rail"] and s["rail"]["y"] >= s["ta"]["b"] - 1, s)
+        check("open: the bar sits at the bottom of the window with Done on screen",
+              s["bar"] and abs(s["bar"]["b"] - s["vh"]) <= 1 and s["done"]
+              and s["done"]["y"] >= 0 and s["done"]["b"] <= s["vh"]
+              and s["done"]["x"] >= 0 and s["done"]["r"] <= s["vw"], s)
+        check("open: the bar holds this block's controls and nothing else's",
+              s["barControls"] == [LONG_IDX], s["barControls"])
     if shots:
         png = cdp("Page.captureScreenshot", format="png")["data"]
         Path(shots, f"{prefix}-{w}.png").write_bytes(base64.b64decode(png))
@@ -305,7 +328,7 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
         load(cdp, base)
         open_long(cdp)
         cdp("Input.insertText", text=" Typed while the keyboard was up.")
-    tapped = cdp.tap_el('.block.editing .block-controls button[title="Insert a paragraph"]', 1.0)
+    tapped = cdp.tap_el(PLUS, 1.0)
     s = state(cdp)
     check("insert menu: + keeps editing", tapped and editing_long(s), s)
     check("insert menu: menu doesn't cover the text",
@@ -321,7 +344,7 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
 
     # --- insert Above: the list shifts under the open editor -----------------
     if editing_long(s):
-        cdp.tap_el('.block.editing .block-controls button[title="Insert a paragraph"]', 1.0)
+        cdp.tap_el(PLUS, 1.0)
         above = cdp.tap_el(".insert-choice button", 1.2)  # "↑ Above" is first
         s = state(cdp)
         check("insert above: editor follows its block down one",
@@ -337,7 +360,7 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
         load(cdp, base)
         open_long(cdp)
         cdp("Input.insertText", text=" Typed while the keyboard was up.")
-    done = cdp.tap_el(".block.editing .edit-done", 1.0)
+    done = cdp.tap_el(DONE, 1.0)
     s = state(cdp)
     check("done: closes the editor", done and s["editing"] is None, s)
     check("done: saves the text", "Typed while the keyboard was up." in POST.read_text())
@@ -350,6 +373,8 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
     s = state(cdp)
     check("switch: the tapped block opens", s["editing"] == FIRST, s)
     check("switch: the first block's edit was saved", "Switch text." in POST.read_text())
+    check("switch: the bar now holds the tapped block's controls, only",
+          s["barControls"] == [FIRST], s["barControls"])
 
     # --- a control tapped with the PAIR editor open must not eat the pair ---
     load(cdp, base)
@@ -357,18 +382,379 @@ def run_viewport(cdp, base, w, h, results, shots, prefix):
     cdp.js(f"document.querySelector('{block_sel(PAIR_IDX)}').dispatchEvent("
            "new MouseEvent('mouseover', {bubbles: true}))")
     # The bar is hover-only outside the text editor, so press it directly.
-    cdp.js(f"document.querySelector('{block_sel(PAIR_IDX)} .block-controls "
-           "button[title=\"Move this block\"]').click()")
+    cdp.js(f"document.querySelector('#edit-bar .block-controls button[title=\"Move this block\"], "
+           f"{block_sel(PAIR_IDX)} .block-controls button[title=\"Move this block\"]').click()")
     time.sleep(1.0)
     check("pair: a control tap keeps the pair's picture",
           'class="pair pair-right' in POST.read_text() and "a cat" in POST.read_text(),
           POST.read_text()[-400:])
 
-    run_review_cases(cdp, base, w, h, check)
+
+# Where a block and the one after it sit, the closed block's text face, and
+# the scroll position -- read before a tap opens it.
+PLACE = """((i) => {
+  const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect();
+    return {x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom}; };
+  const el = document.querySelector(`.block[data-index="${i}"]`);
+  const next = document.querySelector(`.block[data-index="${i + 1}"]`);
+  const text = el && el.querySelector('.block-content > *');
+  return JSON.stringify({block: r(el), next: r(next), sy: scrollY,
+    font: text ? getComputedStyle(text).fontFamily : null});
+})"""
+
+
+def place(cdp, i: int) -> dict:
+    return json.loads(cdp.js(f"({PLACE})({i})"))
+
+
+def run_in_place_cases(cdp, base, w, h, check, shots, prefix):
+    """The open block stays where it was, set in the post's own type."""
+
+    def open_in_place(i, name):
+        load(cdp, base)
+        cdp.js(f"document.querySelector('{block_sel(i)}').scrollIntoView({{block: 'center'}})")
+        time.sleep(0.3)
+        before = place(cdp, i)
+        b = before["block"]
+        cdp.tap(b["x"] + b["w"] / 2, b["y"] + b["h"] / 2, 0.8)
+        after = place(cdp, i)
+        s = state(cdp)
+        check(f"in place ({name}): opens", s["editing"] == i, s)
+        check(f"in place ({name}): block top stays put (2px)",
+              abs(after["block"]["y"] - b["y"]) <= 2, {"before": b, "after": after["block"]})
+        check(f"in place ({name}): next block stays put (2px)",
+              before["next"] and after["next"]
+              and abs(after["next"]["y"] - before["next"]["y"]) <= 2,
+              {"before": before["next"], "after": after["next"]})
+        check(f"in place ({name}): scroll position unchanged",
+              abs(after["sy"] - before["sy"]) <= 1, {"before": before["sy"], "after": after["sy"]})
+        check(f"in place ({name}): the field is set in the closed block's face",
+              s["font"] and s["font"] == before["font"], {"field": s["font"], "closed": before["font"]})
+        return s
+
+    for i, name in ((CLOSING, "paragraph"), (HEADING, "heading")):
+        try:
+            open_in_place(i, name)
+        except Exception as exc:  # noqa: BLE001
+            check(f"in place ({name}) ran", False, repr(exc))
+        if name == "paragraph" and shots:
+            png = cdp("Page.captureScreenshot", format="png")["data"]
+            Path(shots, f"{prefix}-{w}-paragraph.png").write_bytes(base64.b64decode(png))
+
+    # The last block of the post: its field sits above the bar, not under it.
+    try:
+        load(cdp, base)
+        cdp.js("scrollTo(0, document.documentElement.scrollHeight)")
+        time.sleep(0.3)
+        cdp.tap_el(block_sel(FINAL), 0.8)
+        cdp.js("scrollTo(0, document.documentElement.scrollHeight)")
+        time.sleep(0.3)
+        s = state(cdp)
+        check("last block: its field sits above the bar",
+              s["editing"] == FINAL and s["bar"] and s["ta"]["b"] <= s["bar"]["y"] + 0.5, s)
+    except Exception as exc:  # noqa: BLE001
+        check("last block ran", False, repr(exc))
+
+    # Rotation mid-edit: the bar stays at the bottom, the block's top holds.
+    if (w, h) == (1366, 1024):
+        try:
+            load(cdp, base)
+            # Long enough that the new, taller window can still scroll to
+            # where the old one was, so nothing clamps the position.
+            POST.write_text(BODY + "".join(f"\nFiller paragraph {n}.\n" for n in range(40)))
+            cdp("Page.reload")
+            time.sleep(2.0)
+            cdp.js(f"document.querySelector('{block_sel(HEADING)}').scrollIntoView({{block: 'center'}})")
+            time.sleep(0.3)
+            b = cdp.rect(block_sel(HEADING))
+            cdp.tap(b["x"] + b["w"] / 2, b["y"] + b["h"] / 2, 0.8)
+            top = cdp.rect(block_sel(HEADING))["y"]
+            cdp("Emulation.setDeviceMetricsOverride", width=1024, height=1366,
+                deviceScaleFactor=1, mobile=True)
+            time.sleep(0.8)
+            s = state(cdp)
+            check("rotate: still editing, bar at the new bottom",
+                  s["editing"] == HEADING and s["bar"] and abs(s["bar"]["b"] - 1366) <= 1, s)
+            # Unless the page is too short to scroll that far at the new
+            # size: then the browser clamps the scroll and nothing can hold it.
+            clamped = cdp.js("scrollY >= document.documentElement.scrollHeight - innerHeight - 1")
+            check("rotate: the block's top stays put (2px) unless the scroll is clamped",
+                  s["block"] and (abs(s["block"]["y"] - top) <= 2 or (clamped and s["block"]["y"] > top)),
+                  {"before": top, "after": s["block"], "clamped": clamped,
+                   "sy": s["sy"], "sh": cdp.js("document.documentElement.scrollHeight")})
+        except Exception as exc:  # noqa: BLE001
+            check("rotate ran", False, repr(exc))
+        finally:
+            cdp("Emulation.setDeviceMetricsOverride", width=w, height=h,
+                deviceScaleFactor=1, mobile=True)
+            time.sleep(0.3)
+
+
+# A second scratch post for the settings that moved into the bar: a photo
+# row, a spacer, an image pair and a video pair.
+MEDIA_ROW = (
+    '<div class="img-row size-medium">\n'
+    '<img src="https://img.cloudy.nyc/p/b.jpg" alt="b">\n'
+    '<img src="https://img.cloudy.nyc/p/c.jpg" alt="c">\n</div>'
+)
+VIDEO_PAIR = (
+    '<div class="pair pair-left size-small">\n<div class="pair-media">\n'
+    '<div class="video-row size-small">\n'
+    '<video autoplay loop muted playsinline data-sync-loop="4">\n'
+    '<source src="https://img.cloudy.nyc/p/v.mp4" type="video/mp4">\n</video>\n</div>\n</div>\n'
+    '<div class="pair-text">\n\nWords beside the clip.\n\n</div>\n</div>'
+)
+MEDIA_BODY = (
+    "+++\ntitle = \"Edit tap scratch\"\ndate = 2026-10-04\ndraft = true\n+++\n\n"
+    "Intro paragraph.\n\n"
+    f"{MEDIA_ROW}\n\n"
+    "A paragraph after the row.\n\n"
+    '<div class="post-spacer"></div>\n\n'
+    "A paragraph after the space.\n\n"
+    f"{PAIR}\n\n"
+    "Between the pairs, and long enough to wrap a little on a tablet so the pair "
+    "below has something under it.\n\n"
+    f"{VIDEO_PAIR}\n\n"
+    "The end.\n"
+)
+M_ROW, M_SPACER, M_PAIR, M_VPAIR = 1, 3, 5, 7
+
+
+def load_media(cdp: CDP, base: str) -> None:
+    POST.write_text(MEDIA_BODY)
+    cdp("Page.navigate", url=f"{base}/edit/{SLUG}")
+    for _ in range(80):
+        time.sleep(0.25)
+        try:
+            if cdp.js(f"!!document.querySelector('{block_sel(M_VPAIR + 1)}')"):
+                time.sleep(0.3)
+                return
+        except RuntimeError:
+            pass
+    raise RuntimeError("editor never rendered the media scratch post")
+
+
+def bar_button(label: str) -> str:
+    return f'#edit-bar button[aria-label="{label}"]'
+
+
+BAR = """(() => {
+  const bar = document.getElementById('edit-bar');
+  const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect();
+    return {x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom}; };
+  return JSON.stringify({
+    shown: !bar.hidden,
+    labels: [...bar.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') || b.textContent),
+    pressed: [...bar.querySelectorAll('button[aria-pressed="true"]')].map((b) => b.getAttribute('aria-label')),
+    segmented: bar.querySelectorAll('.segmented').length,
+    small: [...bar.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().height < 43.5)
+      .map((b) => b.getAttribute('aria-label') || b.textContent),
+    caps: [...bar.querySelectorAll('*')].filter((n) => getComputedStyle(n).textTransform === 'uppercase').length,
+    filled: [...bar.querySelectorAll('button')].filter((b) => {
+      const bg = getComputedStyle(b).backgroundColor;
+      return b.offsetParent && bg === 'rgb(0, 102, 204)'; }).map((b) => b.textContent),
+    inBlock: document.querySelectorAll('.block.editing .framing-controls, .block.editing .size-buttons,'
+      + ' .block.editing .side-buttons, .block.editing .image-editor-actions, .block.editing .wrap-control').length,
+  });
+})()"""
+
+
+def bar(cdp) -> dict:
+    return json.loads(cdp.js(BAR))
+
+
+def run_media_cases(cdp, base, w, h, check, shots, prefix):
+    """Rows, spacers and pairs: their settings live in the bar."""
+
+    def tap_block(i, settle=0.8):
+        cdp.js(f"document.querySelector('{block_sel(i)}').scrollIntoView({{block: 'center'}})")
+        time.sleep(0.3)
+        before = place(cdp, i)
+        b = before["block"]
+        cdp.tap(b["x"] + b["w"] / 2, b["y"] + min(b["h"] / 2, 40), settle)
+        return before
+
+    def bar_basics(name):
+        b = bar(cdp)
+        check(f"{name}: every bar button is a 44px target", b["shown"] and not b["small"], b)
+        check(f"{name}: one filled button (Done), no all-caps",
+              b["filled"] == ["Done"] and b["caps"] == 0, b)
+        return b
+
+    def case_closed():
+        load_media(cdp, base)
+        glyphs = cdp.js("[...document.querySelectorAll('.block .block-controls button')]"
+                        ".map((b) => b.textContent)")
+        check("media: closed blocks offer no ◨ layout button", glyphs and "◨" not in glyphs, glyphs)
+
+    def case_row_open():
+        load_media(cdp, base)
+        before = tap_block(M_ROW)
+        after = place(cdp, M_ROW)
+        b = bar_basics("row")
+        check("row: size and side toggles are in the bar, nothing in the block",
+              b["segmented"] >= 2 and b["inBlock"] == 0, b)
+        check("row: its own top stays put (2px)",
+              abs(after["block"]["y"] - before["block"]["y"]) <= 2,
+              {"before": before["block"], "after": after["block"]})
+        check("row: offers Pair, and Done and Cancel",
+              "Pair with the text beside it" in b["labels"] and "Done" in b["labels"]
+              and "Cancel" in b["labels"], b["labels"])
+        if shots:
+            png = cdp("Page.captureScreenshot", format="png")["data"]
+            Path(shots, f"{prefix}-{w}-row.png").write_bytes(base64.b64decode(png))
+
+    def case_row_side_done():
+        load_media(cdp, base)
+        tap_block(M_ROW)
+        cdp.tap_el(bar_button("Picture on the left, text beside it"), 0.4)
+        cdp.tap_el(DONE, 1.2)
+        want = MEDIA_ROW.replace('img-row size-medium"', 'img-row size-medium beside-left"')
+        text = POST.read_text()
+        check("row: side then Done writes what the old picker wrote",
+              want in text and text == MEDIA_BODY.replace(MEDIA_ROW, want), text[:500])
+
+    def case_row_cancel():
+        load_media(cdp, base)
+        tap_block(M_ROW)
+        cdp.tap_el(bar_button("Picture on the right, text beside it"), 0.4)
+        cdp.tap_el(bar_button("Small"), 0.4)
+        cdp.tap_el(bar_button("Cancel"), 1.0)
+        check("row: Cancel writes nothing and closes",
+              POST.read_text() == MEDIA_BODY and not bar(cdp)["shown"])
+
+    def case_spacer():
+        load_media(cdp, base)
+        tap_block(M_SPACER)
+        b = bar_basics("spacer")
+        check("spacer: Everywhere / Desktop only in the bar",
+              "Everywhere" in b["labels"] and "Desktop only" in b["labels"]
+              and b["pressed"] == ["Everywhere"], b)
+        cdp.tap_el(bar_button("Desktop only"), 0.4)
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("spacer: Done writes the desktop-only spacer the old toggle wrote",
+              text == MEDIA_BODY.replace('<div class="post-spacer"></div>',
+                                         '<div class="post-spacer desktop-only"></div>'), text[:500])
+
+    def case_pair_unpair():
+        load_media(cdp, base)
+        tap_block(M_ROW)
+        b = bar(cdp)
+        check("row: Pair is off until the row has a side",
+              cdp.js(f"document.querySelector({json.dumps(bar_button('Pair with the text beside it'))}).disabled"), b)
+        cdp.tap_el(bar_button("Picture on the left, text beside it"), 0.4)
+        cdp.tap_el(bar_button("Pair with the text beside it"), 2.0)
+        text = POST.read_text()
+        check("row: Pair saves the side and pairs at once",
+              '<div class="pair pair-left size-medium">' in text and text.count('class="pair ') == 3,
+              text[:700])
+        load_media(cdp, base)
+        tap_block(M_PAIR)
+        cdp.tap_el(bar_button("Unpair"), 2.0)
+        text = POST.read_text()
+        check("pair: Unpair acts at once",
+              'class="pair pair-right' not in text and "beside-right" in text and "a cat" in text,
+              text[:900])
+
+    PAIR_STATE = """(() => {
+      const r = (e) => { if (!e) return null; const b = e.getBoundingClientRect();
+        return {x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom}; };
+      const ed = document.querySelector('.block.editing');
+      const pair = ed && ed.querySelector('.pair');
+      return JSON.stringify({
+        cls: pair ? pair.className : null,
+        media: r(pair && pair.querySelector('.pair-media')),
+        ta: r(ed && ed.querySelector('.pair-text textarea')),
+        imgs: ed ? ed.querySelectorAll('.pair-media img, .pair-media video').length : 0,
+      });
+    })()"""
+
+    def pair_state():
+        return json.loads(cdp.js(PAIR_STATE))
+
+    def case_pair_open():
+        load_media(cdp, base)
+        before = tap_block(M_PAIR)
+        after = place(cdp, M_PAIR)
+        ps = pair_state()
+        bar_basics("pair")
+        check("pair: opens as a pair, picture beside the field",
+              ps["media"] and ps["ta"] and ps["imgs"] == 1
+              and (ps["media"]["x"] >= ps["ta"]["r"] - 1 or ps["ta"]["x"] >= ps["media"]["r"] - 1), ps)
+        check("pair: block top and next block stay put (2px)",
+              abs(after["block"]["y"] - before["block"]["y"]) <= 2
+              and abs(after["next"]["y"] - before["next"]["y"]) <= 2,
+              {"before": before, "after": after})
+        if shots:
+            png = cdp("Page.captureScreenshot", format="png")["data"]
+            Path(shots, f"{prefix}-{w}-pair.png").write_bytes(base64.b64decode(png))
+        cdp.tap_el(bar_button("Picture on the left"), 0.4)
+        ps2 = pair_state()
+        check("pair: flipping side flips it live",
+              "pair-left" in ps2["cls"] and ps2["media"]["r"] <= ps2["ta"]["x"] + 1, ps2)
+        cdp.tap_el(bar_button("Prose at the top"), 0.4)
+        check("pair: prose position updates live", "justify-top" in pair_state()["cls"], pair_state())
+        cdp.tap_el(bar_button("Cancel"), 1.0)
+        check("pair: Cancel after changes writes nothing", POST.read_text() == MEDIA_BODY)
+
+    def case_pair_done_unchanged():
+        load_media(cdp, base)
+        tap_block(M_PAIR)
+        cdp.tap_el(DONE, 1.2)
+        check("pair: Done with no changes leaves the file byte-identical",
+              POST.read_text() == MEDIA_BODY and not bar(cdp)["shown"])
+
+    def case_pair_photo():
+        load_media(cdp, base)
+        tap_block(M_PAIR)
+        cdp.tap_el(bar_button("Photo: alt text and link preview"), 0.6)
+        sheet = json.loads(cdp.js(
+            "JSON.stringify({inputs: document.querySelectorAll('.pair-photo-sheet input').length,"
+            " stars: document.querySelectorAll('.pair-photo-sheet .preview-pick').length})"))
+        check("pair: Photo opens a sheet with an alt field and a star per photo",
+              sheet == {"inputs": 1, "stars": 1}, sheet)
+        if shots:
+            png = cdp("Page.captureScreenshot", format="png")["data"]
+            Path(shots, f"{prefix}-{w}-pair-photo.png").write_bytes(base64.b64decode(png))
+        cdp.js("(() => { const i = document.querySelector('.pair-photo-sheet input');"
+               " i.focus(); i.value = 'a black cat'; i.dispatchEvent(new Event('input')); })()")
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("pair: an alt edit is written into the pair's <img alt>",
+              text == MEDIA_BODY.replace('alt="a cat"', 'alt="a black cat"'), text[:900])
+        load_media(cdp, base)
+        tap_block(M_PAIR)
+        cdp.tap_el(bar_button("Picture on the left"), 0.4)
+        cdp.tap_el(bar_button("Photo: alt text and link preview"), 0.6)
+        cdp.js("(() => { const i = document.querySelector('.pair-photo-sheet input');"
+               " i.value = 'nope'; i.dispatchEvent(new Event('input')); })()")
+        cdp.tap_el(bar_button("Cancel"), 1.0)
+        check("pair: Cancel after a side flip and an alt edit writes nothing",
+              POST.read_text() == MEDIA_BODY and not cdp.js("!!document.querySelector('.pair-photo-sheet')"))
+
+    def case_video_pair():
+        load_media(cdp, base)
+        tap_block(M_VPAIR)
+        b = bar(cdp)
+        check("video pair: opens, and has no Photo button",
+              b["shown"] and "Photo: alt text and link preview" not in b["labels"]
+              and pair_state()["imgs"] == 1, b)
+
+    for case in (case_closed, case_row_open, case_row_side_done, case_row_cancel,
+                 case_spacer, case_pair_unpair, case_pair_open, case_pair_done_unchanged,
+                 case_pair_photo, case_video_pair):
+        try:
+            case()
+        except Exception as exc:  # noqa: BLE001
+            check(f"media case {case.__name__} ran", False, repr(exc))
+        cdp.js("localStorage.clear()")
+
 
 CARET_END = ("(() => { const t = document.querySelector('.block.editing textarea');"
              " t.focus(); t.setSelectionRange(t.value.length, t.value.length); })()")
-PLUS = '.block.editing .block-controls button[title="Insert a paragraph"]'
+DONE = "#edit-bar .edit-done"
+PLUS = '#edit-bar .block-controls button[title="Insert a paragraph"]'
 
 
 def flush_via_plus(cdp) -> None:
@@ -392,7 +778,7 @@ def run_review_cases(cdp, base, w, h, check):
               s["editing"] == LONG_IDX and (s["value"] or "").endswith("Hello "), s)
         cdp.js(CARET_END)
         cdp("Input.insertText", text="world")
-        cdp.tap_el(".block.editing .edit-done", 1.0)
+        cdp.tap_el(DONE, 1.0)
         check("review 1: typing after it saves too", "Hello world" in POST.read_text())
 
     def case_2():
@@ -405,7 +791,7 @@ def run_review_cases(cdp, base, w, h, check):
         s = state(cdp)
         check("review 1: a save that splits the block keeps editing its first piece",
               s["editing"] == FIRST and s["value"] == "# Split heading", s)
-        cdp.tap_el(".block.editing .edit-done", 1.0)
+        cdp.tap_el(DONE, 1.0)
         text = POST.read_text()
         check("review 1: split text saved once, nothing duplicated",
               text.count("Split heading") == 1 and text.count("Split body.") == 1, text[:300])
@@ -431,8 +817,8 @@ def run_review_cases(cdp, base, w, h, check):
         cdp.js("(() => { const t = document.querySelector('.block.editing textarea'); t.focus();"
                " t.setSelectionRange(t.value.length, t.value.length); })()")
         cdp("Input.insertText", text=" Moved prose.")
-        cdp.js(f"document.querySelector('{block_sel(PAIR_IDX)} .block-controls "
-               "button[title=\"Move this block\"]').click()")
+        cdp.js(f"document.querySelector('#edit-bar .block-controls button[title=\"Move this block\"], "
+               f"{block_sel(PAIR_IDX)} .block-controls button[title=\"Move this block\"]').click()")
         time.sleep(1.2)
         text = POST.read_text()
         check("review 2: a control tap saves the pair's prose, picture intact",
@@ -446,7 +832,7 @@ def run_review_cases(cdp, base, w, h, check):
         open_long(cdp)
         cdp.tap_el(PLUS, 1.0)
         cdp.tap_el(".insert-choice button:nth-of-type(2)", 1.2)  # ↓ Below
-        cdp.tap_el(".block.editing .edit-done", 1.0)
+        cdp.tap_el(DONE, 1.0)
         cdp.tap_el(block_sel(LONG_IDX + 1), 0.6)  # the new "New paragraph."
         cdp.tap_el(PLUS, 1.0)
         cdp.tap_el(".insert-choice button", 1.2)  # ↑ Above
@@ -461,7 +847,7 @@ def run_review_cases(cdp, base, w, h, check):
         cdp.js(CARET_END)
         cdp("Input.insertText", text=" Draft text.")
         POST.write_text(POST.read_text() + "\nChanged on disk.\n")
-        cdp.tap_el(".block.editing .edit-done", 1.0)
+        cdp.tap_el(DONE, 1.0)
         s = state(cdp)
         check("review 4: a 409 leaves the editor open with its text",
               s["editing"] == LONG_IDX and "Draft text." in (s["value"] or ""), s)
@@ -473,7 +859,7 @@ def run_review_cases(cdp, base, w, h, check):
         check("review 4: after reload the draft is offered and restores",
               offered and restored and s["editing"] == LONG_IDX
               and "Draft text." in (s["value"] or ""), s)
-        cdp.tap_el(".block.editing .edit-done", 1.0)
+        cdp.tap_el(DONE, 1.0)
         check("review 4: and then saves", "Draft text." in POST.read_text())
         cdp.js("localStorage.clear()")
 
@@ -490,7 +876,7 @@ def run_review_cases(cdp, base, w, h, check):
         try:
             cdp.js("(() => { flushPendingEdit(); const t = document.querySelector('.block.editing textarea');"
                    " t.value += ' Late.'; t.dispatchEvent(new Event('input')); })()")
-            cdp.tap_el(".block.editing .edit-done", 8.0)
+            cdp.tap_el(DONE, 8.0)
         finally:
             cdp("Network.emulateNetworkConditions", offline=False, latency=0,
                 downloadThroughput=-1, uploadThroughput=-1)
@@ -501,7 +887,7 @@ def run_review_cases(cdp, base, w, h, check):
     def case_7():
         # 7. Row mode: Done is on screen while the field is taller than the
         # window (keyboard up).
-        if w < 1000:
+        if True:
             load(cdp, base)
             cdp("Emulation.setDeviceMetricsOverride", width=w, height=300,
                 deviceScaleFactor=1, mobile=True)
@@ -513,7 +899,7 @@ def run_review_cases(cdp, base, w, h, check):
             cdp.tap(b["x"] + b["w"] / 2, b["y"] + 30)
             cdp.js(f"document.querySelector('{block_sel(LONG_IDX)}').scrollIntoView({{block: 'start'}})")
             time.sleep(0.3)
-            r = cdp.rect(".block.editing .edit-done")
+            r = cdp.rect(DONE)
             check("review 7: Done stays on screen under a tall field",
                   r and r["y"] + r["h"] <= 300 + 1 and r["y"] >= 0, r or state(cdp))
             cdp("Emulation.setDeviceMetricsOverride", width=w, height=h,
@@ -527,8 +913,8 @@ def run_review_cases(cdp, base, w, h, check):
         cdp.js(f"({SET_TEXT})({json.dumps(text)})")
 
     def done_if_open():
-        if cdp.rect(".block.editing .edit-done"):
-            cdp.tap_el(".block.editing .edit-done", 1.0)
+        if cdp.rect(DONE):
+            cdp.tap_el(DONE, 1.0)
 
     def case_8():
         # NEW-1: a paragraph saved empty is removed; the editor must not
@@ -628,11 +1014,244 @@ def run_review_cases(cdp, base, w, h, check):
             deviceScaleFactor=1, mobile=True)
 
 
+# --- Left | Center and the link button --------------------------------------
+
+CLOSING_TEXT = "A closing paragraph that follows the long one."
+
+
+def centred(inner: str) -> str:
+    return f'<div class="align-center">\n\n{inner}\n\n</div>'
+
+
+FIELD = """(() => {
+  const t = document.querySelector('.block.editing textarea');
+  const bar = document.getElementById('edit-bar');
+  const sheet = document.querySelector('#edit-bar .link-sheet');
+  return JSON.stringify({
+    value: t ? t.value : null,
+    focused: !!t && document.activeElement === t,
+    sel: t ? [t.selectionStart, t.selectionEnd] : null,
+    centred: t ? getComputedStyle(t).textAlign : null,
+    pressed: [...bar.querySelectorAll('button[aria-pressed="true"]')].map((b) => b.getAttribute('aria-label')),
+    link: !!bar.querySelector('.link-button'),
+    sheet: !!sheet,
+    sheetFocus: !!sheet && document.activeElement === sheet.querySelector('input'),
+  });
+})()"""
+
+
+def run_align_cases(cdp, base, w, h, check, shots, prefix):
+    def field():
+        return json.loads(cdp.js(FIELD))
+
+    def load_body(body):
+        POST.write_text(body)
+        cdp("Page.navigate", url=f"{base}/edit/{SLUG}")
+        for _ in range(80):
+            time.sleep(0.25)
+            try:
+                if cdp.js(f"!!document.querySelector('{block_sel(FINAL)}')"):
+                    time.sleep(0.3)
+                    return
+            except RuntimeError:
+                pass
+        raise RuntimeError("editor never rendered the scratch post")
+
+    def open_block(i, settle=0.8):
+        cdp.js(f"document.querySelector('{block_sel(i)}').scrollIntoView({{block: 'center'}})")
+        time.sleep(0.3)
+        b = cdp.rect(block_sel(i))
+        cdp.tap(b["x"] + b["w"] / 2, b["y"] + b["h"] / 2, settle)
+        return b
+
+    def select(start, end):
+        cdp.js("(() => { const t = document.querySelector('.block.editing textarea');"
+               f" t.focus(); t.setSelectionRange({start}, {end}); }})()")
+
+    def case_center_then_left():
+        load(cdp, base)
+        before = open_block(CLOSING)
+        f = field()
+        check("align: an open paragraph offers Left | Center, Left pressed, and 🔗",
+              f["pressed"] == ["Align left"] and f["link"], f)
+        cdp.tap_el(bar_button("Align center"), 0.4)
+        f = field()
+        check("align: Center centres the open field at once, focus kept",
+              f["centred"] == "center" and f["focused"], f)
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("align: Center then Done writes the wrapper, nothing else",
+              text == BODY.replace(CLOSING_TEXT, centred(CLOSING_TEXT)), text[:700])
+        shown = cdp.js(f"(() => {{ const p = document.querySelector('{block_sel(CLOSING)} "
+                       ".block-content .align-center p'); return p ? getComputedStyle(p).textAlign : null; })()")
+        check("align: the closed block renders centred", shown == "center", shown)
+        after = cdp.rect(block_sel(CLOSING))
+        check("align: still one block, same height (2px)",
+              after and abs(after["h"] - before["h"]) <= 2, {"before": before, "after": after})
+        # Reopen: the field holds the words, not the wrapper.
+        top = open_block(CLOSING)
+        f = field()
+        reopened = cdp.rect(block_sel(CLOSING))
+        check("align: reopened, the field shows the inner text and Center is pressed",
+              f["value"] == CLOSING_TEXT and f["pressed"] == ["Align center"]
+              and f["centred"] == "center", f)
+        check("align: a centred block opens in place (2px)",
+              reopened and abs(reopened["y"] - top["y"]) <= 2, {"before": top, "after": reopened})
+        if shots:
+            png = cdp("Page.captureScreenshot", format="png")["data"]
+            Path(shots, f"{prefix}-{w}-centred.png").write_bytes(base64.b64decode(png))
+        cdp.tap_el(bar_button("Align left"), 0.4)
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("align: Left then Done removes the wrapper (byte-identical to before)",
+              text == BODY, text[:700])
+
+    def case_center_typing():
+        # Typing into a centred block keeps the wrapper.
+        load_body(BODY.replace(CLOSING_TEXT, centred(CLOSING_TEXT)))
+        open_block(CLOSING)
+        cdp.js(CARET_END)
+        cdp("Input.insertText", text=" More.")
+        time.sleep(0.2)
+        flush_via_plus(cdp)
+        f = field()
+        check("align: a save mid-edit keeps the centred editor open on its block",
+              f["value"] == CLOSING_TEXT + " More." and f["pressed"] == ["Align center"], f)
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("align: typing in a centred block keeps the wrapper",
+              text == BODY.replace(CLOSING_TEXT, centred(CLOSING_TEXT + " More.")), text[:700])
+
+    def case_url_link():
+        url_text = "Final words at https://example.com/page here."
+        body = BODY.replace("Final words.", url_text)
+        load_body(body)
+        open_block(FINAL)
+        start = url_text.index("https://")
+        end = start + len("https://example.com/page")
+        select(start, end)
+        cdp.tap_el("#edit-bar .link-button", 0.5)
+        f = field()
+        want = "Final words at [https://example.com/page](https://example.com/page) here."
+        check("link: a selected URL becomes a link in one tap", f["value"] == want and not f["sheet"], f)
+        caret = want.index(") here") + 1
+        check("link: focus stays in the field, caret after the link",
+              f["focused"] and f["sel"] == [caret, caret], f)
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("link: Done saves it", text == body.replace(url_text, want), text[-200:])
+
+    def case_www_link():
+        www = "See www.example.com for more."
+        load_body(BODY.replace("Final words.", www))
+        open_block(FINAL)
+        select(4, 4 + len("www.example.com"))
+        cdp.tap_el("#edit-bar .link-button", 0.5)
+        f = field()
+        check("link: a bare www. URL gets https:// in the target",
+              f["value"] == "See [www.example.com](https://www.example.com) for more.", f)
+
+    def case_words_link():
+        load(cdp, base)
+        open_block(AFTER_LIST)
+        select(len("After "), len("After the list"))
+        cdp.tap_el("#edit-bar .link-button", 0.6)
+        f = field()
+        check("link: selected words open the address sheet, focused",
+              f["sheet"] and f["sheetFocus"], f)
+        if shots:
+            png = cdp("Page.captureScreenshot", format="png")["data"]
+            Path(shots, f"{prefix}-{w}-link-sheet.png").write_bytes(base64.b64decode(png))
+        sheet = cdp.rect("#edit-bar .link-sheet")
+        barr = cdp.rect("#edit-bar")
+        check("link: the sheet sits above the bar, on screen",
+              sheet and barr and sheet["y"] + sheet["h"] <= barr["y"] + 0.5
+              and sheet["x"] >= 0 and sheet["x"] + sheet["w"] <= w + 0.5, {"sheet": sheet, "bar": barr})
+        small = cdp.js("[...document.querySelectorAll('#edit-bar .link-sheet button, #edit-bar .link-sheet input')]"
+                       ".filter((b) => b.getBoundingClientRect().height < 43.5).length")
+        check("link: the sheet's controls are 44px targets", small == 0, small)
+        cdp("Input.insertText", text="example.org/x")
+        time.sleep(0.2)
+        cdp.tap_el("#edit-bar .link-sheet .link-add", 0.5)
+        f = field()
+        want = "After [the list](https://example.org/x)."
+        check("link: Add link wraps the words, back in the field, caret after it",
+              f["value"] == want and not f["sheet"] and f["focused"]
+              and f["sel"] == [len(want) - 1, len(want) - 1], f)
+        cdp.tap_el(DONE, 1.2)
+        text = POST.read_text()
+        check("link: Done saves the linked words", text == BODY.replace("After the list.", want), text[-300:])
+
+    def case_cancel_and_caret():
+        load(cdp, base)
+        open_block(AFTER_LIST)
+        select(len("After "), len("After the list"))
+        cdp.tap_el("#edit-bar .link-button", 0.6)
+        cdp.tap_el("#edit-bar .link-sheet .link-cancel", 0.5)
+        f = field()
+        check("link: Cancel changes nothing and gives the selection back",
+              f["value"] == "After the list." and not f["sheet"] and f["focused"]
+              and f["sel"] == [len("After "), len("After the list")], f)
+        # No selection: [link text](url) at the caret, "link text" selected.
+        cdp.js(CARET_END)
+        cdp.tap_el("#edit-bar .link-button", 0.6)
+        cdp("Input.insertText", text="https://example.net")
+        cdp("Input.dispatchKeyEvent", type="keyDown", key="Enter", code="Enter",
+            windowsVirtualKeyCode=13)
+        cdp("Input.dispatchKeyEvent", type="keyUp", key="Enter", code="Enter",
+            windowsVirtualKeyCode=13)
+        time.sleep(0.4)
+        f = field()
+        at = len("After the list.") + 1
+        check("link: no selection inserts [link text](url) with the words selected",
+              f["value"] == "After the list.[link text](https://example.net)" and f["focused"]
+              and f["sel"] == [at, at + len("link text")], f)
+        # Saved, so leaving the page doesn't flush it into the next case.
+        cdp.tap_el(DONE, 1.2)
+
+    def case_pair_link():
+        load(cdp, base)
+        open_block(PAIR_IDX)
+        has = cdp.js("!!document.querySelector('#edit-bar .link-button')")
+        check("link: a pair's prose field has 🔗 too", has, has)
+        cdp.js("(() => { const t = document.querySelector('.block.editing .pair-text textarea');"
+               " t.focus(); t.setSelectionRange(0, 5); })()")
+        cdp.tap_el("#edit-bar .link-button", 0.6)
+        cdp("Input.insertText", text="https://example.com/w")
+        cdp.tap_el("#edit-bar .link-sheet .link-add", 0.5)
+        cdp.tap_el(DONE, 1.4)
+        text = POST.read_text()
+        check("link: a pair's prose link saves through the pair route, picture kept",
+              text == BODY.replace("Words beside the cat.", "[Words](https://example.com/w) beside the cat."),
+              text[text.index('<div class="pair-text">'):][:300])
+
+    def case_heading_has_toggle_spacer_does_not():
+        load_media(cdp, base)
+        cdp.tap_el(block_sel(M_SPACER), 0.8)
+        b = bar(cdp)
+        check("align: a spacer has no Left | Center and no 🔗",
+              "Align center" not in b["labels"] and "Link" not in b["labels"], b["labels"])
+
+    for case in (case_center_then_left, case_center_typing, case_url_link, case_www_link,
+                 case_words_link, case_cancel_and_caret, case_pair_link,
+                 case_heading_has_toggle_spacer_does_not):
+        try:
+            case()
+        except Exception as exc:  # noqa: BLE001
+            check(f"align case {case.__name__} ran", False, repr(exc))
+        cdp.js("localStorage.clear()")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--shots")
-    ap.add_argument("--shot-prefix", default="edit-rail")
+    ap.add_argument("--shot-prefix", default="edit-bar")
+    ap.add_argument("--only", action="append", default=[],
+                    help="tap / inplace / media / review / align; repeatable. Default: all")
+    ap.add_argument("--viewport", action="append", default=[],
+                    help="WxH; repeatable. Default: all three tablet viewports")
     args = ap.parse_args()
+    viewports = [tuple(int(n) for n in v.split("x")) for v in args.viewport] or VIEWPORTS
 
     if POST.exists():
         sys.exit(f"{POST} already exists; refusing to overwrite it")
@@ -684,8 +1303,8 @@ def main() -> int:
         cdp("Network.setCookie", name="editor_session", value=sid,
             domain="127.0.0.1", path="/")
 
-        for w, h in VIEWPORTS:
-            run_viewport(cdp, base, w, h, results, args.shots, args.shot_prefix)
+        for w, h in viewports:
+            run_viewport(cdp, base, w, h, results, args.shots, args.shot_prefix, args.only)
     finally:
         for p in reversed(procs):
             # Kill the whole process group by its own PID: Chromium's

@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title>Editing — Peter's blog</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
+<!-- The blog's own two families, so a block being edited is set like the
+     published post. One link per family on purpose: the Fontshare API
+     honours only the first f[] parameter and silently drops the rest. -->
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=sentient@400,500&display=swap">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap">
 <link rel="stylesheet" href="/static/editor.css">
 </head>
 <body>
@@ -20,6 +26,7 @@
     </span>
     <button id="undo" class="bar-action" title="Step back through your edits">↶ Undo</button>
     <button id="discard" class="bar-action danger" title="Throw away every change since the last publish">Discard</button>
+    <button id="preview" class="bar-action" title="See this post as the site will show it, drafts included">Preview</button>
     <button id="publish" class="publish">Publish</button>
     <button id="sign-out" class="bar-action" title="Sign out">Sign out</button>
     <button id="add-photo" class="add-photo" type="button" aria-label="Add photo" title="Add photo" hidden>📷</button>
@@ -32,6 +39,7 @@
     <div id="blocks"></div>
   </main>
   <div id="review-bar" class="review-bar" hidden></div>
+  <div id="edit-bar" class="edit-bar" hidden role="toolbar" aria-label="Block controls"></div>
   <script src="/static/editor.js"></script>
 </body>
 </html>

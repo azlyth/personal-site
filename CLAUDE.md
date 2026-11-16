@@ -550,6 +550,11 @@ text still renders in the fallback stack with *synthesised* weights, so it
 looks like a styling bug (the nav rendering too heavy) rather than a font that
 never loaded. Check `document.fonts` before believing a weight problem.
 
+**The tablet editor uses the same two families** (since 2026-11-15, so a block
+being edited is set like the published post): its own `index.html` carries
+the same two separate links and `editor.css` the same two variables, and
+`editor/tests/test_editor_fonts.py` fails if either side changes alone.
+
 **One type scale for the whole site**: `h1` 2rem, `h2` 1.5, `h3` 1.25, `h4`
 1.0625, all weight 500. `h1`/`h2` were previously 1.6/1.5rem — near enough to
 read as the same level.
@@ -1236,18 +1241,21 @@ absence caused a real bug here.
 Block kinds and their editors: `image` (standalone markdown), `img_row` and
 `video` (side-by-side grids) get thumbnail strips with add/remove/reorder,
 alt text, and Small/Medium/Full size presets; `pair` (a picture and a bounded
-run of prose, side by side) gets that same strip plus its prose in one
-markdown field; `clear` and `spacer` render as labelled dividers; everything
-else gets a markdown textarea.
+run of prose, side by side) opens as a pair, its prose in one markdown field
+in the pair's own text column; `clear` and `spacer` render as labelled
+dividers (an open spacer gets one toggle); everything else gets a markdown
+textarea. See "Edit in place" below for how an open block looks.
 
 Each block's control bar carries `+` (paragraph), `🖼` (photos), `␣`
-(spacer), `◨` (layout controls, on media rows, pairs and spacers), `⊟` (stop-wrap
-marker, only where a float is still wrapping), `⇅` (move) and `×`. The
-inserting ones ask above or below. Behind `◨`, a media row offers
-"Text wraps: No / Left / Right" — choosing a side floats it and the text
-flows around it — plus "⧉ Centre", which folds the row and the section
-beside it into a `pair`; a pair offers "⤢ Unpair" instead; a spacer offers
-"Space shows: Everywhere / Desktop only". A single photo or
+(spacer), `⊟` (stop-wrap marker, only where a float is still wrapping), `⇅`
+(move) and `×`. The inserting ones ask above or below. Layout is changed by
+OPENING the block (there is no `◨` button any more, 2026-11-15): an open
+media row's edit bar has its size (`S` `M` `Full`) and side (on its own
+line / picture left / picture right) -- choosing a side floats it and the
+text flows around it -- plus `Pair`, which folds the row and the section
+beside it into a `pair`; an open pair has size, side, prose position,
+`Photo` and `Unpair`; an open spacer has `Everywhere` / `Desktop only`. A
+single photo or
 clip can be split out of its row into one of its own, and any block can be
 moved (pick it up, tap an overlaid bar) or merged with an adjacent
 same-family block. The editor bar has Undo (walks back through the post's
@@ -1390,10 +1398,10 @@ edits), Discard (back to the last published version), and "↗ View live".
     so the pair would silently render as a plain stack. Choosing a side
     therefore narrows a full-width row to **medium**, and choosing Full drops
     the side. That constraint lives in exactly one place on each side of the
-    wire (`markdown_for`, and `framingControls()`/`setRowSide()` in
-    editor.js) or the two row editors drift apart.
+    wire (`markdown_for`, and `framingControls()` in editor.js) or the row
+    and pair editors drift apart.
   - **Setting a side has no route of its own.** It is an ordinary property of
-    the row, so the picker performs the same PUT the row editor does.
+    the row, saved on Done with the same PUT the row editor always did.
   - **A floated row carries `clear: both`.** Without it a second float slots
     into whatever room is left beside an earlier one, so two pictures close
     together pair up, the prose is squeezed into the gutter between them and
@@ -1407,8 +1415,7 @@ edits), Discard (back to the last published version), and "↗ View live".
     and the photo's own controls appeared at the top-right of its invisible
     block. The floated block carries the row's width (`--row-w` plus the
     block's own padding and border, so the picture still measures its
-    published width), the row inside drops back to `float: none; width: 100%`,
-    and the wrap picker lives inside the block so it travels with the float.
+    published width), and the row inside drops back to `float: none; width: 100%`.
     - **It also needs `z-index: 1`.** Every `.block` is `position: relative`
       (its controls are absolutely positioned inside it), and positioned
       boxes paint above floats -- so a following paragraph, whose box still
@@ -1431,10 +1438,10 @@ edits), Discard (back to the last published version), and "↗ View live".
     still wrapping (`wrapIsActiveAt` scans back for a sided media row,
     stopping at any earlier marker), so it can't insert a block that does
     nothing.
-  - **The picker is a full-width strip under the row, not an icon in
+  - **Layout lives in the open block's edit bar, never in hover-only
     `.block-controls`.** That bar is `display: none` until `:hover`, and the
-    tablet this editor exists for has no hover -- the feature was there and
-    effectively invisible.
+    tablet this editor exists for has no hover -- the first version of the
+    wrap picker was there and effectively invisible.
   - **"↗ View live" opens the published post in a new tab.** The base comes
     from `config.SITE_BASE_URL`, hand-duplicated from `scripts/build-site.sh`'s
     `BASE_URL` default and pinned by a test -- **that** script is what renders
@@ -1443,10 +1450,10 @@ edits), Discard (back to the last published version), and "↗ View live".
     host that doesn't answer. A draft's link is shown but muted and says so
     in its title: a draft isn't built at all, so it would 404, and "where is
     my post" is exactly the question a draft raises.
-  - **Layout controls are behind a `◨` toggle in the control bar**
-    (`state.wrapOpen`), not always on: a picture usually just sits there, and
-    a strip under every one of them is noise when reading a post back. The
-    toggle lights up while its controls are showing.
+  - **Layout controls only show while the block is open** (they used to sit
+    behind a `◨` toggle and `state.wrapOpen`, both removed 2026-11-15): a
+    picture usually just sits there, and controls under every one of them
+    are noise when reading a post back.
   - **A spacer (`<div class="post-spacer">`) is plain breathing room between
     sections**, with its own block kind for the same reason the stop marker
     has one: an empty div is otherwise an invisible, unexplainable block. It
@@ -1457,7 +1464,7 @@ edits), Discard (back to the last published version), and "↗ View live".
     test keeps that height in step with the published one, or the gap would
     be tuned by guesswork.
   - **A spacer can be desktop-only** (`class="post-spacer desktop-only"`,
-    picked behind `◨`): on a phone the post is already one narrow column, so a
+    picked in an open spacer's edit bar): on a phone the post is already one narrow column, so a
     deliberate section break reads as a scroll of blank screen. `base.html`
     collapses it to `height: 0` inside the same `max-width: 700px` query that
     unfloats rows, so "mobile" means one thing site-wide, and the rule is
@@ -1538,8 +1545,8 @@ edits), Discard (back to the last published version), and "↗ View live".
     parse inside an HTML block; it can't be, because a paired row always has
     a side, a side always implies small or medium, and both write the div.
   - **`isMediaRow()` excludes pairs.** A pair reports `images` too, so
-    without that it would get a wrap picker instead of Unpair, and would look
-    like it started a wrap for everything after it.
+    without that it would get a row's side toggles and Pair instead of the
+    pair editor, and would look like it started a wrap for everything after it.
   - **A section's boundary is the stop marker, the next picture, or the end
     of the post** -- exactly what the float was already wrapping. Pairing
     consumes the marker (the pair's closing div does that job now) and
@@ -1562,10 +1569,13 @@ edits), Discard (back to the last published version), and "↗ View live".
     stretching the pair would stretch the media column too, and
     `.img-row img` carries `height: 100%; object-fit: cover`, so the photo
     would be cropped to whatever height the prose happened to want.
-  - **A pair is edited as one thing**: its picture through the usual strip,
-    its prose as markdown in one textarea. That is the trade the pair makes
+  - **A pair is edited as one thing, and opens as a pair**: the rendered
+    `.pair` stays (real picture in its media column), and its prose becomes
+    one markdown field in the text column. That is the trade the pair makes
     in exchange for being able to centre -- the section stopped being a set
-    of sibling blocks.
+    of sibling blocks. Alt text and the preview star are in the `Photo`
+    sheet; reordering, removing, adding and Split out are not -- Unpair
+    first, and the row editor has them. See "Edit in place".
 
 - **Sizing a standalone image is opt-in by design.** Markdown has nowhere to
   hang a class, so a lone photo at default size stays `![alt](url)`; choosing a
@@ -1610,10 +1620,10 @@ edits), Discard (back to the last published version), and "↗ View live".
     open block close it;
   - Publish, the post picker, + New, Sign out and the tab hiding
     (`visibilitychange`/`pagehide`, `keepalive` fetch) flush first;
-  - while open, the block's controls, Done and the insert menu sit in a rail:
-    a 72px column right of the block when the window has the room and the
-    block spans the column (not when a float narrows it), else a row under
-    the field. Never on top of the text.
+  - while open, the block's controls and Done sit in the edit bar fixed to
+    the bottom of the window, and the insert menu pops up from it (see "Edit
+    in place"). Never on top of the text. (This replaced a rail -- a 72px
+    column beside the block, or a sticky row under it -- on 2026-11-15.)
   - `flushPendingEdit` reads the open editor from `openEditor`, NOT "a
     textarea inside `.block.editing`": that selector also matched a pair's
     prose field and saved the prose over the whole pair, deleting its
@@ -1637,8 +1647,9 @@ edits), Discard (back to the last published version), and "↗ View live".
       all register `{dirty(), save()}`, so the same flush covers them and
       only one is ever open. A pair saves through its own route; a photo or
       clip strip has no typing, so a flush `confirm()`s before dropping its
-      list changes. Rail CSS is scoped to `.text-editing`, so the other
-      editors keep their hover-only controls.
+      list changes. Every kind's controls move into the edit bar while it
+      is open, so `×` there checks `openEditor.controls`, not "is the button
+      inside the open block".
     - *A flush loops.* Awaiting a save that is already in flight isn't
       enough when typing carried on after it started; it re-checks and
       saves again (one module-level `saveInFlight`).
@@ -1646,8 +1657,8 @@ edits), Discard (back to the last published version), and "↗ View live".
       block index + source hash + page load; a 409-then-reload or iOS
       killing a hidden tab otherwise lost it. A strip above the post offers
       Restore/Discard, or shows the text to copy when its block changed.
-    - Row-mode rail is `position: sticky; bottom: 0`, so Done stays on
-      screen under a field taller than the window.
+    - Done is in the fixed edit bar, so it stays on screen under a field
+      taller than the window (review 7 checks it at a 300px-tall window).
     - *Re-review: never re-attach, or restore a draft, onto a block that
       isn't verified as the same one.* A save can REMOVE its block (saved
       empty) or MERGE it into a neighbour ("- x" after a list); trusting
@@ -1662,8 +1673,134 @@ edits), Discard (back to the last published version), and "↗ View live".
       (`flushThenFind`) and do nothing, with a status line, if they can't.
   `scripts/verify-edit-tap.py` drives all of this in headless Chromium at
   1024x1366, 1366x1024 and 820x1180, review cases included (system
-  `python3`, ~5 min; not in
-  pytest, since the venv has no websocket-client).
+  `python3`, ~6 min; not in
+  pytest, since the venv has no websocket-client). `--only
+  tap|inplace|media|review|align` and `--viewport WxH` (both repeatable) run a
+  slice while iterating; `--shots DIR` writes the open paragraph, insert
+  menu, row, pair and Photo sheet per width.
+
+### Edit in place (added 2026-11-15)
+
+Opening a block used to change what you were looking at: a paragraph became
+a monospace box, a pair collapsed into a thumbnail over raw markdown with
+three rows of full-width buttons, a photo row grew a screenful of controls.
+Spec: `docs/superpowers/specs/2026-11-15-edit-in-place-design.md`. Three
+goals, in Peter's order -- **the block stays put**, **it keeps the post's
+look**, **fewer, smaller controls** -- and when they conflict, that order
+decides.
+
+- **One edit bar, `#edit-bar`, fixed to the bottom of the window** (editor.js,
+  the "edit bar" section after `closeEditor`). `showEditBar({left, settings,
+  onDone, onCancel, popover})` empties and fills it: the open block's own
+  `.block-controls` node (MOVED out of the block, not rebuilt, so its
+  handlers keep working), the settings as compact toggles (`segmented()`;
+  an array in `settings` shares one group), then Cancel (only where the
+  editor has one -- text has Done only, as it always did) and Done, the one
+  filled button. `hideEditBar()` empties and hides it.
+  - **`renderBlocks()` clears the bar first and hides it at the end unless an
+    editor is open again.** Every close path re-renders, and a text editor
+    put back by `restoreOpenText` refills the bar from the fresh block -- so
+    the bar can never show block A's controls while block B is open. It is
+    cleared rather than hidden at the start so the page doesn't shrink in
+    between.
+  - **Never both bars.** `showEditBar` refuses while a review, move mode or
+    a placement is up; `startProofread`, `enterMoveMode` and `beginPlacing`
+    hide it (after closing the editor, which saves).
+  - **Reserve padding** (`reserveEditBar`): `#blocks` gets bottom padding of
+    bar height + 16px MINUS the room the page already has below it (the
+    body's 6rem and the container's 1rem). On a tablet that is usually 0, so
+    closing an editor can't shrink the page and jump the scroll; the last
+    block can still scroll clear of the bar.
+  - **One row or two, measured** (`layoutEditBar`, also on a ResizeObserver):
+    if everything doesn't fit on one row, `.two-rows` puts the settings on a
+    second row (a zero-height `::after` line break keeps them off Done's
+    row). A pair's bar is two rows at 820px, one at 1366px.
+  - **The insert menu and the pair's Photo sheet are popovers** above the
+    bar, anchored over the button that opened them (`anchorPopovers`; the
+    insert buttons carry `data-insert` = the menu's label).
+  - **Soft keyboard: needs a manual check on the tablet.** The viewport meta
+    has `interactive-widget=resizes-content`, which shrinks the layout
+    viewport with the keyboard so a `bottom: 0` bar rides on top of it;
+    where a browser ignores that, `placeEditBar` lifts the bar by
+    `innerHeight - (visualViewport.height + offsetTop)`. Headless Chromium
+    can't show a soft keyboard, so neither path is proven here.
+  - The bar's mousedown is `preventDefault`ed (except on inputs), so a tap on
+    a toggle doesn't blur the field and drop the keyboard; its clicks stop
+    propagating so they are never taps on the page under it.
+- **The block stays put -- meaning its TOP edge.** `.block.editing` changes
+  border COLOUR only. A text field takes the rendered text's place at the
+  rendered first/last child's outer margins and, until `fit()` runs, its
+  measured height, set in the same face/size/line-height/width, so a
+  paragraph re-wraps onto exactly the lines it had (verified: block and the
+  next block within 2px, scroll unchanged). Markdown syntax (`## `, `*`,
+  links) can make the field a line taller; that's accepted. Nothing scrolls
+  on open except `keepClearOfBar`, when a field's first lines would sit
+  under the bar. A width change (rotation) scrolls back by however far the
+  block's top drifted; a height-only change doesn't, since that is the
+  keyboard and the browser's own scroll-to-caret must win.
+  - **Photo and clip rows are exempt below their top**: the strip (alt
+    fields, arrows, Split out) is taller than the row, so only the row's own
+    top is pinned and blocks below it move.
+  - **A paragraph beside a float edits at the narrow width** for its whole
+    height (the existing `flow-root` behaviour); the top stays put.
+- **The post's look.** `index.html` loads Sentient and Switzer, one Fontshare
+  `<link>` each (see Typography for why), and editor.css carries
+  `--font-text`/`--font-display` with the same families as base.html --
+  `tests/test_editor_fonts.py` pins both. Rendered blocks AND text fields use
+  them; a heading's field is Sentient at its level's size (`heading-N`
+  class); monospace is only for `raw-source` fields (anything not
+  paragraph/heading/list/blockquote: raw HTML the structured editors
+  couldn't parse, and code). The post title is Sentient too.
+- **A pair opens as a pair** (`startEditingPair`): the rendered `.pair` is
+  kept and its `.pair-text` gets the field; size, side and prose position
+  are toggles that re-apply the published classes live (`pair-<side>
+  size-<size> justify-<j>`, `center` writing none). All of it -- and alt
+  text from the `Photo` sheet -- is a working copy in `dirty()` (media JSON
+  vs the original), saved on Done through the unchanged `PUT .../pair`
+  route, dropped on Cancel. A clip pair has no `Photo` button.
+- **Rows** (`showRowBar`): the strip stays in the block (unchanged), size and
+  side are toggles in the bar, Done with no change just closes (no write),
+  Cancel writes nothing. **`Pair` acts at once**: it saves the row's working
+  copy first if it changed (the side just picked -- the server pairs the row
+  as it is on disk, and refuses an unfloated one), then pairs; disabled
+  until the row has a side. `Unpair` flushes the pair editor, then unpairs.
+- **A spacer opens** to `Everywhere` / `Desktop only` (`startEditingSpacer`),
+  shown live on the block and saved on Done through `saveBlock` with the
+  same `SPACER_SOURCE` / `DESKTOP_SPACER_SOURCE` strings as before. It no
+  longer opens a raw textarea.
+- **Closed blocks keep their hover controls**, minus `◨`. Deleting or moving
+  a spacer or photo row still works without opening it.
+
+- **Left | Center and 🔗** (added 2026-11-15, spec
+  `docs/superpowers/specs/2026-11-15-align-and-link-design.md`). An open
+  paragraph, heading, list or blockquote has a `Left | Center` toggle and a
+  🔗 button in its bar's settings group; a pair's prose field has 🔗 only.
+  - **A centred block is `<div class="align-center">`, a blank line, the
+    block's markdown, a blank line, `</div>`** -- the pair's blank-line
+    mechanism. Left writes no wrapper, so no existing post changes.
+    `blocks._group_aligns` (after `_group_pairs`) folds the three tokens into
+    ONE block of the inner kind with `align = "center"` and `text` = the
+    inner markdown, but only when every block inside is prose AND
+    `aligned_source(text, "center")` rebuilds the source byte-exactly;
+    anything else (no closer, a missing blank line, html inside) stays raw
+    fragments. Every other text block reports `align: "left"`.
+  - **The client rebuilds the wrapper** (`alignedSource` in editor.js, the
+    same normalisation as `blocks.aligned_source`) and PUTs the WHOLE block
+    through the unchanged block route, so re-attach, drafts and
+    `flushThenFind` keep comparing full sources. The field holds the inner
+    text (`editText`); alignment rides through `captureOpenText` and drafts.
+    `ALIGN_CENTER_OPEN` is read out of editor.js by a test.
+  - `.align-center` is in base.html and editor.css (lists keep their bullets
+    beside the words: `list-style-position: inside`); a test checks both.
+  - **🔗**: a selected URL (`https?://` or `www.`, no spaces) becomes
+    `[url](url)` in one tap (`https://` added to `www.`); other words open
+    a small address sheet above the bar (clipboard URL prefilled where the
+    browser allows it) and become `[words](url)`; no selection inserts
+    `[link text](url)` with `link text` selected. The edit goes in through
+    `execCommand('insertText')` (falls back to `setRangeText` + an `input`
+    event), so it is ordinary typing: dirty, drafted, saved on Done.
+  - `test_align.py` also parses every `content/blog/*.md` and checks each
+    block regenerates unchanged.
 
 ### Proofread (added 2026-10-04)
 
@@ -1673,8 +1810,9 @@ punctuation fixes only, and shows them inline for Accept/Reject.
 - **The claude CLI runs at an absolute path** (`config.claude_bin()`,
   default `/home/peter/.local/bin/claude`, override `EDITOR_CLAUDE_BIN`, read
   live). The systemd unit's PATH has no `~/.local/bin`; that is exactly how
-  recipes' prod parser broke on 2026-09-13. `EDITOR_PROOFREAD_MODEL` adds an
-  optional `--model`.
+  recipes' prod parser broke on 2026-09-13. The model is **Sonnet** by
+  default (`config.proofread_model()`; `EDITOR_PROOFREAD_MODEL` overrides,
+  blank means sonnet).
 - **Claude runs boxed in** (`run_claude`, the same pattern as split's receipt
   reader). Post text is untrusted input, so: cwd is a fresh empty
   `tempfile.TemporaryDirectory` removed after the call (NOT the repo, whose
@@ -1687,15 +1825,25 @@ punctuation fixes only, and shows them inline for Accept/Reject.
 - **Two routes.** `POST /api/posts/{slug}/proofread {indices: [<=5]}` runs one
   claude call for up to five prose blocks and returns, per block, its
   `block_hash`, the suggestions and a `review_html` with
-  `<del class="pr-old" data-sid>`/`<ins class="pr-new" data-sid>` marks; a
+  `<del class="pr-old" data-sid>`/`<ins class="pr-new" data-sid>` marks (`_diff_html`: a token-level diff, so
+  only the CHANGED runs are marked and one suggestion can carry several marks
+  sharing its sid; unchanged words stay plain text); a
   failed call comes back as `errors: [{indices, message}]` for that batch
   only. `POST .../proofread/apply {index, block_hash, before, after, kind, hash}`
   writes one fix through `_write_body` (so Undo has it) and returns the post
   payload plus the block's new `block_hash`.
 - **The guardrails live in `editor/proofread.py`** (`validate`/`_problem`):
-  `before` must occur exactly once, be short, sit on word boundaries ("form"
-  inside "formal" is dropped), avoid markup/URLs/code/inline-image alt
-  text/bare `www.` domains, and be at most two word edits. A `spelling` fix
+  `before` must occur exactly once, sit on word boundaries ("form" inside
+  "formal" is dropped), stay inside one sentence (no `.`/`?`/`!` followed by
+  more text, so "e.g. the" is dropped, never mangled), and avoid
+  markup/URLs/code/inline-image alt text/bare `www.` domains. Length caps
+  differ by kind (added 2026-11-15, sentence-level fixes): `spelling` is
+  <= 80 chars and at most two word edits; `grammar`/`punctuation` may be up
+  to 300 chars, and the NEW words in `after` (replace/insert opcodes of a
+  word-level difflib match; deletions are free) are capped at
+  `max(2, words_in_before // 2)`, so a half-edited sentence can be repaired
+  but a correct one can't be restated. An empty `after` is dropped. A
+  `spelling` fix
   must also look like the word it fixes (`difflib` ratio >= 0.6: teh->the
   passes, good->great doesn't), and no fix may change the block's type
   (`1 Apples` -> `1. Apples` would make a list). If the marks can't be placed
@@ -1723,8 +1871,11 @@ punctuation fixes only, and shows them inline for Accept/Reject.
   suggestions resolved, not items left, since a batch can land mid-Accept.
   Cancel and Close abort the client's fetch but don't kill a claude call
   already running on the server; it finishes (or times out) within 120 s
-  and its answer is dropped. The bar shows the change as text
-  (`before → after`, clipped) next to its kind.
+  and its answer is dropped. Each suggestion also carries a `reason` (2-4
+  plain words from the model, trimmed to 40 chars, `""` if missing); the bar
+  shows `kind · reason` (via `textContent`, so a reason is never HTML), the
+  full `before → after` as its tooltip. `resolveMark` resolves EVERY mark
+  sharing a sid, so Accept/Reject on a multi-mark fix leaves no stray text.
   The client batches five blocks per request with a progress strip, so a
   long post shows results as they come in.
 - `scripts/verify-proofread.py` checks the whole flow in headless Chromium
@@ -1817,6 +1968,44 @@ and in move mode (`syncAddPhoto()`, called from `renderBlocks`); hidden is
   `click()` comes before any save and the save before the banner. Screenshots go to
   `~/.cache/add-photo-<width>[-button|-pending].png`. Route tests:
   `editor/tests/test_api_place_images.py`.
+
+
+### Preview (added 2026-11-15)
+
+The bar's **Preview** button opens the post in a new tab rendered with the
+real site templates, drafts and unpublished edits included. The click opens
+the tab synchronously (popup rules), flushes the open editor, then
+`POST /api/posts/{slug}/preview` runs `scripts/build-preview.sh` (same Zola
+container and legacy-config handling as `build-site.sh`, plus `--drafts`)
+into the gitignored `editor/.preview/site`, never `public/`, under a lock,
+with `--base-url {EDITOR_BASE_URL}/preview`. `GET /preview/{path}` serves it
+(`no-store`, `noindex`, traversal refused) behind the normal sign-in gate.
+Nothing reaches git, nginx or Cloudflare. `EDITOR_BASE_URL` must match the
+host you browse from or the preview's assets won't resolve. Tests:
+`editor/tests/test_api_preview.py`.
+
+### Media keep their shape across a re-render (fixed 2026-11-15)
+
+Every save re-renders the whole block list, and a fresh `<video>` is the
+browser's default 300x150 until its metadata reloads. With three 9:20 clips
+the page lost ~1070px for a frame: near the bottom the scroll clamped up,
+mid-page everything below jumped up and back ("the page jumps when I click
+a block"). `renderBlocks` now learns each img/video's shape by URL
+(`mediaShapes`, `learnMediaShape`) before throwing the old nodes away and
+stamps it on the rebuilt element as `aspect-ratio` (`holdMediaShapes`).
+Reproduce with a page-level `renderBlocks()` call while scrolled to the
+bottom of a post with videos: `documentElement.scrollHeight` must not dip.
+
+### No picture taller than the window (added 2026-11-15)
+
+`templates/base.html` caps `.container img, .container video` at
+`calc(100svh - 4rem)` (vh fallback first), and a lone item in a row drops
+its flex sizing (`width: auto`) so the cap narrows it instead of cropping.
+Stacked pairs on a phone give their picture the whole column, and a 9:20
+phone clip there was ~760px on a ~630px visible screen. `svh` because a
+phone's collapsing URL bar would otherwise push it back over. Measure with
+headless at real visible heights (390x664, 412x760), not full device
+heights -- headless has no URL bar, so 390x844 hides the bug.
 
 
 ## Git Workflow
