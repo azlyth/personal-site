@@ -81,11 +81,12 @@ def _child_env() -> dict:
 def run_claude(prompt: str, timeout_s: int = 120) -> str:
     """Post text is untrusted input to the model, so it runs boxed in: an
     empty throwaway cwd (not the repo -- no project CLAUDE.md, nothing to
-    read), no tools, no saved session, the prompt on stdin, and a minimal
-    environment. Not --bare: that skips the OAuth login."""
+    read), no tools, no MCP servers, no saved session, the prompt on stdin, and
+    a minimal environment. --safe-mode keeps ~/.claude/CLAUDE.md and the memory
+    files out of the model's context. Not --bare: that skips the OAuth login."""
     cmd = [config.claude_bin(), "-p", "--output-format", "text",
            "--tools", "", "--disallowedTools", DENIED_TOOLS,
-           "--no-session-persistence"]
+           "--strict-mcp-config", "--no-session-persistence", "--safe-mode"]
     model = config.proofread_model()
     if model:
         cmd += ["--model", model]
