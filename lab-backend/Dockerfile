@@ -1,5 +1,9 @@
 FROM node:24-alpine
 
+# The node image lags Alpine's own security updates (zlib, openssl), so take
+# them at build time. `build --pull` alone does not.
+RUN apk upgrade --no-cache
+
 # Set working directory
 WORKDIR /app
 
